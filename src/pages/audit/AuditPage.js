@@ -4,7 +4,7 @@ import {
   IconButton, Tooltip, Grid, Card, CardContent, Typography,
   Dialog, DialogTitle, DialogContent, DialogActions, MenuItem,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  Paper, TablePagination, Avatar, Stack, Collapse, Divider,
+  Paper, TablePagination, Avatar, Stack, Collapse,
 } from '@mui/material';
 import {
   Add as AddIcon, Search as SearchIcon, Refresh as RefreshIcon,
@@ -17,7 +17,7 @@ import {
 } from '@mui/icons-material';
 import PageHeader from '../../components/PageHeader';
 import ErrorAlert from '../../components/ErrorAlert';
-import { getStatusColor, formatDate } from '../../utils/helpers';
+import { formatDate } from '../../utils/helpers';
 import { ROUTES } from '../../utils/constants';
 import { searchAuditLogsApi, getAuditStatsApi } from '../../api/auditApi';
 

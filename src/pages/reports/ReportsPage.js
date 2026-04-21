@@ -6,7 +6,6 @@ import {
 } from '@mui/material';
 import { Download as DownloadIcon } from '@mui/icons-material';
 import PageHeader from '../../components/PageHeader';
-import { getStatusColor } from '../../utils/helpers';
 import { ROUTES } from '../../utils/constants';
 import { getReportsDashboardApi } from '../../api/reportsApi';
 
