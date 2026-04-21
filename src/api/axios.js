@@ -2,8 +2,14 @@ import axios from 'axios';
 import { getToken, removeToken } from '../utils/helpers';
 import { ROUTES } from '../utils/constants';
 
+// All successful API calls return response.data where:
+//   response.data.success       = true/false
+//   response.data.data          = actual payload
+//   response.data.data.content  = array (paginated responses)
+//   response.data.data.totalElements = total count (paginated responses)
+
 const apiClient = axios.create({
-  baseURL: process.env.REACT_APP_API_BASE_URL || 'http://localhost:8080/api',
+  baseURL: process.env.REACT_APP_API_BASE_URL || 'http://localhost:8080',
   headers: {
     'Content-Type': 'application/json',
   },

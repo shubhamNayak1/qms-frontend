@@ -15,14 +15,31 @@ export const AuthProvider = ({ children }) => {
     setError(null);
     try {
       const { data } = await loginApi(credentials);
-      const { token: jwt, user: userData } = data;
+
+      // Response shape: { success, message, data: { accessToken, userId, username, ... } }
+      const payload = data.data || data;
+      const jwt = payload.accessToken || payload.token || payload.jwt || payload.access_token;
+
+      if (!jwt) throw new Error('Token not found in response');
+
+      const userData = {
+        id: payload.userId,
+        name: payload.fullName || payload.username,
+        email: payload.email,
+        username: payload.username,
+        roles: payload.roles || [],
+        permissions: payload.permissions || [],
+      };
+
       setToken(jwt);
       setUser(userData);
       setTokenState(jwt);
       setUserState(userData);
       return { success: true };
     } catch (err) {
-      const msg = err.response?.data?.message || 'Login failed. Check credentials.';
+      const msg = err.message?.startsWith('Token field')
+        ? err.message
+        : err.response?.data?.message || err.response?.data?.error || 'Login failed. Check credentials.';
       setError(msg);
       return { success: false, message: msg };
     } finally {

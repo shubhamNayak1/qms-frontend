@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box, Grid, Card, CardContent, Typography, Button, Tabs, Tab,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
@@ -8,6 +8,7 @@ import { Download as DownloadIcon } from '@mui/icons-material';
 import PageHeader from '../../components/PageHeader';
 import { getStatusColor } from '../../utils/helpers';
 import { ROUTES } from '../../utils/constants';
+import { getReportsDashboardApi } from '../../api/reportsApi';
 
 const QMS_SUMMARY = [
   { metric: 'Total Non-Conformances', thisMonth: 12, lastMonth: 15, trend: -20, status: 'IMPROVED' },
@@ -78,8 +79,16 @@ const ReportTable = ({ data }) => (
 const ReportsPage = () => {
   const [tab, setTab] = useState(0);
   const [period, setPeriod] = useState('monthly');
+  const [dashData, setDashData] = useState(null);
+
+  useEffect(() => {
+    getReportsDashboardApi()
+      .then(({ data }) => setDashData(data?.data || null))
+      .catch(() => {});
+  }, []);
 
   const tableData = [null, QMS_SUMMARY, DMS_SUMMARY, LMS_SUMMARY][tab];
+  const d = dashData;
 
   return (
     <Box>
@@ -138,10 +147,10 @@ const ReportsPage = () => {
                 <Typography variant="subtitle1" fontWeight={600} gutterBottom>Executive Summary — Monthly Overview</Typography>
                 <Grid container spacing={2}>
                   {[
-                    { label: 'System-Wide NCRs', value: 34, delta: '-12%', up: false },
-                    { label: 'Docs Under Control', value: '1,204', delta: '+18 this month', up: true },
-                    { label: 'Training Completions', value: 87, delta: '+32%', up: true },
-                    { label: 'Overall Compliance', value: '92%', delta: '+2%', up: true },
+                    { label: 'System-Wide NCRs', value: d?.totalNcr ?? 34, delta: '-12%', up: false },
+                    { label: 'Docs Under Control', value: d?.totalDocuments ?? '1,204', delta: '+18 this month', up: true },
+                    { label: 'Training Completions', value: d?.totalCompletions ?? 87, delta: '+32%', up: true },
+                    { label: 'Overall Compliance', value: d?.overallComplianceRate ? `${d.overallComplianceRate}%` : '92%', delta: '+2%', up: true },
                   ].map(({ label, value, delta, up }) => (
                     <Grid item xs={6} md={3} key={label}>
                       <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>

@@ -10,6 +10,7 @@ import {
   Description as DmsIcon,
   School as LmsIcon,
   BarChart as ReportsIcon,
+  ManageSearch as AuditIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ROUTES } from '../utils/constants';
@@ -24,6 +25,7 @@ const navItems = [
   { label: 'DMS', icon: <DmsIcon />, path: ROUTES.DMS },
   { label: 'LMS', icon: <LmsIcon />, path: ROUTES.LMS },
   { label: 'Reports', icon: <ReportsIcon />, path: ROUTES.REPORTS },
+  { label: 'Audit Trail', icon: <AuditIcon />, path: ROUTES.AUDIT },
 ];
 
 const Sidebar = ({ mobileOpen, onMobileClose }) => {

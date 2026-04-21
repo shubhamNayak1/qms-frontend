@@ -36,7 +36,7 @@ const LoginPage = () => {
     const errs = validate();
     if (Object.keys(errs).length) { setFieldErrors(errs); return; }
     setFieldErrors({});
-    const result = await login({ username: form.username, password: form.password });
+    const result = await login({ usernameOrEmail: form.username, password: form.password });
     if (result.success) navigate(from, { replace: true });
   };
 

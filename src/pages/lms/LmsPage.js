@@ -10,22 +10,31 @@ import DataTable from '../../components/DataTable';
 import ErrorAlert from '../../components/ErrorAlert';
 import { getStatusColor, formatDate } from '../../utils/helpers';
 import { ROUTES } from '../../utils/constants';
+import { getProgramsApi, getEnrollmentsApi, getLmsComplianceDashboardApi } from '../../api/lmsApi';
 
-const MOCK_COURSES = [
-  { id: 1, courseCode: 'ISO-001', title: 'ISO 9001:2015 Foundation', category: 'Compliance', duration: '4 hours', enrollments: 48, completions: 42, status: 'ACTIVE', dueDate: '2024-04-30' },
-  { id: 2, courseCode: 'EHS-003', title: 'Workplace Health & Safety', category: 'Safety', duration: '2 hours', enrollments: 87, completions: 80, status: 'ACTIVE', dueDate: '2024-03-31' },
-  { id: 3, courseCode: 'QMS-007', title: 'Root Cause Analysis Techniques', category: 'Quality', duration: '3 hours', enrollments: 32, completions: 18, status: 'ACTIVE', dueDate: '2024-05-15' },
-  { id: 4, courseCode: 'DATA-002', title: 'GDPR & Data Privacy', category: 'Compliance', duration: '1.5 hours', enrollments: 102, completions: 99, status: 'ARCHIVED', dueDate: '2023-12-31' },
-  { id: 5, courseCode: 'LEAD-005', title: 'Leadership & Change Management', category: 'Management', duration: '6 hours', enrollments: 22, completions: 5, status: 'ACTIVE', dueDate: '2024-06-01' },
-];
+const normProgram = (p) => ({
+  id: p.id,
+  courseCode: p.code || p.courseCode || `PRG-${p.id}`,
+  title: p.title,
+  category: p.category || '-',
+  duration: p.estimatedDurationMinutes ? `${p.estimatedDurationMinutes} min` : (p.duration || '-'),
+  enrollments: p.enrollmentCount ?? p.enrollments ?? 0,
+  completions: p.completionCount ?? p.completions ?? 0,
+  status: p.status,
+  dueDate: p.dueDate || null,
+});
 
-const MOCK_ENROLLMENTS = [
-  { id: 1, employee: 'Alice Johnson', courseCode: 'ISO-001', courseName: 'ISO 9001:2015 Foundation', enrolledDate: '2024-03-01', completedDate: '2024-03-10', progress: 100, status: 'COMPLETED', score: 92 },
-  { id: 2, employee: 'Bob Martinez', courseCode: 'EHS-003', courseName: 'Workplace Health & Safety', enrolledDate: '2024-03-05', completedDate: null, progress: 65, status: 'IN_PROGRESS', score: null },
-  { id: 3, employee: 'Carol Smith', courseCode: 'QMS-007', courseName: 'Root Cause Analysis Techniques', enrolledDate: '2024-03-10', completedDate: null, progress: 30, status: 'IN_PROGRESS', score: null },
-  { id: 4, employee: 'David Lee', courseCode: 'ISO-001', courseName: 'ISO 9001:2015 Foundation', enrolledDate: '2024-02-15', completedDate: null, progress: 0, status: 'PENDING', score: null },
-  { id: 5, employee: 'Emma Wilson', courseCode: 'DATA-002', courseName: 'GDPR & Data Privacy', enrolledDate: '2023-11-01', completedDate: '2023-11-15', progress: 100, status: 'COMPLETED', score: 88 },
-];
+const normEnrollment = (e) => ({
+  id: e.id,
+  employee: e.user?.fullName || e.user?.name || e.employee || '-',
+  courseCode: e.program?.code || e.program?.courseCode || e.courseCode || '-',
+  courseName: e.program?.title || e.courseName || '-',
+  enrolledDate: e.enrolledAt || e.enrolledDate || e.createdAt,
+  completedDate: e.completedAt || e.completedDate || null,
+  progress: e.progressPercent ?? e.progress ?? 0,
+  status: e.status,
+  score: e.assessmentScore ?? e.score ?? null,
+});
 
 const LmsPage = () => {
   const [tab, setTab] = useState(0);
@@ -34,27 +43,54 @@ const LmsPage = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [search, setSearch] = useState('');
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [totalCount, setTotalCount] = useState(0);
+  const [lmsDash, setLmsDash] = useState(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError(null);
+    const params = { search: search || undefined, page, size: rowsPerPage };
     try {
-      await new Promise((r) => setTimeout(r, 500));
-      const q = search.toLowerCase();
-      setCourseRows(MOCK_COURSES.filter((r) => !q || r.title.toLowerCase().includes(q) || r.courseCode.toLowerCase().includes(q)));
-      setEnrollmentRows(MOCK_ENROLLMENTS.filter((r) => !q || r.employee.toLowerCase().includes(q) || r.courseName.toLowerCase().includes(q)));
-    } catch {
-      setError('Failed to load LMS data.');
+      if (tab === 0) {
+        const { data } = await getProgramsApi(params);
+        const payload = data?.data;
+        const items = payload?.content ?? (Array.isArray(payload) ? payload : []);
+        setCourseRows(items.map(normProgram));
+        setTotalCount(payload?.totalElements ?? items.length);
+      } else {
+        const { data } = await getEnrollmentsApi(params);
+        const payload = data?.data;
+        const items = payload?.content ?? (Array.isArray(payload) ? payload : []);
+        setEnrollmentRows(items.map(normEnrollment));
+        setTotalCount(payload?.totalElements ?? items.length);
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to load LMS data.');
     } finally {
       setLoading(false);
     }
-  }, [search]);
+  }, [search, page, rowsPerPage, tab]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const overallCompletionRate = Math.round(
-    (MOCK_ENROLLMENTS.filter((e) => e.status === 'COMPLETED').length / MOCK_ENROLLMENTS.length) * 100
-  );
+  useEffect(() => {
+    getLmsComplianceDashboardApi()
+      .then(({ data }) => setLmsDash(data?.data || null))
+      .catch(() => {});
+  }, []);
+
+  const handleTabChange = (_, v) => { setTab(v); setPage(0); };
+
+  const totalCourses = lmsDash?.activeProgramCount ?? courseRows.length;
+  const activeCourses = lmsDash?.activeProgramCount ?? courseRows.filter((c) => c.status === 'ACTIVE').length;
+  const totalEnrollments = lmsDash?.totalEnrollments ?? enrollmentRows.length;
+  const completionRate = lmsDash?.overallComplianceRate
+    ? `${lmsDash.overallComplianceRate}%`
+    : enrollmentRows.length > 0
+      ? `${Math.round((enrollmentRows.filter((e) => e.status === 'COMPLETED').length / enrollmentRows.length) * 100)}%`
+      : '—';
 
   const courseColumns = [
     { field: 'courseCode', headerName: 'Code', minWidth: 100 },
@@ -92,8 +128,8 @@ const LmsPage = () => {
         </Box>
       ),
     },
-    { field: 'status', headerName: 'Status', minWidth: 120, renderCell: (row) => <Chip label={row.status.replace('_', ' ')} size="small" color={getStatusColor(row.status)} /> },
-    { field: 'score', headerName: 'Score', minWidth: 80, align: 'center', renderCell: (row) => row.score ? `${row.score}%` : '—' },
+    { field: 'status', headerName: 'Status', minWidth: 120, renderCell: (row) => <Chip label={row.status?.replace('_', ' ')} size="small" color={getStatusColor(row.status)} /> },
+    { field: 'score', headerName: 'Score', minWidth: 80, align: 'center', renderCell: (row) => row.score != null ? `${row.score}%` : '—' },
     { field: 'completedDate', headerName: 'Completed', minWidth: 110, renderCell: (row) => formatDate(row.completedDate) },
   ];
 
@@ -108,10 +144,10 @@ const LmsPage = () => {
 
       <Grid container spacing={2} sx={{ mb: 3 }}>
         {[
-          { label: 'Total Courses', value: MOCK_COURSES.length, color: 'primary.main' },
-          { label: 'Active Courses', value: MOCK_COURSES.filter((c) => c.status === 'ACTIVE').length, color: 'success.main' },
-          { label: 'Total Enrollments', value: MOCK_ENROLLMENTS.length, color: 'info.main' },
-          { label: 'Completion Rate', value: `${overallCompletionRate}%`, color: 'warning.main' },
+          { label: 'Total Courses', value: totalCourses, color: 'primary.main' },
+          { label: 'Active Courses', value: activeCourses, color: 'success.main' },
+          { label: 'Total Enrollments', value: totalEnrollments, color: 'info.main' },
+          { label: 'Completion Rate', value: completionRate, color: 'warning.main' },
         ].map(({ label, value, color }) => (
           <Grid item xs={6} sm={3} key={label}>
             <Card>
@@ -125,7 +161,7 @@ const LmsPage = () => {
       </Grid>
 
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
-        <Tabs value={tab} onChange={(_, v) => setTab(v)}>
+        <Tabs value={tab} onChange={handleTabChange}>
           <Tab label="Courses" />
           <Tab label="Enrollments" />
         </Tabs>
@@ -136,7 +172,7 @@ const LmsPage = () => {
           placeholder="Search..."
           size="small"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => { setSearch(e.target.value); setPage(0); }}
           sx={{ width: 300 }}
           InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
         />
@@ -145,8 +181,30 @@ const LmsPage = () => {
 
       {error && <ErrorAlert message={error} onRetry={fetchData} />}
 
-      {tab === 0 && <DataTable columns={courseColumns} rows={courseRows} loading={loading} totalCount={courseRows.length} />}
-      {tab === 1 && <DataTable columns={enrollmentColumns} rows={enrollmentRows} loading={loading} totalCount={enrollmentRows.length} />}
+      {tab === 0 && (
+        <DataTable
+          columns={courseColumns}
+          rows={courseRows}
+          loading={loading}
+          totalCount={totalCount}
+          page={page}
+          rowsPerPage={rowsPerPage}
+          onPageChange={(_, p) => setPage(p)}
+          onRowsPerPageChange={(e) => { setRowsPerPage(+e.target.value); setPage(0); }}
+        />
+      )}
+      {tab === 1 && (
+        <DataTable
+          columns={enrollmentColumns}
+          rows={enrollmentRows}
+          loading={loading}
+          totalCount={totalCount}
+          page={page}
+          rowsPerPage={rowsPerPage}
+          onPageChange={(_, p) => setPage(p)}
+          onRowsPerPageChange={(e) => { setRowsPerPage(+e.target.value); setPage(0); }}
+        />
+      )}
     </Box>
   );
 };

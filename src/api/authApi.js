@@ -1,13 +1,18 @@
 import apiClient from './axios';
 
 export const loginApi = (credentials) =>
-  apiClient.post('/auth/login', credentials);
+  apiClient.post('/api/v1/auth/login', credentials);
+// LoginRequest: { usernameOrEmail, password }
 
 export const logoutApi = () =>
-  apiClient.post('/auth/logout');
+  apiClient.post('/api/v1/auth/logout');
 
-export const getMeApi = () =>
-  apiClient.get('/auth/me');
+export const refreshTokenApi = (refreshToken) =>
+  apiClient.post('/api/v1/auth/refresh', { refreshToken });
 
-export const refreshTokenApi = () =>
-  apiClient.post('/auth/refresh');
+export const forgotPasswordApi = (email) =>
+  apiClient.post('/api/v1/auth/forgot-password', { email });
+
+export const resetPasswordApi = (data) =>
+  apiClient.post('/api/v1/auth/reset-password', data);
+// ResetPasswordRequest: { token, newPassword, confirmPassword }

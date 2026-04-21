@@ -12,6 +12,7 @@ const QmsPage = lazy(() => import('../pages/qms/QmsPage'));
 const DmsPage = lazy(() => import('../pages/dms/DmsPage'));
 const LmsPage = lazy(() => import('../pages/lms/LmsPage'));
 const ReportsPage = lazy(() => import('../pages/reports/ReportsPage'));
+const AuditPage = lazy(() => import('../pages/audit/AuditPage'));
 
 const AppRoutes = () => (
   <Suspense fallback={<Loader />}>
@@ -31,6 +32,7 @@ const AppRoutes = () => (
         <Route path={ROUTES.DMS} element={<DmsPage />} />
         <Route path={ROUTES.LMS} element={<LmsPage />} />
         <Route path={ROUTES.REPORTS} element={<ReportsPage />} />
+        <Route path={ROUTES.AUDIT} element={<AuditPage />} />
       </Route>
       <Route path="*" element={<Navigate to={ROUTES.DASHBOARD} replace />} />
     </Routes>

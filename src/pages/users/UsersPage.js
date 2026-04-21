@@ -14,16 +14,18 @@ import { getUsersApi, createUserApi, updateUserApi, deleteUserApi } from '../../
 import { getStatusColor, formatDate } from '../../utils/helpers';
 import { ROUTES } from '../../utils/constants';
 
-const MOCK_USERS = [
-  { id: 1, name: 'Alice Johnson', email: 'alice@qms.com', role: 'ADMIN', department: 'Quality', status: 'ACTIVE', createdAt: '2024-01-15' },
-  { id: 2, name: 'Bob Martinez', email: 'bob@qms.com', role: 'MANAGER', department: 'Production', status: 'ACTIVE', createdAt: '2024-02-20' },
-  { id: 3, name: 'Carol Smith', email: 'carol@qms.com', role: 'USER', department: 'HR', status: 'ACTIVE', createdAt: '2024-03-10' },
-  { id: 4, name: 'David Lee', email: 'david@qms.com', role: 'USER', department: 'Engineering', status: 'INACTIVE', createdAt: '2024-03-25' },
-  { id: 5, name: 'Emma Wilson', email: 'emma@qms.com', role: 'MANAGER', department: 'Compliance', status: 'ACTIVE', createdAt: '2024-04-01' },
-  { id: 6, name: 'Frank Brown', email: 'frank@qms.com', role: 'USER', department: 'Logistics', status: 'ACTIVE', createdAt: '2024-04-15' },
-];
+const EMPTY_FORM = { name: '', username: '', email: '', password: '', role: 'USER', department: '', status: 'ACTIVE' };
 
-const EMPTY_FORM = { name: '', email: '', role: 'USER', department: '', status: 'ACTIVE' };
+const normalizeUser = (u) => ({
+  id: u.id,
+  name: u.fullName || `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.username,
+  username: u.username,
+  email: u.email,
+  role: Array.isArray(u.roles) ? (u.roles[0]?.name || u.roles[0] || 'USER') : (u.role || 'USER'),
+  department: u.department || '',
+  status: u.isActive !== undefined ? (u.isActive ? 'ACTIVE' : 'INACTIVE') : (u.status || 'ACTIVE'),
+  createdAt: u.createdAt,
+});
 
 const UsersPage = () => {
   const [rows, setRows] = useState([]);
@@ -32,6 +34,7 @@ const UsersPage = () => {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [totalCount, setTotalCount] = useState(0);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editUser, setEditUser] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -42,40 +45,54 @@ const UsersPage = () => {
     setLoading(true);
     setError(null);
     try {
-      // Uses mock data — swap for: const { data } = await getUsersApi({ page, size: rowsPerPage, search });
-      await new Promise((r) => setTimeout(r, 600));
-      const filtered = MOCK_USERS.filter(
-        (u) =>
-          !search ||
-          u.name.toLowerCase().includes(search.toLowerCase()) ||
-          u.email.toLowerCase().includes(search.toLowerCase()) ||
-          u.department.toLowerCase().includes(search.toLowerCase())
-      );
-      setRows(filtered);
+      const { data } = await getUsersApi({ search: search || undefined, page, size: rowsPerPage });
+      const payload = data?.data;
+      const items = payload?.content ?? (Array.isArray(payload) ? payload : []);
+      setRows(items.map(normalizeUser));
+      setTotalCount(payload?.totalElements ?? items.length);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to load users.');
     } finally {
       setLoading(false);
     }
-  }, [search]);
+  }, [search, page, rowsPerPage]);
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
   const openCreate = () => { setEditUser(null); setForm(EMPTY_FORM); setSaveError(null); setDialogOpen(true); };
-  const openEdit = (user) => { setEditUser(user); setForm({ name: user.name, email: user.email, role: user.role, department: user.department, status: user.status }); setSaveError(null); setDialogOpen(true); };
+  const openEdit = (user) => {
+    setEditUser(user);
+    setForm({ name: user.name, username: user.username || '', email: user.email, password: '', role: user.role, department: user.department, status: user.status });
+    setSaveError(null);
+    setDialogOpen(true);
+  };
 
   const handleSave = async () => {
     setSaving(true);
     setSaveError(null);
     try {
+      const [firstName, ...rest] = (form.name || '').split(' ');
+      const lastName = rest.join(' ');
       if (editUser) {
-        await new Promise((r) => setTimeout(r, 400)); // swap: await updateUserApi(editUser.id, form);
-        setRows((prev) => prev.map((u) => (u.id === editUser.id ? { ...u, ...form } : u)));
+        await updateUserApi(editUser.id, {
+          firstName, lastName,
+          email: form.email,
+          department: form.department,
+          roles: [form.role],
+          isActive: form.status === 'ACTIVE',
+        });
       } else {
-        await new Promise((r) => setTimeout(r, 400)); // swap: await createUserApi(form);
-        setRows((prev) => [...prev, { id: Date.now(), ...form, createdAt: new Date().toISOString() }]);
+        await createUserApi({
+          username: form.username,
+          email: form.email,
+          password: form.password,
+          firstName, lastName,
+          roles: [form.role],
+          department: form.department,
+        });
       }
       setDialogOpen(false);
+      fetchUsers();
     } catch (err) {
       setSaveError(err.response?.data?.message || 'Failed to save user.');
     } finally {
@@ -86,15 +103,16 @@ const UsersPage = () => {
   const handleDelete = async (id) => {
     if (!window.confirm('Delete this user?')) return;
     try {
-      await new Promise((r) => setTimeout(r, 300)); // swap: await deleteUserApi(id);
-      setRows((prev) => prev.filter((u) => u.id !== id));
+      await deleteUserApi(id);
+      fetchUsers();
     } catch (err) {
-      setError('Failed to delete user.');
+      setError(err.response?.data?.message || 'Failed to delete user.');
     }
   };
 
   const columns = [
     { field: 'name', headerName: 'Name', minWidth: 150 },
+    { field: 'username', headerName: 'Username', minWidth: 120 },
     { field: 'email', headerName: 'Email', minWidth: 200 },
     { field: 'role', headerName: 'Role', minWidth: 100, renderCell: (row) => <Chip label={row.role} size="small" color={row.role === 'ADMIN' ? 'primary' : row.role === 'MANAGER' ? 'secondary' : 'default'} /> },
     { field: 'department', headerName: 'Department', minWidth: 130 },
@@ -129,7 +147,7 @@ const UsersPage = () => {
           placeholder="Search by name, email, department..."
           size="small"
           value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          onChange={(e) => { setSearch(e.target.value); setPage(0); }}
           sx={{ width: 320 }}
           InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
         />
@@ -144,28 +162,35 @@ const UsersPage = () => {
         columns={columns}
         rows={rows}
         loading={loading}
-        totalCount={rows.length}
+        totalCount={totalCount}
         page={page}
         rowsPerPage={rowsPerPage}
         onPageChange={(_, p) => setPage(p)}
         onRowsPerPageChange={(e) => { setRowsPerPage(+e.target.value); setPage(0); }}
       />
 
-      {/* Create / Edit Dialog */}
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>{editUser ? 'Edit User' : 'Create User'}</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
           {saveError && <Alert severity="error" sx={{ mb: 2 }}>{saveError}</Alert>}
           <Grid container spacing={2}>
-            {[
-              { label: 'Full Name', field: 'name' },
-              { label: 'Email Address', field: 'email', type: 'email' },
-              { label: 'Department', field: 'department' },
-            ].map(({ label, field, type }) => (
-              <Grid item xs={12} key={field}>
-                <TextField label={label} type={type || 'text'} fullWidth value={form[field]} onChange={(e) => setForm({ ...form, [field]: e.target.value })} />
+            <Grid item xs={12}>
+              <TextField label="Full Name" fullWidth value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            </Grid>
+            <Grid item xs={6}>
+              <TextField label="Username" fullWidth value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
+            </Grid>
+            <Grid item xs={6}>
+              <TextField label="Email Address" type="email" fullWidth value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+            </Grid>
+            {!editUser && (
+              <Grid item xs={12}>
+                <TextField label="Password" type="password" fullWidth value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
               </Grid>
-            ))}
+            )}
+            <Grid item xs={12}>
+              <TextField label="Department" fullWidth value={form.department} onChange={(e) => setForm({ ...form, department: e.target.value })} />
+            </Grid>
             <Grid item xs={6}>
               <TextField label="Role" select fullWidth value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
                 {['ADMIN', 'MANAGER', 'USER'].map((r) => <MenuItem key={r} value={r}>{r}</MenuItem>)}

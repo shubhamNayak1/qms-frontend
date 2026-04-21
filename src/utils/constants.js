@@ -9,6 +9,7 @@ export const ROUTES = {
   DMS: '/dms',
   LMS: '/lms',
   REPORTS: '/reports',
+  AUDIT: '/audit',
 };
 
 export const ROLES = {

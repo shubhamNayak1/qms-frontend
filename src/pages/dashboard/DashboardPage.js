@@ -5,39 +5,29 @@ import {
   VerifiedUser as QmsIcon,
   Description as DmsIcon,
   School as LmsIcon,
-  Warning as WarningIcon,
-  CheckCircle as CheckIcon,
-  Schedule as PendingIcon,
 } from '@mui/icons-material';
 import PageHeader from '../../components/PageHeader';
 import StatCard from '../../components/StatCard';
 import { useAuth } from '../../store/AuthContext';
+import { getQmsDashboardApi } from '../../api/qmsApi';
+import { getUsersApi } from '../../api/userApi';
+import { getDocumentStatsApi } from '../../api/dmsApi';
+import { getLmsComplianceDashboardApi } from '../../api/lmsApi';
 
-const MOCK_STATS = [
-  { title: 'Total Users', value: '248', subtitle: 'Active accounts', icon: <PeopleIcon />, color: '#1565C0', trend: 12 },
-  { title: 'Non-Conformances', value: '34', subtitle: '8 open this week', icon: <QmsIcon />, color: '#E53935', trend: -5 },
-  { title: 'Documents', value: '1,204', subtitle: '23 pending review', icon: <DmsIcon />, color: '#00897B', trend: 8 },
-  { title: 'Training Courses', value: '47', subtitle: '312 enrollments', icon: <LmsIcon />, color: '#7B1FA2', trend: 15 },
-];
-
-const RECENT_ACTIVITY = [
-  { id: 1, type: 'NC', title: 'Non-Conformance #NC-2024-089', desc: 'Product defect reported in Batch #4421', status: 'OPEN', time: '2 hours ago', color: 'error' },
-  { id: 2, type: 'DOC', title: 'SOP-QC-023 Updated', desc: 'Quality Control Procedure v3.2 published', status: 'APPROVED', time: '4 hours ago', color: 'success' },
-  { id: 3, type: 'LMS', title: 'ISO 9001 Training Completed', desc: '12 employees completed training module', status: 'COMPLETED', time: '1 day ago', color: 'success' },
-  { id: 4, type: 'AUDIT', title: 'Internal Audit Scheduled', desc: 'Q4 Internal Audit — Production Floor', status: 'PENDING', time: '2 days ago', color: 'warning' },
-  { id: 5, type: 'DOC', title: 'Risk Assessment Document', desc: 'Annual risk assessment submitted for review', status: 'PENDING', time: '3 days ago', color: 'warning' },
-];
-
-const QUICK_STATS = [
-  { label: 'Open NCRs', value: 8, color: 'error' },
-  { label: 'Docs Pending', value: 23, color: 'warning' },
-  { label: 'Overdue Training', value: 5, color: 'error' },
-  { label: 'Audits This Month', value: 3, color: 'info' },
+const FALLBACK_STATS = [
+  { title: 'Total Users', value: '—', subtitle: 'Active accounts', icon: <PeopleIcon />, color: '#1565C0', trend: 0 },
+  { title: 'Non-Conformances', value: '—', subtitle: 'Open items', icon: <QmsIcon />, color: '#E53935', trend: 0 },
+  { title: 'Documents', value: '—', subtitle: 'Managed docs', icon: <DmsIcon />, color: '#00897B', trend: 0 },
+  { title: 'Training Courses', value: '—', subtitle: 'Active courses', icon: <LmsIcon />, color: '#7B1FA2', trend: 0 },
 ];
 
 const DashboardPage = () => {
   const { user } = useAuth();
   const [greeting, setGreeting] = useState('');
+  const [stats, setStats] = useState(FALLBACK_STATS);
+  const [qmsDash, setQmsDash] = useState(null);
+  const [lmsDash, setLmsDash] = useState(null);
+  const [recentActivity, setRecentActivity] = useState([]);
 
   useEffect(() => {
     const h = new Date().getHours();
@@ -45,6 +35,69 @@ const DashboardPage = () => {
     else if (h < 17) setGreeting('Good afternoon');
     else setGreeting('Good evening');
   }, []);
+
+  useEffect(() => {
+    const load = async () => {
+      const results = await Promise.allSettled([
+        getQmsDashboardApi(),
+        getUsersApi({ page: 0, size: 1 }),
+        getDocumentStatsApi(),
+        getLmsComplianceDashboardApi(),
+      ]);
+
+      const qmsData = results[0].status === 'fulfilled' ? results[0].value.data?.data : null;
+      const usersData = results[1].status === 'fulfilled' ? results[1].value.data?.data : null;
+      const dmsData = results[2].status === 'fulfilled' ? results[2].value.data?.data : null;
+      const lmsData = results[3].status === 'fulfilled' ? results[3].value.data?.data : null;
+
+      if (qmsData) setQmsDash(qmsData);
+      if (lmsData) setLmsDash(lmsData);
+
+      const totalUsers = usersData?.totalElements ?? usersData?.totalUsers ?? '—';
+      const totalDocs = dmsData?.totalDocuments ?? dmsData?.total ?? '—';
+      const openNc = qmsData?.openNcCount ?? qmsData?.openNonConformances ?? '—';
+      const totalCourses = lmsData?.activeProgramCount ?? lmsData?.totalPrograms ?? '—';
+
+      setStats([
+        { title: 'Total Users', value: String(totalUsers), subtitle: 'Active accounts', icon: <PeopleIcon />, color: '#1565C0', trend: 0 },
+        { title: 'Non-Conformances', value: String(openNc), subtitle: 'Open this period', icon: <QmsIcon />, color: '#E53935', trend: 0 },
+        { title: 'Documents', value: String(totalDocs), subtitle: 'Managed docs', icon: <DmsIcon />, color: '#00897B', trend: 0 },
+        { title: 'Training Courses', value: String(totalCourses), subtitle: 'Active courses', icon: <LmsIcon />, color: '#7B1FA2', trend: 0 },
+      ]);
+
+      if (qmsData?.recentActivity) {
+        setRecentActivity(qmsData.recentActivity.slice(0, 5).map((a, i) => ({
+          id: i,
+          type: a.module?.substring(0, 3) || 'QMS',
+          title: a.title || a.action || 'Activity',
+          desc: a.description || '',
+          status: a.status || 'INFO',
+          time: a.timestamp ? new Date(a.timestamp).toLocaleDateString() : '',
+          color: 'info',
+        })));
+      }
+    };
+    load();
+  }, []);
+
+  const d = qmsDash;
+  const quickStats = [
+    { label: 'Open NCRs', value: d?.openNcCount ?? '—', color: 'error' },
+    { label: 'Open CAPAs', value: d?.openCapaCount ?? '—', color: 'warning' },
+    { label: 'Open Incidents', value: d?.openIncidentCount ?? '—', color: 'error' },
+    { label: 'Pending Changes', value: d?.pendingChangeCount ?? '—', color: 'info' },
+  ];
+
+  const complianceScores = [
+    { module: 'Quality Management', score: d?.qmsComplianceScore ?? 94, color: 'success' },
+    { module: 'Document Control', score: lmsDash?.documentComplianceScore ?? 87, color: 'info' },
+    { module: 'Training & Competency', score: lmsDash?.overallComplianceRate ?? 79, color: 'warning' },
+    { module: 'Risk Management', score: d?.riskScore ?? 91, color: 'success' },
+  ];
+
+  const displayActivity = recentActivity.length > 0 ? recentActivity : [
+    { id: 1, type: 'SYS', title: 'Dashboard loaded', desc: 'Connect your backend to see live activity', status: 'INFO', time: 'now', color: 'info' },
+  ];
 
   return (
     <Box>
@@ -54,7 +107,7 @@ const DashboardPage = () => {
       />
 
       <Grid container spacing={2.5} sx={{ mb: 3 }}>
-        {MOCK_STATS.map((stat) => (
+        {stats.map((stat) => (
           <Grid item xs={12} sm={6} lg={3} key={stat.title}>
             <StatCard {...stat} />
           </Grid>
@@ -62,14 +115,13 @@ const DashboardPage = () => {
       </Grid>
 
       <Grid container spacing={2.5}>
-        {/* Recent Activity */}
         <Grid item xs={12} lg={8}>
           <Card>
             <CardContent sx={{ pb: 0 }}>
               <Typography variant="h6" gutterBottom>Recent Activity</Typography>
               <Divider sx={{ mb: 1 }} />
               <List dense disablePadding>
-                {RECENT_ACTIVITY.map((item, idx) => (
+                {displayActivity.map((item, idx) => (
                   <React.Fragment key={item.id}>
                     <ListItem disablePadding sx={{ py: 1 }}>
                       <ListItemAvatar>
@@ -79,11 +131,11 @@ const DashboardPage = () => {
                       </ListItemAvatar>
                       <ListItemText
                         primary={<Typography variant="body2" fontWeight={600}>{item.title}</Typography>}
-                        secondary={<Typography variant="caption" color="text.secondary">{item.desc} · {item.time}</Typography>}
+                        secondary={<Typography variant="caption" color="text.secondary">{item.desc}{item.time ? ` · ${item.time}` : ''}</Typography>}
                       />
                       <Chip label={item.status} color={item.color} size="small" variant="outlined" sx={{ ml: 1, minWidth: 80 }} />
                     </ListItem>
-                    {idx < RECENT_ACTIVITY.length - 1 && <Divider />}
+                    {idx < displayActivity.length - 1 && <Divider />}
                   </React.Fragment>
                 ))}
               </List>
@@ -91,14 +143,13 @@ const DashboardPage = () => {
           </Card>
         </Grid>
 
-        {/* Quick Stats panel */}
         <Grid item xs={12} lg={4}>
           <Card sx={{ mb: 2.5 }}>
             <CardContent>
               <Typography variant="h6" gutterBottom>Action Required</Typography>
               <Divider sx={{ mb: 2 }} />
               <Grid container spacing={1.5}>
-                {QUICK_STATS.map(({ label, value, color }) => (
+                {quickStats.map(({ label, value, color }) => (
                   <Grid item xs={6} key={label}>
                     <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: `${color}.50`, border: '1px solid', borderColor: `${color}.100`, textAlign: 'center' }}>
                       <Typography variant="h5" fontWeight={700} color={`${color}.main`}>{value}</Typography>
@@ -114,12 +165,7 @@ const DashboardPage = () => {
             <CardContent>
               <Typography variant="h6" gutterBottom>Compliance Score</Typography>
               <Divider sx={{ mb: 2 }} />
-              {[
-                { module: 'Quality Management', score: 94, color: 'success' },
-                { module: 'Document Control', score: 87, color: 'info' },
-                { module: 'Training & Competency', score: 79, color: 'warning' },
-                { module: 'Risk Management', score: 91, color: 'success' },
-              ].map(({ module, score, color }) => (
+              {complianceScores.map(({ module, score, color }) => (
                 <Box key={module} sx={{ mb: 2 }}>
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
                     <Typography variant="caption">{module}</Typography>
