@@ -95,17 +95,38 @@ const UsersPage = () => {
     try {
       const [firstName, ...rest] = (form.name || '').split(' ');
       const lastName = rest.join(' ');
+
       if (editUser) {
-        // PUT — update profile details only (no roleIds)
-        await updateUserApi(editUser.id, {
-          firstName, lastName,
-          department: form.department,
-          isActive: form.status === 'ACTIVE',
-        });
-        // PATCH — update roles separately
-        if (form.role) {
-          await assignRolesApi(editUser.id, [form.role]);
+        // Detect what actually changed
+        const [origFirst, ...origRest] = (editUser.name || '').split(' ');
+        const origLast = origRest.join(' ');
+
+        const profileChanged =
+          firstName !== origFirst ||
+          lastName !== origLast ||
+          form.department !== editUser.department ||
+          (form.status === 'ACTIVE') !== (editUser.status === 'ACTIVE');
+
+        const roleChanged = form.role && String(form.role) !== String(editUser.roleId);
+
+        const calls = [];
+        if (profileChanged) {
+          calls.push(updateUserApi(editUser.id, {
+            firstName, lastName,
+            department: form.department,
+            isActive: form.status === 'ACTIVE',
+          }));
         }
+        if (roleChanged) {
+          calls.push(assignRolesApi(editUser.id, [form.role]));
+        }
+
+        if (calls.length === 0) {
+          // nothing changed — just close
+          setDialogOpen(false);
+          return;
+        }
+        await Promise.all(calls);
       } else {
         // POST — create user with roleIds in one call
         await createUserApi({
