@@ -10,7 +10,7 @@ import {
 import PageHeader from '../../components/PageHeader';
 import DataTable from '../../components/DataTable';
 import ErrorAlert from '../../components/ErrorAlert';
-import { getUsersApi, createUserApi, updateUserApi, deleteUserApi } from '../../api/userApi';
+import { getUsersApi, createUserApi, updateUserApi, deleteUserApi, assignRolesApi } from '../../api/userApi';
 import { getAllRolesFlatApi } from '../../api/roleApi';
 import { getStatusColor, formatDate } from '../../utils/helpers';
 import { ROUTES } from '../../utils/constants';
@@ -96,14 +96,18 @@ const UsersPage = () => {
       const [firstName, ...rest] = (form.name || '').split(' ');
       const lastName = rest.join(' ');
       if (editUser) {
+        // PUT — update profile details only (no roleIds)
         await updateUserApi(editUser.id, {
           firstName, lastName,
-          email: form.email,
           department: form.department,
-          roleIds: [form.role],
           isActive: form.status === 'ACTIVE',
         });
+        // PATCH — update roles separately
+        if (form.role) {
+          await assignRolesApi(editUser.id, [form.role]);
+        }
       } else {
+        // POST — create user with roleIds in one call
         await createUserApi({
           username: form.username,
           email: form.email,
