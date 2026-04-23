@@ -11,10 +11,11 @@ import PageHeader from '../../components/PageHeader';
 import DataTable from '../../components/DataTable';
 import ErrorAlert from '../../components/ErrorAlert';
 import { getUsersApi, createUserApi, updateUserApi, deleteUserApi } from '../../api/userApi';
+import { getAllRolesFlatApi } from '../../api/roleApi';
 import { getStatusColor, formatDate } from '../../utils/helpers';
 import { ROUTES } from '../../utils/constants';
 
-const EMPTY_FORM = { name: '', username: '', email: '', password: '', role: 'USER', department: '', status: 'ACTIVE' };
+const EMPTY_FORM = { name: '', username: '', email: '', password: '', role: '', department: '', status: 'ACTIVE' };
 
 const normalizeUser = (u) => ({
   id: u.id,
@@ -35,6 +36,7 @@ const UsersPage = () => {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [totalCount, setTotalCount] = useState(0);
+  const [roles, setRoles] = useState([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editUser, setEditUser] = useState(null);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -59,7 +61,23 @@ const UsersPage = () => {
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
-  const openCreate = () => { setEditUser(null); setForm(EMPTY_FORM); setSaveError(null); setDialogOpen(true); };
+  useEffect(() => {
+    getAllRolesFlatApi()
+      .then(({ data }) => {
+        const list = data?.data ?? [];
+        setRoles(list);
+        // pre-select first role in EMPTY_FORM default
+        if (list.length > 0) setForm((f) => ({ ...f, role: f.role || list[0].name }));
+      })
+      .catch(() => {});
+  }, []);
+
+  const openCreate = () => {
+    setEditUser(null);
+    setForm({ ...EMPTY_FORM, role: roles[0]?.name || '' });
+    setSaveError(null);
+    setDialogOpen(true);
+  };
   const openEdit = (user) => {
     setEditUser(user);
     setForm({ name: user.name, username: user.username || '', email: user.email, password: '', role: user.role, department: user.department, status: user.status });
@@ -114,7 +132,12 @@ const UsersPage = () => {
     { field: 'name', headerName: 'Name', minWidth: 150 },
     { field: 'username', headerName: 'Username', minWidth: 120 },
     { field: 'email', headerName: 'Email', minWidth: 200 },
-    { field: 'role', headerName: 'Role', minWidth: 100, renderCell: (row) => <Chip label={row.role} size="small" color={row.role === 'ADMIN' ? 'primary' : row.role === 'MANAGER' ? 'secondary' : 'default'} /> },
+    { field: 'role', headerName: 'Role', minWidth: 130, renderCell: (row) => {
+      const r = row.role || '';
+      const color = r.includes('ADMIN') ? 'primary' : r.includes('MANAGER') || r.includes('QA') ? 'secondary' : 'default';
+      const label = roles.find((x) => x.name === r)?.displayName || r;
+      return <Chip label={label} size="small" color={color} />;
+    }},
     { field: 'department', headerName: 'Department', minWidth: 130 },
     { field: 'status', headerName: 'Status', minWidth: 100, renderCell: (row) => <Chip label={row.status} size="small" color={getStatusColor(row.status)} /> },
     { field: 'createdAt', headerName: 'Created', minWidth: 120, renderCell: (row) => formatDate(row.createdAt) },
@@ -193,7 +216,11 @@ const UsersPage = () => {
             </Grid>
             <Grid item xs={6}>
               <TextField label="Role" select fullWidth value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
-                {['ADMIN', 'MANAGER', 'USER'].map((r) => <MenuItem key={r} value={r}>{r}</MenuItem>)}
+                {roles.map((r) => (
+                  <MenuItem key={r.name} value={r.name}>
+                    {r.displayName || r.name}
+                  </MenuItem>
+                ))}
               </TextField>
             </Grid>
             <Grid item xs={6}>
