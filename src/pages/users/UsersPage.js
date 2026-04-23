@@ -17,16 +17,20 @@ import { ROUTES } from '../../utils/constants';
 
 const EMPTY_FORM = { name: '', username: '', email: '', password: '', role: '', department: '', status: 'ACTIVE' };
 
-const normalizeUser = (u) => ({
-  id: u.id,
-  name: u.fullName || `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.username,
-  username: u.username,
-  email: u.email,
-  role: Array.isArray(u.roles) ? (u.roles[0]?.name || u.roles[0] || 'USER') : (u.role || 'USER'),
-  department: u.department || '',
-  status: u.isActive !== undefined ? (u.isActive ? 'ACTIVE' : 'INACTIVE') : (u.status || 'ACTIVE'),
-  createdAt: u.createdAt,
-});
+const normalizeUser = (u) => {
+  const firstRole = Array.isArray(u.roles) ? u.roles[0] : null;
+  return {
+    id: u.id,
+    name: u.fullName || `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.username,
+    username: u.username,
+    email: u.email,
+    role: firstRole?.name || u.role || '',       // name — used for display
+    roleId: firstRole?.id ?? null,               // id  — used for form
+    department: u.department || '',
+    status: u.isActive !== undefined ? (u.isActive ? 'ACTIVE' : 'INACTIVE') : (u.status || 'ACTIVE'),
+    createdAt: u.createdAt,
+  };
+};
 
 const UsersPage = () => {
   const [rows, setRows] = useState([]);
@@ -67,20 +71,20 @@ const UsersPage = () => {
         const list = data?.data ?? [];
         setRoles(list);
         // pre-select first role in EMPTY_FORM default
-        if (list.length > 0) setForm((f) => ({ ...f, role: f.role || list[0].name }));
+        if (list.length > 0) setForm((f) => ({ ...f, role: f.role || list[0].id }));
       })
       .catch(() => {});
   }, []);
 
   const openCreate = () => {
     setEditUser(null);
-    setForm({ ...EMPTY_FORM, role: roles[0]?.name || '' });
+    setForm({ ...EMPTY_FORM, role: roles[0]?.id || '' });
     setSaveError(null);
     setDialogOpen(true);
   };
   const openEdit = (user) => {
     setEditUser(user);
-    setForm({ name: user.name, username: user.username || '', email: user.email, password: '', role: user.role, department: user.department, status: user.status });
+    setForm({ name: user.name, username: user.username || '', email: user.email, password: '', role: user.roleId || '', department: user.department, status: user.status });
     setSaveError(null);
     setDialogOpen(true);
   };
@@ -96,7 +100,7 @@ const UsersPage = () => {
           firstName, lastName,
           email: form.email,
           department: form.department,
-          roles: [form.role],
+          roleIds: [form.role],
           isActive: form.status === 'ACTIVE',
         });
       } else {
@@ -105,7 +109,7 @@ const UsersPage = () => {
           email: form.email,
           password: form.password,
           firstName, lastName,
-          roles: [form.role],
+          roleIds: [form.role],
           department: form.department,
         });
       }
@@ -132,10 +136,11 @@ const UsersPage = () => {
     { field: 'name', headerName: 'Name', minWidth: 150 },
     { field: 'username', headerName: 'Username', minWidth: 120 },
     { field: 'email', headerName: 'Email', minWidth: 200 },
-    { field: 'role', headerName: 'Role', minWidth: 130, renderCell: (row) => {
-      const r = row.role || '';
-      const color = r.includes('ADMIN') ? 'primary' : r.includes('MANAGER') || r.includes('QA') ? 'secondary' : 'default';
-      const label = roles.find((x) => x.name === r)?.displayName || r;
+    { field: 'role', headerName: 'Role', minWidth: 150, renderCell: (row) => {
+      const roleName = row.role || '';
+      const matched = roles.find((x) => x.name === roleName);
+      const label = matched?.displayName || roleName;
+      const color = roleName.includes('ADMIN') ? 'primary' : roleName.includes('MANAGER') || roleName.includes('QA') ? 'secondary' : 'default';
       return <Chip label={label} size="small" color={color} />;
     }},
     { field: 'department', headerName: 'Department', minWidth: 130 },
@@ -217,7 +222,7 @@ const UsersPage = () => {
             <Grid item xs={6}>
               <TextField label="Role" select fullWidth value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
                 {roles.map((r) => (
-                  <MenuItem key={r.name} value={r.name}>
+                  <MenuItem key={r.id} value={r.id}>
                     {r.displayName || r.name}
                   </MenuItem>
                 ))}
