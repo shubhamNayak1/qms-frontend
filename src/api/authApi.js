@@ -16,3 +16,6 @@ export const forgotPasswordApi = (email) =>
 export const resetPasswordApi = (data) =>
   apiClient.post('/api/v1/auth/reset-password', data);
 // ResetPasswordRequest: { token, newPassword, confirmPassword }
+
+export const getMeApi = () =>
+  apiClient.get('/api/v1/auth/me');

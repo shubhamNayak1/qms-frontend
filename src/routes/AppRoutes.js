@@ -1,6 +1,7 @@
 import React, { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import ProtectedRoute from './ProtectedRoute';
+import ModuleRoute from './ModuleRoute';
 import MainLayout from '../layouts/MainLayout';
 import Loader from '../components/Loader';
 import { ROUTES } from '../utils/constants';
@@ -27,12 +28,12 @@ const AppRoutes = () => (
       >
         <Route index element={<Navigate to={ROUTES.DASHBOARD} replace />} />
         <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
-        <Route path={ROUTES.USERS} element={<UsersPage />} />
-        <Route path={ROUTES.QMS} element={<QmsPage />} />
-        <Route path={ROUTES.DMS} element={<DmsPage />} />
-        <Route path={ROUTES.LMS} element={<LmsPage />} />
-        <Route path={ROUTES.REPORTS} element={<ReportsPage />} />
-        <Route path={ROUTES.AUDIT} element={<AuditPage />} />
+        <Route path={ROUTES.USERS}   element={<ModuleRoute moduleKey="USER">  <UsersPage />   </ModuleRoute>} />
+        <Route path={ROUTES.QMS}    element={<ModuleRoute moduleKey="QMS">   <QmsPage />     </ModuleRoute>} />
+        <Route path={ROUTES.DMS}    element={<ModuleRoute moduleKey="DMS">   <DmsPage />     </ModuleRoute>} />
+        <Route path={ROUTES.LMS}    element={<ModuleRoute moduleKey="LMS">   <LmsPage />     </ModuleRoute>} />
+        <Route path={ROUTES.REPORTS} element={<ModuleRoute moduleKey="REPORT"><ReportsPage /> </ModuleRoute>} />
+        <Route path={ROUTES.AUDIT}  element={<ModuleRoute moduleKey="AUDIT"> <AuditPage />   </ModuleRoute>} />
       </Route>
       <Route path="*" element={<Navigate to={ROUTES.DASHBOARD} replace />} />
     </Routes>

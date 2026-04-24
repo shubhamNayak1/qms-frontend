@@ -18,20 +18,28 @@ import { useAuth } from '../store/AuthContext';
 
 export const DRAWER_WIDTH = 240;
 
+// moduleKey maps to the key used in moduleAccess from /auth/me
+// null = always visible (Dashboard)
 const navItems = [
-  { label: 'Dashboard', icon: <DashboardIcon />, path: ROUTES.DASHBOARD },
-  { label: 'Users', icon: <PeopleIcon />, path: ROUTES.USERS },
-  { label: 'QMS', icon: <QmsIcon />, path: ROUTES.QMS },
-  { label: 'DMS', icon: <DmsIcon />, path: ROUTES.DMS },
-  { label: 'LMS', icon: <LmsIcon />, path: ROUTES.LMS },
-  { label: 'Reports', icon: <ReportsIcon />, path: ROUTES.REPORTS },
-  { label: 'Audit Trail', icon: <AuditIcon />, path: ROUTES.AUDIT },
+  { label: 'Dashboard', icon: <DashboardIcon />, path: ROUTES.DASHBOARD, moduleKey: null },
+  { label: 'Users',     icon: <PeopleIcon />,    path: ROUTES.USERS,     moduleKey: 'USER' },
+  { label: 'QMS',       icon: <QmsIcon />,       path: ROUTES.QMS,       moduleKey: 'QMS' },
+  { label: 'DMS',       icon: <DmsIcon />,       path: ROUTES.DMS,       moduleKey: 'DMS' },
+  { label: 'LMS',       icon: <LmsIcon />,       path: ROUTES.LMS,       moduleKey: 'LMS' },
+  { label: 'Reports',   icon: <ReportsIcon />,   path: ROUTES.REPORTS,   moduleKey: 'REPORT' },
+  { label: 'Audit Trail', icon: <AuditIcon />,   path: ROUTES.AUDIT,     moduleKey: 'AUDIT' },
 ];
 
 const Sidebar = ({ mobileOpen, onMobileClose }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, canAccessModule } = useAuth();
+
+  const visibleItems = navItems.filter(
+    ({ moduleKey }) => moduleKey === null || canAccessModule(moduleKey)
+  );
+
+  const roleName = Array.isArray(user?.roles) ? user.roles[0] : (user?.role || 'USER');
 
   const content = (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -46,7 +54,7 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
       </Toolbar>
 
       <List sx={{ flex: 1, px: 1.5, pt: 1.5 }}>
-        {navItems.map(({ label, icon, path }) => {
+        {visibleItems.map(({ label, icon, path }) => {
           const active = location.pathname === path || location.pathname.startsWith(path + '/');
           return (
             <ListItem key={path} disablePadding sx={{ mb: 0.5 }}>
@@ -77,8 +85,8 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
           {user?.name?.[0]?.toUpperCase() || 'U'}
         </Avatar>
         <Box sx={{ overflow: 'hidden', flex: 1 }}>
-          <Typography variant="body2" fontWeight={600} noWrap>{user?.name || 'Admin User'}</Typography>
-          <Chip label={user?.role || 'ADMIN'} size="small" color="primary" variant="outlined" sx={{ height: 18, fontSize: 10, mt: 0.3 }} />
+          <Typography variant="body2" fontWeight={600} noWrap>{user?.name || 'User'}</Typography>
+          <Chip label={roleName} size="small" color="primary" variant="outlined" sx={{ height: 18, fontSize: 10, mt: 0.3 }} />
         </Box>
       </Box>
     </Box>
@@ -86,7 +94,6 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
 
   return (
     <>
-      {/* Mobile drawer */}
       <Drawer
         variant="temporary"
         open={mobileOpen}
@@ -96,7 +103,6 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
       >
         {content}
       </Drawer>
-      {/* Permanent drawer */}
       <Drawer
         variant="permanent"
         sx={{ display: { xs: 'none', md: 'block' }, '& .MuiDrawer-paper': { width: DRAWER_WIDTH, boxSizing: 'border-box', borderRight: '1px solid', borderColor: 'divider' } }}

@@ -5,10 +5,10 @@ import { ROUTES } from '../utils/constants';
 import Loader from '../components/Loader';
 
 const ProtectedRoute = ({ children }) => {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, bootstrapping } = useAuth();
   const location = useLocation();
 
-  if (loading) return <Loader />;
+  if (loading || bootstrapping) return <Loader />;
 
   if (!isAuthenticated) {
     return <Navigate to={ROUTES.LOGIN} state={{ from: location }} replace />;
