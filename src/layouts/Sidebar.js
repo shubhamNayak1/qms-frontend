@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   Drawer, List, ListItem, ListItemButton, ListItemIcon, ListItemText,
   Toolbar, Typography, Box, Divider, Avatar, Chip,
@@ -21,13 +21,13 @@ export const DRAWER_WIDTH = 240;
 // moduleKey maps to the key used in moduleAccess from /auth/me
 // null = always visible (Dashboard)
 const navItems = [
-  { label: 'Dashboard', icon: <DashboardIcon />, path: ROUTES.DASHBOARD, moduleKey: null },
-  { label: 'Users',     icon: <PeopleIcon />,    path: ROUTES.USERS,     moduleKey: 'USER' },
-  { label: 'QMS',       icon: <QmsIcon />,       path: ROUTES.QMS,       moduleKey: 'QMS' },
-  { label: 'DMS',       icon: <DmsIcon />,       path: ROUTES.DMS,       moduleKey: 'DMS' },
-  { label: 'LMS',       icon: <LmsIcon />,       path: ROUTES.LMS,       moduleKey: 'LMS' },
-  { label: 'Reports',   icon: <ReportsIcon />,   path: ROUTES.REPORTS,   moduleKey: 'REPORT' },
-  { label: 'Audit Trail', icon: <AuditIcon />,   path: ROUTES.AUDIT,     moduleKey: 'AUDIT' },
+  { label: 'Dashboard',   icon: <DashboardIcon />, path: ROUTES.DASHBOARD, moduleKey: null },
+  { label: 'QMS',         icon: <QmsIcon />,       path: ROUTES.QMS,       moduleKey: 'QMS' },
+  { label: 'DMS',         icon: <DmsIcon />,       path: ROUTES.DMS,       moduleKey: 'DMS' },
+  { label: 'LMS',         icon: <LmsIcon />,       path: ROUTES.LMS,       moduleKey: 'LMS' },
+  { label: 'Reports',     icon: <ReportsIcon />,   path: ROUTES.REPORTS,   moduleKey: 'REPORT' },
+  { label: 'Audit Trail', icon: <AuditIcon />,     path: ROUTES.AUDIT,     moduleKey: 'AUDIT' },
+  { label: 'Users',       icon: <PeopleIcon />,    path: ROUTES.USERS,     moduleKey: 'USER' },
 ];
 
 const Sidebar = ({ mobileOpen, onMobileClose }) => {
@@ -35,8 +35,10 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
   const location = useLocation();
   const { user, canAccessModule } = useAuth();
 
-  const visibleItems = navItems.filter(
-    ({ moduleKey }) => moduleKey === null || canAccessModule(moduleKey)
+  // Memoize so the list doesn't recompute on every navigation render
+  const visibleItems = useMemo(
+    () => navItems.filter(({ moduleKey }) => moduleKey === null || canAccessModule(moduleKey)),
+    [canAccessModule]
   );
 
   const roleName = Array.isArray(user?.roles) ? user.roles[0] : (user?.role || 'USER');
@@ -114,4 +116,4 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
   );
 };
 
-export default Sidebar;
+export default React.memo(Sidebar);

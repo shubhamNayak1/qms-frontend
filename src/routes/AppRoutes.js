@@ -7,6 +7,7 @@ import Loader from '../components/Loader';
 import { ROUTES } from '../utils/constants';
 
 const LoginPage = lazy(() => import('../pages/auth/LoginPage'));
+const ChangePasswordPage = lazy(() => import('../pages/auth/ChangePasswordPage'));
 const DashboardPage = lazy(() => import('../pages/dashboard/DashboardPage'));
 const UsersPage = lazy(() => import('../pages/users/UsersPage'));
 const QmsPage = lazy(() => import('../pages/qms/QmsPage'));
@@ -19,6 +20,9 @@ const AppRoutes = () => (
   <Suspense fallback={<Loader />}>
     <Routes>
       <Route path={ROUTES.LOGIN} element={<LoginPage />} />
+      <Route path={ROUTES.CHANGE_PASSWORD} element={
+        <ProtectedRoute><ChangePasswordPage /></ProtectedRoute>
+      } />
       <Route
         element={
           <ProtectedRoute>

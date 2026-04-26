@@ -19,3 +19,7 @@ export const resetPasswordApi = (data) =>
 
 export const getMeApi = () =>
   apiClient.get('/api/v1/auth/me');
+
+export const changePasswordApi = (userId, data) =>
+  apiClient.patch(`/api/v1/users/${userId}/change-password`, data);
+// ChangePasswordRequest: { currentPassword, newPassword, confirmPassword }

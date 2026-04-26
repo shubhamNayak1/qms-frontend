@@ -28,13 +28,25 @@ apiClient.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// Handle 401 — redirect to login
+// Handle 401 — only redirect to login when we truly have no valid session.
+// 401 on a DATA endpoint while a token exists = Spring Security returning 401
+// instead of 403 for insufficient permissions → don't logout, just reject.
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      removeToken();
-      window.location.href = ROUTES.LOGIN;
+    const status = error.response?.status;
+    const url = error.config?.url || '';
+    const hasToken = !!getToken();
+
+    // Only hard-redirect on 401 if:
+    //   • we have no token (genuinely unauthenticated), OR
+    //   • it's an auth/me endpoint (token confirmed invalid by the server)
+    if (status === 401) {
+      if (!hasToken || url.includes('/auth/me') || url.includes('/auth/login')) {
+        removeToken();
+        window.location.href = ROUTES.LOGIN;
+      }
+      // Otherwise: authenticated user hitting a locked endpoint → treat as 403, keep session
     }
     return Promise.reject(error);
   }

@@ -3,6 +3,7 @@ export const USER_KEY = 'qms_user';
 
 export const ROUTES = {
   LOGIN: '/login',
+  CHANGE_PASSWORD: '/change-password',
   DASHBOARD: '/dashboard',
   USERS: '/users',
   QMS: '/qms',

@@ -6,10 +6,12 @@ import {
 import {
   Add as AddIcon, Search as SearchIcon,
   Edit as EditIcon, Delete as DeleteIcon, Refresh as RefreshIcon,
+  Security as PolicyIcon,
 } from '@mui/icons-material';
 import PageHeader from '../../components/PageHeader';
 import DataTable from '../../components/DataTable';
 import ErrorAlert from '../../components/ErrorAlert';
+import PasswordPolicyDialog from './PasswordPolicyDialog';
 import { getUsersApi, createUserApi, updateUserApi, deleteUserApi, assignRolesApi } from '../../api/userApi';
 import { getAllRolesFlatApi } from '../../api/roleApi';
 import { getStatusColor, formatDate } from '../../utils/helpers';
@@ -46,6 +48,7 @@ const UsersPage = () => {
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
+  const [policyOpen, setPolicyOpen] = useState(false);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -189,9 +192,14 @@ const UsersPage = () => {
         subtitle="Manage system users and their access roles."
         breadcrumbs={[{ label: 'Dashboard', href: ROUTES.DASHBOARD }, { label: 'Users' }]}
         action={
-          <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
-            Add User
-          </Button>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <Button variant="outlined" startIcon={<PolicyIcon />} onClick={() => setPolicyOpen(true)}>
+              Password Policy
+            </Button>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
+              Add User
+            </Button>
+          </Box>
         }
       />
 
@@ -222,6 +230,8 @@ const UsersPage = () => {
         onRowsPerPageChange={(e) => { setRowsPerPage(+e.target.value); setPage(0); }}
       />
 
+      <PasswordPolicyDialog open={policyOpen} onClose={() => setPolicyOpen(false)} />
+
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
         <DialogTitle>{editUser ? 'Edit User' : 'Create User'}</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
@@ -231,10 +241,25 @@ const UsersPage = () => {
               <TextField label="Full Name" fullWidth value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             </Grid>
             <Grid item xs={6}>
-              <TextField label="Username" fullWidth value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
+              <TextField
+                label="Username"
+                fullWidth
+                value={form.username}
+                onChange={(e) => setForm({ ...form, username: e.target.value })}
+                disabled={!!editUser}
+                helperText={editUser ? 'Cannot be changed' : ''}
+              />
             </Grid>
             <Grid item xs={6}>
-              <TextField label="Email Address" type="email" fullWidth value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+              <TextField
+                label="Email Address"
+                type="email"
+                fullWidth
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                disabled={!!editUser}
+                helperText={editUser ? 'Cannot be changed' : ''}
+              />
             </Grid>
             {!editUser && (
               <Grid item xs={12}>
