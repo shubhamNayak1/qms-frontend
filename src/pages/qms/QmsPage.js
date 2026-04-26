@@ -106,11 +106,6 @@ const normChangeControl = (r) => ({
   overdue: r.overdue,
 });
 
-const extractList = (data) => {
-  const payload = data?.data;
-  if (!payload) return [];
-  return Array.isArray(payload) ? payload : (payload.content ?? []);
-};
 
 // ── Columns per module ────────────────────────────────────────────────────────
 const makeColumns = (openDetail) => ({

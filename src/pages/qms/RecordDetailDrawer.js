@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Drawer, Box, Typography, Chip, Divider, IconButton, Tooltip,
   CircularProgress, Alert, Button, Stack, Paper, Grid,
@@ -22,7 +22,7 @@ import {
 } from '../../api/qmsApi';
 import {
   STATUS_COLORS, STATUS_LABELS, PRIORITY_COLORS,
-  BRANCH_TRANSITIONS, DANGER_TRANSITIONS, getPrimaryForward, ACTION_LABELS,
+  BRANCH_TRANSITIONS, getPrimaryForward, ACTION_LABELS,
 } from './qmsConstants';
 import WorkflowActionDialog from './WorkflowActionDialog';
 import { formatDate } from '../../utils/helpers';
@@ -248,7 +248,7 @@ const RecordDetailDrawer = ({ open, onClose, recordId, moduleKey, onUpdated }) =
   const [wfLabel, setWfLabel]         = useState('');
   const [wfTargetStatus, setWfTarget] = useState(null);       // for /transition
 
-  const apis = MODULE_APIS[moduleKey] || {};
+  const apis = useMemo(() => MODULE_APIS[moduleKey] || {}, [moduleKey]);
 
   const fetchRecord = useCallback(async () => {
     if (!recordId || !apis.getById) return;
