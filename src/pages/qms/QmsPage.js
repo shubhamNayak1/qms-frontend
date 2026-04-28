@@ -3,10 +3,16 @@ import {
   Box, Button, Chip, Tabs, Tab, TextField, InputAdornment,
   IconButton, Tooltip, Grid, Card, CardContent, Typography,
   MenuItem, Select, FormControl, InputLabel,
+  LinearProgress, Stack, Paper,
 } from '@mui/material';
 import {
   Add as AddIcon, Search as SearchIcon, Refresh as RefreshIcon,
   OpenInNew as OpenIcon,
+  Warning as WarningIcon,
+  CheckCircle as ClosedIcon,
+  HourglassEmpty as InProgressIcon,
+  FolderOpen as OpenRecIcon,
+  PriorityHigh as CriticalIcon,
 } from '@mui/icons-material';
 import PageHeader from '../../components/PageHeader';
 import DataTable from '../../components/DataTable';
@@ -170,6 +176,222 @@ const makeColumns = (openDetail) => ({
   ],
 });
 
+// ── Dashboard Section ─────────────────────────────────────────────────────────
+
+const MODULE_DASH = [
+  {
+    label: 'CAPA', color: '#7b1fa2', bg: '#f3e5f5',
+    stats: (d) => [
+      { label: 'Open',        value: d.capaOpen,       color: '#e65100' },
+      { label: 'In Progress', value: d.capaInProgress, color: '#1565c0' },
+      { label: 'Closed',      value: d.capaClosed,     color: '#2e7d32' },
+    ],
+    badges: (d) => [
+      d.capaOverdue  > 0 && { label: `${d.capaOverdue} Overdue`,   icon: <WarningIcon sx={{ fontSize: 12 }} />, color: 'error'   },
+      d.capaCritical > 0 && { label: `${d.capaCritical} Critical`, icon: <CriticalIcon sx={{ fontSize: 12 }} />, color: 'warning' },
+    ].filter(Boolean),
+  },
+  {
+    label: 'Deviation', color: '#1565c0', bg: '#e3f2fd',
+    stats: (d) => [
+      { label: 'Open',        value: d.deviationOpen,       color: '#e65100' },
+      { label: 'In Progress', value: d.deviationInProgress, color: '#1565c0' },
+      { label: 'Closed',      value: d.deviationClosed,     color: '#2e7d32' },
+    ],
+    badges: (d) => [
+      d.deviationOverdue > 0 && { label: `${d.deviationOverdue} Overdue`, icon: <WarningIcon sx={{ fontSize: 12 }} />, color: 'error' },
+    ].filter(Boolean),
+  },
+  {
+    label: 'Incident', color: '#c62828', bg: '#ffebee',
+    stats: (d) => [
+      { label: 'Open',        value: d.incidentOpen,       color: '#e65100' },
+      { label: 'In Progress', value: d.incidentInProgress, color: '#1565c0' },
+      { label: 'Closed',      value: d.incidentClosed,     color: '#2e7d32' },
+    ],
+    badges: (d) => [
+      d.incidentOverdue         > 0 && { label: `${d.incidentOverdue} Overdue`,          icon: <WarningIcon sx={{ fontSize: 12 }} />,  color: 'error'   },
+      d.incidentCriticalSeverity> 0 && { label: `${d.incidentCriticalSeverity} Critical`, icon: <CriticalIcon sx={{ fontSize: 12 }} />, color: 'warning' },
+    ].filter(Boolean),
+  },
+  {
+    label: 'Change Control', color: '#2e7d32', bg: '#e8f5e9',
+    stats: (d) => [
+      { label: 'Open',            value: d.changeControlOpen,             color: '#e65100' },
+      { label: 'Pending Approval',value: d.changeControlPendingApproval,  color: '#f57f17' },
+      { label: 'Closed',          value: d.changeControlClosed,           color: '#2e7d32' },
+    ],
+    badges: (d) => [
+      d.changeControlOverdue > 0 && { label: `${d.changeControlOverdue} Overdue`, icon: <WarningIcon sx={{ fontSize: 12 }} />, color: 'error' },
+    ].filter(Boolean),
+  },
+  {
+    label: 'Market Complaint', color: '#e65100', bg: '#fff3e0',
+    stats: (d) => [
+      { label: 'Open',        value: d.complaintOpen,       color: '#e65100' },
+      { label: 'In Progress', value: d.complaintInProgress, color: '#1565c0' },
+      { label: 'Closed',      value: d.complaintClosed,     color: '#2e7d32' },
+    ],
+    badges: (d) => [
+      d.complaintOverdue             > 0 && { label: `${d.complaintOverdue} Overdue`,       icon: <WarningIcon sx={{ fontSize: 12 }} />, color: 'error'   },
+      d.complaintReportableToAuthority>0 && { label: `${d.complaintReportableToAuthority} Reportable`, icon: <CriticalIcon sx={{ fontSize: 12 }} />, color: 'warning' },
+    ].filter(Boolean),
+  },
+];
+
+const STATUS_DASH_ROWS = [
+  { key: 'DRAFT',          label: 'Draft',           color: '#9e9e9e' },
+  { key: 'PENDING_REVIEW', label: 'Pending Review',  color: '#ff9800' },
+  { key: 'CLOSED',         label: 'Closed',          color: '#4caf50' },
+  { key: 'REJECTED',       label: 'Rejected',        color: '#f44336' },
+  { key: 'CANCELLED',      label: 'Cancelled',       color: '#757575' },
+];
+
+const PRIORITY_DASH_ROWS = [
+  { key: 'CRITICAL', label: 'Critical', color: '#d32f2f' },
+  { key: 'HIGH',     label: 'High',     color: '#f57c00' },
+  { key: 'MEDIUM',   label: 'Medium',   color: '#1976d2' },
+  { key: 'LOW',      label: 'Low',      color: '#388e3c' },
+];
+
+const QmsDashboardSection = ({ dashboard: d }) => {
+  if (!d) return null;
+
+  const statusTotal  = Object.values(d.statusBreakdown   || {}).reduce((a, b) => a + b, 0) || 1;
+  const priorityTotal= Object.values(d.priorityBreakdown || {}).reduce((a, b) => a + b, 0) || 1;
+
+  return (
+    <Box sx={{ mb: 3 }}>
+      {/* ── Row 1: Hero KPIs ── */}
+      <Grid container spacing={2} sx={{ mb: 2 }}>
+        <Grid item xs={6} sm={3}>
+          <Paper variant="outlined" sx={{ p: 2, textAlign: 'center', borderRadius: 2, borderColor: 'warning.main', borderWidth: 2 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 0.5 }}><OpenRecIcon sx={{ color: 'warning.main', fontSize: 28 }} /></Box>
+            <Typography variant="h3" fontWeight={800} color="warning.main">{d.totalOpenRecords}</Typography>
+            <Typography variant="caption" color="text.secondary" fontWeight={600}>Total Open Records</Typography>
+          </Paper>
+        </Grid>
+        <Grid item xs={6} sm={3}>
+          <Paper variant="outlined" sx={{ p: 2, textAlign: 'center', borderRadius: 2, borderColor: d.totalOverdueRecords > 0 ? 'error.main' : 'divider', borderWidth: d.totalOverdueRecords > 0 ? 2 : 1 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 0.5 }}><WarningIcon sx={{ color: d.totalOverdueRecords > 0 ? 'error.main' : 'text.disabled', fontSize: 28 }} /></Box>
+            <Typography variant="h3" fontWeight={800} color={d.totalOverdueRecords > 0 ? 'error.main' : 'text.secondary'}>{d.totalOverdueRecords}</Typography>
+            <Typography variant="caption" color="text.secondary" fontWeight={600}>Total Overdue</Typography>
+          </Paper>
+        </Grid>
+        <Grid item xs={6} sm={3}>
+          <Paper variant="outlined" sx={{ p: 2, textAlign: 'center', borderRadius: 2 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 0.5 }}><InProgressIcon sx={{ color: 'info.main', fontSize: 28 }} /></Box>
+            <Typography variant="h3" fontWeight={800} color="info.main">{d.statusBreakdown?.PENDING_REVIEW ?? 0}</Typography>
+            <Typography variant="caption" color="text.secondary" fontWeight={600}>Pending Review</Typography>
+          </Paper>
+        </Grid>
+        <Grid item xs={6} sm={3}>
+          <Paper variant="outlined" sx={{ p: 2, textAlign: 'center', borderRadius: 2 }}>
+            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 0.5 }}><ClosedIcon sx={{ color: 'success.main', fontSize: 28 }} /></Box>
+            <Typography variant="h3" fontWeight={800} color="success.main">{d.statusBreakdown?.CLOSED ?? 0}</Typography>
+            <Typography variant="caption" color="text.secondary" fontWeight={600}>Closed</Typography>
+          </Paper>
+        </Grid>
+      </Grid>
+
+      {/* ── Row 2: Per-Module Cards ── */}
+      <Grid container spacing={2} sx={{ mb: 2 }}>
+        {MODULE_DASH.map((m) => {
+          const stats  = m.stats(d);
+          const badges = m.badges(d);
+          return (
+            <Grid item xs={12} sm={6} lg key={m.label}>
+              <Card variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden', height: '100%' }}>
+                {/* Coloured header */}
+                <Box sx={{ bgcolor: m.color, px: 2, py: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Typography variant="subtitle2" fontWeight={700} color="white">{m.label}</Typography>
+                  {badges.length > 0 && (
+                    <Stack direction="row" spacing={0.5}>
+                      {badges.map((b, i) => (
+                        <Chip key={i} icon={b.icon} label={b.label} size="small" color={b.color}
+                          sx={{ height: 20, fontSize: 10, '& .MuiChip-icon': { ml: '4px' }, '& .MuiChip-label': { px: '6px' } }} />
+                      ))}
+                    </Stack>
+                  )}
+                </Box>
+                {/* Stat cells */}
+                <CardContent sx={{ bgcolor: m.bg, p: '12px !important' }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-around' }}>
+                    {stats.map((s) => (
+                      <Box key={s.label} sx={{ textAlign: 'center' }}>
+                        <Typography variant="h4" fontWeight={800} sx={{ color: s.color, lineHeight: 1.1 }}>{s.value ?? 0}</Typography>
+                        <Typography variant="caption" color="text.secondary" sx={{ fontSize: 10 }}>{s.label}</Typography>
+                      </Box>
+                    ))}
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
+          );
+        })}
+      </Grid>
+
+      {/* ── Row 3: Status + Priority Breakdown ── */}
+      <Grid container spacing={2}>
+        {/* Status Breakdown */}
+        <Grid item xs={12} md={7}>
+          <Card variant="outlined" sx={{ borderRadius: 2, p: 2 }}>
+            <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5 }}>Status Breakdown</Typography>
+            <Stack spacing={1.2}>
+              {STATUS_DASH_ROWS.map(({ key, label, color }) => {
+                const val = d.statusBreakdown?.[key] ?? 0;
+                const pct = Math.round((val / statusTotal) * 100);
+                return (
+                  <Box key={key}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.4 }}>
+                      <Typography variant="caption" fontWeight={600} color="text.secondary">{label}</Typography>
+                      <Typography variant="caption" fontWeight={700}>{val}</Typography>
+                    </Box>
+                    <LinearProgress
+                      variant="determinate"
+                      value={pct}
+                      sx={{ height: 8, borderRadius: 4, bgcolor: '#f0f0f0', '& .MuiLinearProgress-bar': { bgcolor: color, borderRadius: 4 } }}
+                    />
+                  </Box>
+                );
+              })}
+            </Stack>
+          </Card>
+        </Grid>
+
+        {/* Priority Breakdown */}
+        <Grid item xs={12} md={5}>
+          <Card variant="outlined" sx={{ borderRadius: 2, p: 2, height: '100%' }}>
+            <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5 }}>Priority Breakdown</Typography>
+            <Stack spacing={1.5}>
+              {PRIORITY_DASH_ROWS.map(({ key, label, color }) => {
+                const val = d.priorityBreakdown?.[key] ?? 0;
+                const pct = Math.round((val / priorityTotal) * 100);
+                return (
+                  <Box key={key}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.4 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                        <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: color }} />
+                        <Typography variant="caption" fontWeight={600} color="text.secondary">{label}</Typography>
+                      </Box>
+                      <Typography variant="caption" fontWeight={700}>{val}</Typography>
+                    </Box>
+                    <LinearProgress
+                      variant="determinate"
+                      value={pct}
+                      sx={{ height: 8, borderRadius: 4, bgcolor: '#f0f0f0', '& .MuiLinearProgress-bar': { bgcolor: color, borderRadius: 4 } }}
+                    />
+                  </Box>
+                );
+              })}
+            </Stack>
+          </Card>
+        </Grid>
+      </Grid>
+    </Box>
+  );
+};
+
 const TABS = [
   { label: 'CAPA',            key: 'capa' },
   { label: 'Deviation',       key: 'deviation' },
@@ -265,14 +487,6 @@ const QmsPage = () => {
 
   const columns = makeColumns(openDetail);
 
-  const d = dashboard;
-  const summaryCards = [
-    { label: 'Open CAPAs',         value: d?.openCapaCount     ?? rows.capa.filter((r) => r.status !== 'CLOSED' && r.status !== 'CANCELLED').length,           color: 'warning.main' },
-    { label: 'Open Deviations',    value: d?.openDeviationCount ?? rows.deviation.filter((r) => r.status !== 'CLOSED' && r.status !== 'CANCELLED').length,      color: 'info.main' },
-    { label: 'Open Incidents',     value: d?.openIncidentCount  ?? rows.incident.filter((r) => r.status !== 'CLOSED' && r.status !== 'CANCELLED').length,       color: 'secondary.main' },
-    { label: 'Market Complaints',  value: d?.openComplaintCount ?? rows.marketComplaint.filter((r) => r.status !== 'CLOSED').length,                            color: 'error.main' },
-    { label: 'Pending Changes',    value: d?.pendingChangeCount ?? rows.changeControl.filter((r) => r.status?.startsWith('PENDING_')).length,                   color: 'primary.main' },
-  ];
 
   return (
     <Box>
@@ -287,19 +501,8 @@ const QmsPage = () => {
         }
       />
 
-      {/* Summary cards */}
-      <Grid container spacing={2} sx={{ mb: 3 }}>
-        {summaryCards.map(({ label, value, color }) => (
-          <Grid item xs={6} sm={4} lg={2} key={label}>
-            <Card>
-              <CardContent sx={{ textAlign: 'center', py: 2, px: 1 }}>
-                <Typography variant="h4" fontWeight={700} color={color}>{value}</Typography>
-                <Typography variant="caption" color="text.secondary">{label}</Typography>
-              </CardContent>
-            </Card>
-          </Grid>
-        ))}
-      </Grid>
+      {/* Dashboard */}
+      <QmsDashboardSection dashboard={dashboard} />
 
       {/* Tabs */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
