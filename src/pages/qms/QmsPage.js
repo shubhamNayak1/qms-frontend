@@ -3,7 +3,7 @@ import {
   Box, Button, Chip, Tabs, Tab, TextField, InputAdornment,
   IconButton, Tooltip, Grid, Card, CardContent, Typography,
   MenuItem, Select, FormControl, InputLabel,
-  LinearProgress, Stack, Paper,
+  LinearProgress, Stack, Paper, Collapse,
 } from '@mui/material';
 import {
   Add as AddIcon, Search as SearchIcon, Refresh as RefreshIcon,
@@ -13,6 +13,9 @@ import {
   HourglassEmpty as InProgressIcon,
   FolderOpen as OpenRecIcon,
   PriorityHigh as CriticalIcon,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
+  Insights as InsightsIcon,
 } from '@mui/icons-material';
 import PageHeader from '../../components/PageHeader';
 import DataTable from '../../components/DataTable';
@@ -254,7 +257,7 @@ const PRIORITY_DASH_ROWS = [
   { key: 'LOW',      label: 'Low',      color: '#388e3c' },
 ];
 
-const QmsDashboardSection = ({ dashboard: d }) => {
+const QmsDashboardSection = ({ dashboard: d, open, onToggle }) => {
   if (!d) return null;
 
   const statusTotal  = Object.values(d.statusBreakdown   || {}).reduce((a, b) => a + b, 0) || 1;
@@ -262,6 +265,38 @@ const QmsDashboardSection = ({ dashboard: d }) => {
 
   return (
     <Box sx={{ mb: 3 }}>
+      {/* ── Compact always-visible bar ── */}
+      <Paper
+        variant="outlined"
+        onClick={onToggle}
+        sx={{
+          display: 'flex', alignItems: 'center', flexWrap: 'wrap',
+          gap: 1, px: 2, py: 1, mb: 1.5, borderRadius: 2,
+          cursor: 'pointer', userSelect: 'none',
+          '&:hover': { bgcolor: 'action.hover' },
+        }}
+      >
+        <InsightsIcon fontSize="small" color="primary" />
+        <Typography variant="body2" fontWeight={700} color="text.secondary" sx={{ mr: 1 }}>
+          QMS Insights
+        </Typography>
+        {[
+          { label: 'Open',       value: d.totalOpenRecords,    color: 'warning' },
+          { label: 'Overdue',    value: d.totalOverdueRecords,  color: d.totalOverdueRecords > 0 ? 'error' : 'default' },
+          { label: 'Pending',    value: d.statusBreakdown?.PENDING_REVIEW ?? 0, color: 'info' },
+          { label: 'Closed',     value: d.statusBreakdown?.CLOSED ?? 0,        color: 'success' },
+          { label: 'Critical',   value: d.priorityBreakdown?.CRITICAL ?? 0,    color: (d.priorityBreakdown?.CRITICAL ?? 0) > 0 ? 'error' : 'default' },
+        ].map(({ label, value, color }) => (
+          <Chip key={label} label={`${label}: ${value}`} size="small" color={color} variant="outlined" sx={{ fontWeight: 600 }} />
+        ))}
+        <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', color: 'text.secondary' }}>
+          <Typography variant="caption" sx={{ mr: 0.5 }}>{open ? 'Hide' : 'Full Insights'}</Typography>
+          {open ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+        </Box>
+      </Paper>
+
+      {/* ── Collapsible full dashboard ── */}
+      <Collapse in={open}>
       {/* ── Row 1: Hero KPIs ── */}
       <Grid container spacing={2} sx={{ mb: 2 }}>
         <Grid item xs={6} sm={3}>
@@ -388,6 +423,7 @@ const QmsDashboardSection = ({ dashboard: d }) => {
           </Card>
         </Grid>
       </Grid>
+      </Collapse>
     </Box>
   );
 };
@@ -432,6 +468,7 @@ const QmsPage = () => {
   const [createOpen, setCreateOpen] = useState({
     capa: false, deviation: false, incident: false, marketComplaint: false, changeControl: false,
   });
+  const [insightOpen, setInsightOpen] = useState(false);
 
   const currentKey = TABS[tab].key;
 
@@ -494,15 +531,14 @@ const QmsPage = () => {
         title="Quality Management System"
         subtitle="CAPA · Deviation · Incident · Market Complaint · Change Control"
         breadcrumbs={[{ label: 'Dashboard', href: ROUTES.DASHBOARD }, { label: 'QMS' }]}
-        action={
-          <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
-            {MODULE_META[currentKey].addLabel}
-          </Button>
-        }
       />
 
-      {/* Dashboard */}
-      <QmsDashboardSection dashboard={dashboard} />
+      {/* Dashboard — compact bar + collapsible full view */}
+      <QmsDashboardSection
+        dashboard={dashboard}
+        open={insightOpen}
+        onToggle={() => setInsightOpen((p) => !p)}
+      />
 
       {/* Tabs */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
@@ -511,17 +547,17 @@ const QmsPage = () => {
         </Tabs>
       </Box>
 
-      {/* Filters */}
-      <Box sx={{ display: 'flex', gap: 1.5, mb: 2, flexWrap: 'wrap' }}>
+      {/* Filters + Create button */}
+      <Box sx={{ display: 'flex', gap: 1.5, mb: 2, flexWrap: 'wrap', alignItems: 'center' }}>
         <TextField
           placeholder="Search by title or record number…"
           size="small"
           value={search}
           onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-          sx={{ width: 280 }}
+          sx={{ width: 260 }}
           InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
         />
-        <FormControl size="small" sx={{ minWidth: 180 }}>
+        <FormControl size="small" sx={{ minWidth: 170 }}>
           <InputLabel>Status</InputLabel>
           <Select
             value={statusFilter}
@@ -537,6 +573,11 @@ const QmsPage = () => {
         <Tooltip title="Refresh">
           <IconButton onClick={fetchCurrentTab}><RefreshIcon /></IconButton>
         </Tooltip>
+        <Box sx={{ ml: 'auto' }}>
+          <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
+            {MODULE_META[currentKey].addLabel}
+          </Button>
+        </Box>
       </Box>
 
       {error && <ErrorAlert message={error} onRetry={fetchCurrentTab} />}
