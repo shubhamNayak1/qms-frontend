@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   AppBar, Toolbar, IconButton, Typography, Box, Avatar,
   Menu, MenuItem, ListItemIcon, Divider, Badge, Tooltip,
@@ -14,12 +14,39 @@ import { DRAWER_WIDTH } from './Sidebar';
 import { useAuth } from '../store/AuthContext';
 import { ROUTES } from '../utils/constants';
 import ProfileDrawer from '../components/ProfileDrawer';
+import NotificationPanel from '../components/NotificationPanel';
+import { getNotificationCountApi } from '../api/notificationApi';
+
+const POLL_INTERVAL = 60_000; // 60 seconds
 
 const Header = ({ onMobileMenuToggle }) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const [anchorEl, setAnchorEl] = useState(null);
+  const [anchorEl, setAnchorEl]     = useState(null);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [notifOpen,   setNotifOpen]  = useState(false);
+  const [countData,   setCountData]  = useState({ totalCount: 0, criticalCount: 0, warningCount: 0, infoCount: 0 });
+  const intervalRef = useRef(null);
+
+  const fetchCount = useCallback(() => {
+    getNotificationCountApi()
+      .then(({ data: res }) => {
+        const d = res?.data || res || {};
+        setCountData({
+          totalCount:    d.total    ?? 0,
+          criticalCount: d.critical ?? 0,
+          warningCount:  d.warning  ?? 0,
+          infoCount:     d.info     ?? 0,
+        });
+      })
+      .catch(() => {}); // silent — badge just stays at last known value
+  }, []);
+
+  useEffect(() => {
+    fetchCount();
+    intervalRef.current = setInterval(fetchCount, POLL_INTERVAL);
+    return () => clearInterval(intervalRef.current);
+  }, [fetchCount]);
 
   const handleLogout = () => {
     setAnchorEl(null);
@@ -61,8 +88,17 @@ const Header = ({ onMobileMenuToggle }) => {
 
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
             <Tooltip title="Notifications">
-              <IconButton>
-                <Badge badgeContent={3} color="error">
+              <IconButton onClick={() => setNotifOpen(true)}>
+                <Badge
+                  badgeContent={countData.totalCount || 0}
+                  color={
+                    countData.criticalCount > 0 ? 'error' :
+                    countData.warningCount  > 0 ? 'warning' :
+                    countData.infoCount     > 0 ? 'info' :
+                    'default'
+                  }
+                  max={99}
+                >
                   <NotificationsIcon />
                 </Badge>
               </IconButton>
@@ -118,6 +154,9 @@ const Header = ({ onMobileMenuToggle }) => {
 
       {/* Profile side panel */}
       <ProfileDrawer open={profileOpen} onClose={() => setProfileOpen(false)} />
+
+      {/* Notification panel */}
+      <NotificationPanel open={notifOpen} onClose={() => setNotifOpen(false)} />
     </>
   );
 };

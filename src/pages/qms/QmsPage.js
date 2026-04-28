@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Box, Button, Chip, Tabs, Tab, TextField, InputAdornment,
   IconButton, Tooltip, Grid, Card, CardContent, Typography,
@@ -17,6 +17,7 @@ import {
   ExpandLess as ExpandLessIcon,
   Insights as InsightsIcon,
 } from '@mui/icons-material';
+import { useLocation, useNavigate } from 'react-router-dom';
 import PageHeader from '../../components/PageHeader';
 import DataTable from '../../components/DataTable';
 import ErrorAlert from '../../components/ErrorAlert';
@@ -429,12 +430,18 @@ const QmsDashboardSection = ({ dashboard: d, open, onToggle }) => {
 };
 
 const TABS = [
-  { label: 'CAPA',            key: 'capa' },
-  { label: 'Deviation',       key: 'deviation' },
-  { label: 'Incident',        key: 'incident' },
-  { label: 'Market Complaint',key: 'marketComplaint' },
-  { label: 'Change Control',  key: 'changeControl' },
+  { label: 'CAPA',             key: 'capa',            path: ROUTES.QMS_CAPA },
+  { label: 'Deviation',        key: 'deviation',        path: ROUTES.QMS_DEVIATION },
+  { label: 'Incident',         key: 'incident',         path: ROUTES.QMS_INCIDENT },
+  { label: 'Market Complaint', key: 'marketComplaint',  path: ROUTES.QMS_MARKET_COMPLAINT },
+  { label: 'Change Control',   key: 'changeControl',    path: ROUTES.QMS_CHANGE_CONTROL },
 ];
+
+// Resolve URL pathname → tab index (default 0 = CAPA)
+const pathToTabIndex = (pathname) => {
+  const idx = TABS.findIndex((t) => pathname === t.path || pathname.startsWith(t.path + '/'));
+  return idx >= 0 ? idx : 0;
+};
 
 const STATUS_FILTER_OPTS = [
   '', 'DRAFT', 'PENDING_HOD', 'PENDING_QA_REVIEW', 'PENDING_DEPT_COMMENT',
@@ -445,7 +452,12 @@ const STATUS_FILTER_OPTS = [
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 const QmsPage = () => {
-  const [tab,         setTab]         = useState(0);
+  const location = useLocation();
+  const navigate  = useNavigate();
+
+  // Tab index is derived from the URL
+  const tab = useMemo(() => pathToTabIndex(location.pathname), [location.pathname]);
+
   const [loading,     setLoading]     = useState(false);
   const [error,       setError]       = useState(null);
   const [search,      setSearch]      = useState('');
@@ -507,6 +519,13 @@ const QmsPage = () => {
 
   useEffect(() => { fetchCurrentTab(); }, [fetchCurrentTab]);
 
+  // Redirect bare /qms → /qms/capa so URL is always explicit
+  useEffect(() => {
+    if (location.pathname === ROUTES.QMS || location.pathname === ROUTES.QMS + '/') {
+      navigate(ROUTES.QMS_CAPA, { replace: true });
+    }
+  }, [location.pathname, navigate]);
+
   // Load dashboard stats once
   useEffect(() => {
     getQmsDashboardApi().then((r) => setDashboard(r.data?.data || null)).catch(() => {});
@@ -542,7 +561,15 @@ const QmsPage = () => {
 
       {/* Tabs */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
-        <Tabs value={tab} onChange={(_, v) => { setTab(v); setPage(0); setSearch(''); setStatusFilter(''); }} variant="scrollable" scrollButtons="auto">
+        <Tabs
+          value={tab}
+          onChange={(_, v) => {
+            navigate(TABS[v].path, { replace: true });
+            setPage(0); setSearch(''); setStatusFilter('');
+          }}
+          variant="scrollable"
+          scrollButtons="auto"
+        >
           {TABS.map((t) => <Tab key={t.key} label={t.label} />)}
         </Tabs>
       </Box>
