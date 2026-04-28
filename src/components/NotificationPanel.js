@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Drawer, Box, Typography, IconButton, Tooltip, Divider,
   Chip, Stack, CircularProgress, Alert, List, ListItem,
-  ListItemText, Button, Badge,
+  ListItemText, Button,
 } from '@mui/material';
 import {
   Close as CloseIcon,
