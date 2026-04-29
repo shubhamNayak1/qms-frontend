@@ -1,82 +1,53 @@
 import apiClient from './axios';
 
-// ── Dashboard (unified) ────────────────────────────────────────────────────
+// ── Module Field Discovery ─────────────────────────────────────────────────
+// GET /api/v1/reports/modules/{module}/fields
+// Returns { dimensions: [{key,label}], metrics: [{key,label}] }
+export const getModuleFieldsApi = (module) =>
+  apiClient.get(`/api/v1/reports/modules/${module}/fields`);
+
+// ── Reports CRUD ───────────────────────────────────────────────────────────
+// GET /api/v1/reports?page=0&size=20&mine=true&module=CAPA
+export const getReportsApi = (params) =>
+  apiClient.get('/api/v1/reports', { params });
+
+// POST /api/v1/reports
+// Body: { name, description, module, format, dateFrom, dateTo, dimensions[], metrics[], extraFilters }
+export const createReportApi = (data) =>
+  apiClient.post('/api/v1/reports', data);
+
+// PUT /api/v1/reports/{id}
+// Partial update — report re-runs automatically
+export const updateReportApi = (id, data) =>
+  apiClient.put(`/api/v1/reports/${id}`, data);
+
+// ── Report Actions ─────────────────────────────────────────────────────────
+// POST /api/v1/reports/{id}/run — re-execute with same config
+export const runReportApi = (id) =>
+  apiClient.post(`/api/v1/reports/${id}/run`);
+
+// GET /api/v1/reports/{id}/download — returns binary blob
+export const downloadReportApi = (id) =>
+  apiClient.get(`/api/v1/reports/${id}/download`, { responseType: 'blob' });
+
+// PATCH /api/v1/reports/{id}/disable
+export const disableReportApi = (id) =>
+  apiClient.patch(`/api/v1/reports/${id}/disable`);
+
+// PATCH /api/v1/reports/{id}/enable
+export const enableReportApi = (id) =>
+  apiClient.patch(`/api/v1/reports/${id}/enable`);
+
+// ── Run History ────────────────────────────────────────────────────────────
+// GET /api/v1/reports/{id}/history?page=0&size=20
+export const getReportHistoryApi = (id, params) =>
+  apiClient.get(`/api/v1/reports/${id}/history`, { params });
+
+// ── Insights ───────────────────────────────────────────────────────────────
+// GET /api/v1/reports/{id}/insights — always fresh live query
+export const getReportInsightsApi = (id) =>
+  apiClient.get(`/api/v1/reports/${id}/insights`);
+
+// ── Legacy dashboard summary (used by DashboardPage) ──────────────────────
 export const getReportsDashboardApi = () =>
   apiClient.get('/api/v1/reports/dashboard');
-
-// ── CAPA Reports ───────────────────────────────────────────────────────────
-// ReportFilter: { dateFrom, dateTo, statuses[], priorities[], assignedToId,
-//   department, source, capaType, overdueOnly, search, page, size, sortBy, sortDir }
-export const getCapaSummaryApi = (filter) =>
-  apiClient.get('/api/v1/reports/capa/summary', { params: { filter } });
-
-export const getCapaTableApi = (filter) =>
-  apiClient.get('/api/v1/reports/capa/table', { params: { filter } });
-
-export const getCapaByStatusApi = (filter) =>
-  apiClient.get('/api/v1/reports/capa/by-status', { params: { filter } });
-
-export const getCapaByPriorityApi = (filter) =>
-  apiClient.get('/api/v1/reports/capa/by-priority', { params: { filter } });
-
-export const getCapaByDepartmentApi = (filter) =>
-  apiClient.get('/api/v1/reports/capa/by-department', { params: { filter } });
-
-export const getCapaMonthlyTrendApi = (filter) =>
-  apiClient.get('/api/v1/reports/capa/monthly-trend', { params: { filter } });
-
-export const exportCapaExcelApi = (data) =>
-  apiClient.post('/api/v1/reports/capa/export/excel', data, { responseType: 'blob' });
-
-export const exportCapaPdfApi = (data) =>
-  apiClient.post('/api/v1/reports/capa/export/pdf', data, { responseType: 'blob' });
-
-// ── Deviation Reports ──────────────────────────────────────────────────────
-export const getDeviationSummaryApi = (filter) =>
-  apiClient.get('/api/v1/reports/deviations/summary', { params: { filter } });
-
-export const getDeviationTableApi = (filter) =>
-  apiClient.get('/api/v1/reports/deviations/table', { params: { filter } });
-
-export const getDeviationByStatusApi = (filter) =>
-  apiClient.get('/api/v1/reports/deviations/by-status', { params: { filter } });
-
-export const getDeviationMonthlyTrendApi = (filter) =>
-  apiClient.get('/api/v1/reports/deviations/monthly-trend', { params: { filter } });
-
-export const exportDeviationExcelApi = (data) =>
-  apiClient.post('/api/v1/reports/deviations/export/excel', data, { responseType: 'blob' });
-
-// ── Incident Reports ───────────────────────────────────────────────────────
-export const getIncidentSummaryApi = (filter) =>
-  apiClient.get('/api/v1/reports/incidents/summary', { params: { filter } });
-
-export const getIncidentTableApi = (filter) =>
-  apiClient.get('/api/v1/reports/incidents/table', { params: { filter } });
-
-export const getIncidentByTypeApi = (filter) =>
-  apiClient.get('/api/v1/reports/incidents/by-type', { params: { filter } });
-
-export const getIncidentBySeverityApi = (filter) =>
-  apiClient.get('/api/v1/reports/incidents/by-severity', { params: { filter } });
-
-export const getIncidentMonthlyTrendApi = (filter) =>
-  apiClient.get('/api/v1/reports/incidents/monthly-trend', { params: { filter } });
-
-export const exportIncidentExcelApi = (data) =>
-  apiClient.post('/api/v1/reports/incidents/export/excel', data, { responseType: 'blob' });
-
-// ── User Reports ───────────────────────────────────────────────────────────
-export const getUsersByRoleApi = () =>
-  apiClient.get('/api/v1/reports/users/by-role');
-
-export const getUsersByDepartmentApi = () =>
-  apiClient.get('/api/v1/reports/users/by-department');
-
-export const getUserActivityTrendApi = (filter) =>
-  apiClient.get('/api/v1/reports/users/activity-trend', { params: { filter } });
-
-// ExportRequest: { format* (EXCEL|PDF), dateFrom, dateTo, statuses[], priorities[],
-//   department, search, columns[], reportTitle, includeSummary, ... }
-export const exportDashboardExcelApi = (data) =>
-  apiClient.post('/api/v1/reports/dashboard/export/excel', data, { responseType: 'blob' });

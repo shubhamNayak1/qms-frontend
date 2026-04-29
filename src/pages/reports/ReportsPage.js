@@ -1,172 +1,538 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
-  Box, Grid, Card, CardContent, Typography, Button, Tabs, Tab,
-  Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
-  Paper, Chip, Divider, MenuItem, TextField, LinearProgress,
+  Box, Button, Chip, CircularProgress, IconButton,
+  MenuItem, Select, Tooltip, Typography, Alert,
+  ToggleButton, ToggleButtonGroup, FormControl, InputLabel,
+  Snackbar,
 } from '@mui/material';
-import { Download as DownloadIcon } from '@mui/icons-material';
-import PageHeader from '../../components/PageHeader';
-import { ROUTES } from '../../utils/constants';
-import { getReportsDashboardApi } from '../../api/reportsApi';
+import {
+  Add            as AddIcon,
+  Download       as DownloadIcon,
+  Refresh        as RerunIcon,
+  Lightbulb      as InsightIcon,
+  History        as HistoryIcon,
+  BlockOutlined  as DisableIcon,
+  PlayCircle     as EnableIcon,
+  HourglassTop   as PendingIcon,
+} from '@mui/icons-material';
+import PageHeader  from '../../components/PageHeader';
+import DataTable   from '../../components/DataTable';
+import { ROUTES }  from '../../utils/constants';
+import {
+  getReportsApi,
+  runReportApi,
+  downloadReportApi,
+  disableReportApi,
+  enableReportApi,
+} from '../../api/reportsApi';
+import CreateReportWizard   from './CreateReportWizard';
+import ReportHistoryDialog  from './ReportHistoryDialog';
+import ReportInsightsDialog from './ReportInsightsDialog';
 
-const QMS_SUMMARY = [
-  { metric: 'Total Non-Conformances', thisMonth: 12, lastMonth: 15, trend: -20, status: 'IMPROVED' },
-  { metric: 'Critical NCRs', thisMonth: 2, lastMonth: 4, trend: -50, status: 'IMPROVED' },
-  { metric: 'Avg Resolution Days', thisMonth: 8, lastMonth: 11, trend: -27, status: 'IMPROVED' },
-  { metric: 'Open Corrective Actions', thisMonth: 7, lastMonth: 6, trend: 17, status: 'ATTENTION' },
-  { metric: 'Audits Conducted', thisMonth: 3, lastMonth: 2, trend: 50, status: 'IMPROVED' },
+// ── Constants ──────────────────────────────────────────────────────────────
+const MODULE_OPTIONS = [
+  { value: '',               label: 'All Modules' },
+  { value: 'CAPA',           label: 'CAPA' },
+  { value: 'DEVIATION',      label: 'Deviation' },
+  { value: 'INCIDENT',       label: 'Incident' },
+  { value: 'CHANGE_CONTROL', label: 'Change Control' },
+  { value: 'COMPLAINT',      label: 'Complaint' },
+  { value: 'LMS_ENROLLMENT', label: 'LMS Enrollment' },
+  { value: 'USER',           label: 'Users' },
 ];
 
-const DMS_SUMMARY = [
-  { metric: 'Documents Created', thisMonth: 18, lastMonth: 12, trend: 50, status: 'IMPROVED' },
-  { metric: 'Documents Approved', thisMonth: 14, lastMonth: 10, trend: 40, status: 'IMPROVED' },
-  { metric: 'Pending Review', thisMonth: 23, lastMonth: 8, trend: 188, status: 'ATTENTION' },
-  { metric: 'Documents Archived', thisMonth: 5, lastMonth: 7, trend: -29, status: 'NORMAL' },
-  { metric: 'Avg Review Days', thisMonth: 4, lastMonth: 6, trend: -33, status: 'IMPROVED' },
-];
+const STATUS_META = {
+  PENDING:   { label: 'Pending',  color: 'default' },
+  RUNNING:   { label: 'Running',  color: 'info'    },
+  COMPLETED: { label: 'Ready',    color: 'success' },
+  FAILED:    { label: 'Failed',   color: 'error'   },
+  DISABLED:  { label: 'Disabled', color: 'warning' },
+};
 
-const LMS_SUMMARY = [
-  { metric: 'New Enrollments', thisMonth: 34, lastMonth: 28, trend: 21, status: 'IMPROVED' },
-  { metric: 'Completions', thisMonth: 29, lastMonth: 22, trend: 32, status: 'IMPROVED' },
-  { metric: 'Completion Rate', thisMonth: '85%', lastMonth: '79%', trend: 8, status: 'IMPROVED' },
-  { metric: 'Overdue Trainings', thisMonth: 5, lastMonth: 9, trend: -44, status: 'IMPROVED' },
-  { metric: 'Avg Score', thisMonth: '88%', lastMonth: '84%', trend: 5, status: 'IMPROVED' },
-];
+// ── Helpers ────────────────────────────────────────────────────────────────
+const fmtDate = (iso) => {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  const now = Date.now();
+  const diff = now - d.getTime();
+  if (diff < 60_000)   return 'just now';
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+};
 
-const MODULE_STATS = [
-  { module: 'QMS', kpi: 'Compliance Rate', value: 94, target: 95, color: 'warning' },
-  { module: 'DMS', kpi: 'Doc Currency Rate', value: 87, target: 90, color: 'info' },
-  { module: 'LMS', kpi: 'Training Completion', value: 85, target: 90, color: 'warning' },
-  { module: 'Users', kpi: 'Active Users', value: 97, target: 95, color: 'success' },
-];
+const fmtSize = (bytes) => {
+  if (bytes == null) return '—';
+  if (bytes < 1024)  return `${bytes} B`;
+  return `${(bytes / 1024).toFixed(1)} KB`;
+};
 
-const ReportTable = ({ data }) => (
-  <TableContainer component={Paper} variant="outlined" sx={{ borderRadius: 2 }}>
-    <Table size="small">
-      <TableHead>
-        <TableRow>
-          {['Metric', 'This Month', 'Last Month', 'Trend', 'Status'].map((h) => (
-            <TableCell key={h} sx={{ fontWeight: 600, bgcolor: 'grey.50' }}>{h}</TableCell>
-          ))}
-        </TableRow>
-      </TableHead>
-      <TableBody>
-        {data.map((row) => (
-          <TableRow key={row.metric} hover>
-            <TableCell><Typography variant="body2" fontWeight={500}>{row.metric}</Typography></TableCell>
-            <TableCell><Typography variant="body2" fontWeight={700}>{row.thisMonth}</Typography></TableCell>
-            <TableCell><Typography variant="body2" color="text.secondary">{row.lastMonth}</Typography></TableCell>
-            <TableCell>
-              <Typography variant="body2" color={row.trend < 0 ? (row.status === 'IMPROVED' ? 'success.main' : 'error.main') : (row.status === 'IMPROVED' ? 'success.main' : 'warning.main')}>
-                {row.trend > 0 ? '▲' : '▼'} {Math.abs(row.trend)}%
-              </Typography>
-            </TableCell>
-            <TableCell>
-              <Chip
-                label={row.status}
-                size="small"
-                color={row.status === 'IMPROVED' ? 'success' : row.status === 'ATTENTION' ? 'warning' : 'default'}
-              />
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
-  </TableContainer>
-);
+const triggerDownload = (blob, fileName) => {
+  const url = URL.createObjectURL(blob);
+  const a   = document.createElement('a');
+  a.href    = url;
+  a.download = fileName;
+  a.click();
+  URL.revokeObjectURL(url);
+};
 
+// ── Sub-components ─────────────────────────────────────────────────────────
+const StatusChip = ({ status }) => {
+  const meta = STATUS_META[status] || { label: status, color: 'default' };
+  if (status === 'RUNNING') {
+    return (
+      <Chip
+        size="small"
+        color="info"
+        label={
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <CircularProgress size={10} color="inherit" />
+            Running
+          </Box>
+        }
+      />
+    );
+  }
+  if (status === 'PENDING') {
+    return (
+      <Chip
+        size="small"
+        color="default"
+        label={
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <PendingIcon sx={{ fontSize: 12 }} />
+            Pending
+          </Box>
+        }
+      />
+    );
+  }
+  return <Chip size="small" color={meta.color} label={meta.label} />;
+};
+
+const ModuleChip = ({ module }) => {
+  const label = MODULE_OPTIONS.find((m) => m.value === module)?.label || module;
+  return (
+    <Chip
+      label={label}
+      size="small"
+      variant="outlined"
+      sx={{ fontSize: '0.7rem', fontWeight: 600 }}
+    />
+  );
+};
+
+// ── Main Page ──────────────────────────────────────────────────────────────
 const ReportsPage = () => {
-  const [tab, setTab] = useState(0);
-  const [period, setPeriod] = useState('monthly');
-  const [dashData, setDashData] = useState(null);
+  // ── State ──────────────────────────────────────────────────────────────
+  const [rows,          setRows]          = useState([]);
+  const [loading,       setLoading]       = useState(false);
+  const [totalElements, setTotalElements] = useState(0);
+  const [page,          setPage]          = useState(0);
+  const [rowsPerPage,   setRowsPerPage]   = useState(20);
+  const [filter,        setFilter]        = useState('all');   // 'all' | 'mine'
+  const [moduleFilter,  setModuleFilter]  = useState('');
+  const [actionLoading, setActionLoading] = useState({});     // { [id]: true }
+  const [error,         setError]         = useState(null);
+
+  // Dialogs
+  const [wizardOpen,   setWizardOpen]   = useState(false);
+  const [historyOpen,  setHistoryOpen]  = useState(false);
+  const [insightsOpen, setInsightsOpen] = useState(false);
+  const [activeReport, setActiveReport] = useState(null);
+
+  // Toast
+  const [toast, setToast] = useState({ open: false, message: '', severity: 'success' });
+  const showToast = (message, severity = 'success') =>
+    setToast({ open: true, message, severity });
+
+  // ── Fetch ──────────────────────────────────────────────────────────────
+  const fetchReports = useCallback(async (pg = page, rpp = rowsPerPage) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const params = {
+        page: pg,
+        size: rpp,
+        ...(filter === 'mine'    && { mine: true }),
+        ...(moduleFilter         && { module: moduleFilter }),
+      };
+      const res = await getReportsApi(params);
+      setRows(res.data?.data?.content     || []);
+      setTotalElements(res.data?.data?.totalElements ?? 0);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to load reports.');
+    } finally {
+      setLoading(false);
+    }
+  }, [page, rowsPerPage, filter, moduleFilter]);
 
   useEffect(() => {
-    getReportsDashboardApi()
-      .then(({ data }) => setDashData(data?.data || null))
-      .catch(() => {});
-  }, []);
+    fetchReports(0, rowsPerPage);
+    setPage(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filter, moduleFilter]);
 
-  const tableData = [null, QMS_SUMMARY, DMS_SUMMARY, LMS_SUMMARY][tab];
-  const d = dashData;
+  useEffect(() => {
+    fetchReports();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, rowsPerPage]);
 
+  // ── Action helpers ─────────────────────────────────────────────────────
+  const setBusy = (id, busy) =>
+    setActionLoading((prev) => ({ ...prev, [id]: busy }));
+
+  const handleRerun = async (report) => {
+    setBusy(report.id, true);
+    try {
+      const res = await runReportApi(report.id);
+      const updated = res.data?.data;
+      setRows((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+      showToast('Report re-run successfully.');
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Re-run failed.', 'error');
+    } finally {
+      setBusy(report.id, false);
+    }
+  };
+
+  const handleDownload = async (report) => {
+    if (report.status !== 'COMPLETED') {
+      showToast('Report is not ready for download yet.', 'warning');
+      return;
+    }
+    setBusy(report.id, true);
+    try {
+      const res = await downloadReportApi(report.id);
+      triggerDownload(res.data, report.fileName || `report_${report.id}.xlsx`);
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Download failed.', 'error');
+    } finally {
+      setBusy(report.id, false);
+    }
+  };
+
+  const handleDisable = async (report) => {
+    setBusy(report.id, true);
+    try {
+      const res = await disableReportApi(report.id);
+      const updated = res.data?.data;
+      setRows((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+      showToast('Report disabled.');
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Action failed.', 'error');
+    } finally {
+      setBusy(report.id, false);
+    }
+  };
+
+  const handleEnable = async (report) => {
+    setBusy(report.id, true);
+    try {
+      const res = await enableReportApi(report.id);
+      const updated = res.data?.data;
+      setRows((prev) => prev.map((r) => (r.id === updated.id ? updated : r)));
+      showToast('Report enabled.');
+    } catch (err) {
+      showToast(err.response?.data?.message || 'Action failed.', 'error');
+    } finally {
+      setBusy(report.id, false);
+    }
+  };
+
+  const openHistory  = (report) => { setActiveReport(report); setHistoryOpen(true);  };
+  const openInsights = (report) => { setActiveReport(report); setInsightsOpen(true); };
+
+  const handleCreated = (newReport) => {
+    showToast('Report created — file is ready to download!');
+    fetchReports(0, rowsPerPage);
+    setPage(0);
+  };
+
+  // ── Columns ────────────────────────────────────────────────────────────
+  const columns = [
+    {
+      field: 'name',
+      headerName: 'Report Name',
+      minWidth: 220,
+      renderCell: (r) => (
+        <Box>
+          <Typography variant="body2" fontWeight={600} noWrap sx={{ maxWidth: 240 }}>
+            {r.name}
+          </Typography>
+          {r.description && (
+            <Typography variant="caption" color="text.secondary" noWrap sx={{ maxWidth: 240, display: 'block' }}>
+              {r.description}
+            </Typography>
+          )}
+        </Box>
+      ),
+    },
+    {
+      field: 'module',
+      headerName: 'Module',
+      minWidth: 140,
+      renderCell: (r) => <ModuleChip module={r.module} />,
+    },
+    {
+      field: 'format',
+      headerName: 'Format',
+      minWidth: 80,
+      renderCell: (r) => (
+        <Chip
+          label={r.format}
+          size="small"
+          variant="outlined"
+          sx={{ fontSize: '0.68rem' }}
+        />
+      ),
+    },
+    {
+      field: 'status',
+      headerName: 'Status',
+      minWidth: 110,
+      renderCell: (r) => <StatusChip status={r.status} />,
+    },
+    {
+      field: 'lastRunAt',
+      headerName: 'Last Run',
+      minWidth: 120,
+      renderCell: (r) => (
+        <Typography variant="caption" color="text.secondary">
+          {fmtDate(r.lastRunAt)}
+        </Typography>
+      ),
+    },
+    {
+      field: 'runCount',
+      headerName: 'Runs',
+      minWidth: 60,
+      align: 'center',
+      renderCell: (r) => (
+        <Typography variant="body2" color="text.secondary">{r.runCount ?? 0}</Typography>
+      ),
+    },
+    {
+      field: 'fileSizeBytes',
+      headerName: 'Size',
+      minWidth: 80,
+      renderCell: (r) => (
+        <Typography variant="caption" color="text.secondary">
+          {r.status === 'COMPLETED' ? fmtSize(r.fileSizeBytes) : '—'}
+        </Typography>
+      ),
+    },
+    {
+      field: 'createdByUsername',
+      headerName: 'Created By',
+      minWidth: 110,
+      renderCell: (r) => (
+        <Typography variant="caption" color="text.secondary">
+          {r.createdByUsername || '—'}
+        </Typography>
+      ),
+    },
+    {
+      field: 'actions',
+      headerName: '',
+      minWidth: 200,
+      align: 'right',
+      renderCell: (r) => {
+        const busy       = !!actionLoading[r.id];
+        const isDisabled = r.isDisabled || r.status === 'DISABLED';
+        const canDL      = r.status === 'COMPLETED';
+        return (
+          <Box sx={{ display: 'flex', gap: 0.25, justifyContent: 'flex-end' }}>
+            {/* Download */}
+            <Tooltip title={canDL ? 'Download' : 'Not ready'}>
+              <span>
+                <IconButton
+                  size="small"
+                  color="primary"
+                  disabled={!canDL || busy}
+                  onClick={(e) => { e.stopPropagation(); handleDownload(r); }}
+                >
+                  {busy ? <CircularProgress size={14} /> : <DownloadIcon fontSize="small" />}
+                </IconButton>
+              </span>
+            </Tooltip>
+
+            {/* Re-run */}
+            <Tooltip title={isDisabled ? 'Enable first' : 'Re-run'}>
+              <span>
+                <IconButton
+                  size="small"
+                  color="secondary"
+                  disabled={isDisabled || busy}
+                  onClick={(e) => { e.stopPropagation(); handleRerun(r); }}
+                >
+                  <RerunIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+
+            {/* Insights */}
+            <Tooltip title="Insights">
+              <IconButton
+                size="small"
+                onClick={(e) => { e.stopPropagation(); openInsights(r); }}
+              >
+                <InsightIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+
+            {/* History */}
+            <Tooltip title="Run History">
+              <IconButton
+                size="small"
+                onClick={(e) => { e.stopPropagation(); openHistory(r); }}
+              >
+                <HistoryIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+
+            {/* Disable / Enable */}
+            {isDisabled ? (
+              <Tooltip title="Enable Report">
+                <IconButton
+                  size="small"
+                  color="success"
+                  disabled={busy}
+                  onClick={(e) => { e.stopPropagation(); handleEnable(r); }}
+                >
+                  <EnableIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            ) : (
+              <Tooltip title="Disable Report">
+                <IconButton
+                  size="small"
+                  color="warning"
+                  disabled={busy}
+                  onClick={(e) => { e.stopPropagation(); handleDisable(r); }}
+                >
+                  <DisableIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
+          </Box>
+        );
+      },
+    },
+  ];
+
+  // ── Render ─────────────────────────────────────────────────────────────
   return (
     <Box>
       <PageHeader
-        title="Reports & Analytics"
-        subtitle="Key performance indicators across all QMS modules."
-        breadcrumbs={[{ label: 'Dashboard', href: ROUTES.DASHBOARD }, { label: 'Reports' }]}
+        title="Reports"
+        subtitle="Build, run, and download custom reports across all QMS modules."
+        breadcrumbs={[
+          { label: 'Dashboard', href: ROUTES.DASHBOARD },
+          { label: 'Reports' },
+        ]}
         action={
-          <Button variant="outlined" startIcon={<DownloadIcon />}>
-            Export Report
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => setWizardOpen(true)}
+          >
+            New Report
           </Button>
         }
       />
 
-      <Grid container spacing={2} sx={{ mb: 3 }}>
-        {MODULE_STATS.map(({ module, kpi, value, target, color }) => (
-          <Grid item xs={12} sm={6} lg={3} key={module}>
-            <Card>
-              <CardContent sx={{ p: 2.5 }}>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography variant="body2" color="text.secondary">{module} — {kpi}</Typography>
-                  <Chip label={`Target: ${target}%`} size="small" variant="outlined" />
-                </Box>
-                <Typography variant="h4" fontWeight={700} color={`${color}.main`}>{value}%</Typography>
-                <LinearProgress variant="determinate" value={value} sx={{ mt: 1, height: 6, borderRadius: 3 }} color={color} />
-              </CardContent>
-            </Card>
-          </Grid>
-        ))}
-      </Grid>
+      {/* ── Filter bar ── */}
+      <Box
+        sx={{
+          display: 'flex', alignItems: 'center', gap: 2,
+          mb: 2.5, flexWrap: 'wrap',
+        }}
+      >
+        <ToggleButtonGroup
+          exclusive
+          size="small"
+          value={filter}
+          onChange={(_e, v) => { if (v) setFilter(v); }}
+        >
+          <ToggleButton value="all"  sx={{ px: 2.5 }}>All Reports</ToggleButton>
+          <ToggleButton value="mine" sx={{ px: 2.5 }}>My Reports</ToggleButton>
+        </ToggleButtonGroup>
 
-      <Card>
-        <CardContent>
-          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2, flexWrap: 'wrap', gap: 1 }}>
-            <Tabs value={tab} onChange={(_, v) => setTab(v)}>
-              <Tab label="Overview" />
-              <Tab label="QMS Report" />
-              <Tab label="DMS Report" />
-              <Tab label="LMS Report" />
-            </Tabs>
-            <TextField
-              select size="small" value={period} onChange={(e) => setPeriod(e.target.value)} sx={{ width: 140 }}
-              label="Period"
-            >
-              {['monthly', 'quarterly', 'annual'].map((p) => (
-                <MenuItem key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</MenuItem>
-              ))}
-            </TextField>
-          </Box>
+        <FormControl size="small" sx={{ minWidth: 160 }}>
+          <InputLabel>Module</InputLabel>
+          <Select
+            label="Module"
+            value={moduleFilter}
+            onChange={(e) => setModuleFilter(e.target.value)}
+          >
+            {MODULE_OPTIONS.map((m) => (
+              <MenuItem key={m.value} value={m.value}>{m.label}</MenuItem>
+            ))}
+          </Select>
+        </FormControl>
 
-          <Divider sx={{ mb: 2 }} />
+        <Box sx={{ flex: 1 }} />
 
-          {tab === 0 && (
-            <Grid container spacing={2}>
-              <Grid item xs={12}>
-                <Typography variant="subtitle1" fontWeight={600} gutterBottom>Executive Summary — Monthly Overview</Typography>
-                <Grid container spacing={2}>
-                  {[
-                    { label: 'System-Wide NCRs', value: d?.totalNcr ?? 34, delta: '-12%', up: false },
-                    { label: 'Docs Under Control', value: d?.totalDocuments ?? '1,204', delta: '+18 this month', up: true },
-                    { label: 'Training Completions', value: d?.totalCompletions ?? 87, delta: '+32%', up: true },
-                    { label: 'Overall Compliance', value: d?.overallComplianceRate ? `${d.overallComplianceRate}%` : '92%', delta: '+2%', up: true },
-                  ].map(({ label, value, delta, up }) => (
-                    <Grid item xs={6} md={3} key={label}>
-                      <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 2 }}>
-                        <Typography variant="caption" color="text.secondary">{label}</Typography>
-                        <Typography variant="h5" fontWeight={700}>{value}</Typography>
-                        <Typography variant="caption" color={up ? 'success.main' : 'error.main'}>{delta}</Typography>
-                      </Box>
-                    </Grid>
-                  ))}
-                </Grid>
-              </Grid>
-            </Grid>
-          )}
+        <Typography variant="caption" color="text.secondary">
+          {totalElements} report{totalElements !== 1 ? 's' : ''}
+        </Typography>
+      </Box>
 
-          {tab > 0 && tableData && <ReportTable data={tableData} />}
-        </CardContent>
-      </Card>
+      {error && (
+        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
+          {error}
+        </Alert>
+      )}
+
+      {/* ── Table ── */}
+      <DataTable
+        columns={columns}
+        rows={rows}
+        loading={loading}
+        totalCount={totalElements}
+        page={page}
+        rowsPerPage={rowsPerPage}
+        onPageChange={(_e, newPage) => setPage(newPage)}
+        onRowsPerPageChange={(e) => { setRowsPerPage(parseInt(e.target.value, 10)); setPage(0); }}
+        emptyMessage="No reports yet. Click '+ New Report' to create one."
+      />
+
+      {/* ── Dialogs ── */}
+      <CreateReportWizard
+        open={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+        onCreated={handleCreated}
+      />
+
+      <ReportHistoryDialog
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        report={activeReport}
+      />
+
+      <ReportInsightsDialog
+        open={insightsOpen}
+        onClose={() => setInsightsOpen(false)}
+        report={activeReport}
+      />
+
+      {/* ── Toast ── */}
+      <Snackbar
+        open={toast.open}
+        autoHideDuration={4000}
+        onClose={() => setToast((t) => ({ ...t, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert
+          severity={toast.severity}
+          onClose={() => setToast((t) => ({ ...t, open: false }))}
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
+          {toast.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };
