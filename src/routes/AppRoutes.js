@@ -35,7 +35,7 @@ const AppRoutes = () => (
         <Route path={ROUTES.USERS}   element={<ModuleRoute moduleKey="USER">  <UsersPage />   </ModuleRoute>} />
         <Route path={`${ROUTES.QMS}/*`} element={<ModuleRoute moduleKey="QMS"><QmsPage /></ModuleRoute>} />
         <Route path={ROUTES.DMS}    element={<ModuleRoute moduleKey="DMS">   <DmsPage />     </ModuleRoute>} />
-        <Route path={ROUTES.LMS}    element={<ModuleRoute moduleKey="LMS">   <LmsPage />     </ModuleRoute>} />
+        <Route path={`${ROUTES.LMS}/*`} element={<ModuleRoute moduleKey="LMS"><LmsPage /></ModuleRoute>} />
         <Route path={ROUTES.REPORTS} element={<ModuleRoute moduleKey="REPORT"><ReportsPage /> </ModuleRoute>} />
         <Route path={ROUTES.AUDIT}  element={<ModuleRoute moduleKey="AUDIT"> <AuditPage />   </ModuleRoute>} />
       </Route>

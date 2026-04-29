@@ -14,6 +14,10 @@ export const ROUTES = {
   QMS_CHANGE_CONTROL:   '/qms/change-control',
   DMS: '/dms',
   LMS: '/lms',
+  LMS_PROGRAMS:     '/lms/programs',
+  LMS_ENROLLMENTS:  '/lms/enrollments',
+  LMS_COMPLIANCE:   '/lms/compliance',
+  LMS_CERTIFICATES: '/lms/certificates',
   REPORTS: '/reports',
   AUDIT: '/audit',
 };

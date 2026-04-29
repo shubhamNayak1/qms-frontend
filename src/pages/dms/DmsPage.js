@@ -15,6 +15,21 @@ import { getStatusColor, formatDate } from '../../utils/helpers';
 import { getDocumentsApi, uploadDocumentApi, downloadDocumentApi, deleteDocumentApi } from '../../api/dmsApi';
 import { ROUTES } from '../../utils/constants';
 
+const DOC_CATEGORIES = [
+  { value: 'SOP',                label: 'SOP – Standard Operating Procedure' },
+  { value: 'POLICY',             label: 'Policy – Company Policy' },
+  { value: 'WORK_INSTRUCTION',   label: 'Work Instruction' },
+  { value: 'FORM',               label: 'Form / Template' },
+  { value: 'RECORD',             label: 'Record – Completed Form / Evidence' },
+  { value: 'SPECIFICATION',      label: 'Specification – Product / Material' },
+  { value: 'PROTOCOL',           label: 'Protocol – Validation / Study' },
+  { value: 'REPORT',             label: 'Report – Study / Audit' },
+  { value: 'REGULATORY',         label: 'Regulatory Submission Document' },
+  { value: 'TRAINING_MATERIAL',  label: 'Training Material' },
+  { value: 'RISK_ASSESSMENT',    label: 'Risk Assessment' },
+  { value: 'OTHER',              label: 'Other' },
+];
+
 const normDoc = (d) => ({
   id: d.id,
   docNumber: d.documentNumber || d.docNumber || d.id,
@@ -119,7 +134,14 @@ const DmsPage = () => {
   const columns = [
     { field: 'docNumber', headerName: 'Doc Number', minWidth: 130 },
     { field: 'title', headerName: 'Title', minWidth: 240 },
-    { field: 'category', headerName: 'Category', minWidth: 140, renderCell: (row) => <Chip label={row.category} size="small" variant="outlined" /> },
+    {
+      field: 'category', headerName: 'Category', minWidth: 160,
+      renderCell: (row) => {
+        const cat = DOC_CATEGORIES.find((c) => c.value === row.category);
+        const display = cat ? cat.label.split(' – ')[0].split(' /')[0] : (row.category || '—');
+        return <Chip label={display} size="small" variant="outlined" />;
+      },
+    },
     { field: 'version', headerName: 'Version', minWidth: 80, align: 'center' },
     { field: 'status', headerName: 'Status', minWidth: 110, renderCell: (row) => <Chip label={row.status} size="small" color={getStatusColor(row.status)} /> },
     { field: 'owner', headerName: 'Owner', minWidth: 140 },
@@ -182,7 +204,9 @@ const DmsPage = () => {
           {uploadSuccess && <Alert severity="success" sx={{ mb: 2 }}>Document uploaded successfully!</Alert>}
           <TextField label="Document Title" fullWidth margin="normal" value={uploadForm.title} onChange={(e) => setUploadForm({ ...uploadForm, title: e.target.value })} />
           <TextField label="Category" select fullWidth margin="normal" value={uploadForm.category} onChange={(e) => setUploadForm({ ...uploadForm, category: e.target.value })}>
-            {['SOP', 'Work Instruction', 'Policy', 'Form', 'Risk Assessment', 'Report'].map((c) => <MenuItem key={c} value={c}>{c}</MenuItem>)}
+            {DOC_CATEGORIES.map(({ value, label }) => (
+              <MenuItem key={value} value={value}>{label}</MenuItem>
+            ))}
           </TextField>
           <TextField label="Version" fullWidth margin="normal" value={uploadForm.version} onChange={(e) => setUploadForm({ ...uploadForm, version: e.target.value })} />
           <Box
