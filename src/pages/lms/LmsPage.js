@@ -11,6 +11,7 @@ import {
   School as SchoolIcon, PeopleAlt as PeopleIcon,
   Warning as WarningIcon, CheckCircle as CertIcon,
   Insights as InsightsIcon, PersonAdd as EnrollIcon,
+  Assignment as ComplianceIcon, Quiz as QuizIcon,
 } from '@mui/icons-material';
 import { useLocation, useNavigate } from 'react-router-dom';
 import PageHeader from '../../components/PageHeader';
@@ -20,6 +21,7 @@ import { formatDate } from '../../utils/helpers';
 import { ROUTES } from '../../utils/constants';
 import {
   getProgramsApi, getEnrollmentsApi, getLmsComplianceDashboardApi,
+  getCertificatesApi,
 } from '../../api/lmsApi';
 import {
   PROGRAM_STATUS_COLORS, PROGRAM_STATUS_LABELS,
@@ -29,11 +31,14 @@ import {
 import CreateProgramDialog from './CreateProgramDialog';
 import ProgramDetailDrawer from './ProgramDetailDrawer';
 import EnrollDialog        from './EnrollDialog';
+import ComplianceDialog    from './ComplianceDialog';
+import ExamDialog          from './ExamDialog';
 
 // ── Tab routing ───────────────────────────────────────────────────────────────
 const TABS = [
   { label: 'Programs',     path: ROUTES.LMS_PROGRAMS },
   { label: 'Enrollments',  path: ROUTES.LMS_ENROLLMENTS },
+  { label: 'Compliance',   path: ROUTES.LMS_COMPLIANCE },
   { label: 'Certificates', path: ROUTES.LMS_CERTIFICATES },
 ];
 
@@ -74,21 +79,22 @@ const normProgram = (p) => ({
 });
 
 const normEnrollment = (e) => ({
-  id:           e.id,
-  userName:     e.userName || '—',
-  userDept:     e.userDepartment || '—',
-  programCode:  e.programCode || '—',
-  programTitle: e.programTitle || '—',
-  status:       e.status,
-  progress:     e.progressPercent ?? 0,
-  dueDate:      e.dueDate,
-  overdue:      e.overdue,
-  completedAt:  e.completedAt,
-  lastScore:    e.lastScore,
-  attemptsUsed: e.attemptsUsed,
+  id:               e.id,
+  userName:         e.userName || '—',
+  userDept:         e.userDepartment || '—',
+  programCode:      e.programCode || '—',
+  programTitle:     e.programTitle || '—',
+  trainingType:     e.trainingType || e.programTrainingType || '',
+  status:           e.status,
+  progress:         e.progressPercent ?? 0,
+  dueDate:          e.dueDate,
+  overdue:          e.overdue,
+  completedAt:      e.completedAt,
+  lastScore:        e.lastScore,
+  attemptsUsed:     e.attemptsUsed,
+  examEnabled:      e.examEnabled || e.programExamEnabled || false,
 });
 
-// eslint-disable-next-line no-unused-vars
 const normCert = (c) => ({
   id:                c.id,
   certificateNumber: c.certificateNumber,
@@ -314,6 +320,11 @@ const LmsPage = () => {
   const [enrollOpen, setEnrollOpen]  = useState(false);
   const [enrollProgram, setEnrollProgram] = useState(null);
 
+  const [complianceOpen,       setComplianceOpen]       = useState(false);
+  const [complianceEnrollId,   setComplianceEnrollId]   = useState(null);
+  const [examOpen,             setExamOpen]             = useState(false);
+  const [examEnrollment,       setExamEnrollment]       = useState(null);
+
   // Redirect bare /lms → /lms/programs
   useEffect(() => {
     if (location.pathname === ROUTES.LMS || location.pathname === ROUTES.LMS + '/') {
@@ -338,9 +349,31 @@ const LmsPage = () => {
         setEnrollmentRows(items.map(normEnrollment));
         setTotalCount(payload?.totalElements ?? items.length);
       } else if (tab === 2) {
-        // Certificates — no dedicated list API yet; show empty with placeholder
-        setCertRows([]);
-        setTotalCount(0);
+        // Compliance — pending enrollments (PENDING_REVIEW, PENDING_HR_REVIEW, PENDING_QA_APPROVAL)
+        const pendingParams = {
+          ...params,
+          status: statusFilter || undefined,
+        };
+        const { data } = await getEnrollmentsApi({
+          ...pendingParams,
+          status: statusFilter || 'PENDING_REVIEW',
+        });
+        const payload = data?.data;
+        const items = payload?.content ?? (Array.isArray(payload) ? payload : []);
+        setEnrollmentRows(items.map(normEnrollment));
+        setTotalCount(payload?.totalElements ?? items.length);
+      } else if (tab === 3) {
+        // Certificates
+        try {
+          const { data } = await getCertificatesApi(params);
+          const payload = data?.data;
+          const items = payload?.content ?? (Array.isArray(payload) ? payload : []);
+          setCertRows(items.map(normCert));
+          setTotalCount(payload?.totalElements ?? items.length);
+        } catch {
+          setCertRows([]);
+          setTotalCount(0);
+        }
       }
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to load data.');
@@ -364,6 +397,8 @@ const LmsPage = () => {
 
   const openDetail = (id) => { setDetailId(id); setDetailOpen(true); };
   const openEnroll = (row) => { setEnrollProgram(row); setEnrollOpen(true); };
+  const openCompliance = (enrollId) => { setComplianceEnrollId(enrollId); setComplianceOpen(true); };
+  const openExam = (row) => { setExamEnrollment(row); setExamOpen(true); };
 
   // ── Program columns ──────────────────────────────────────────────────────────
   const programColumns = [
@@ -435,6 +470,31 @@ const LmsPage = () => {
     { field: 'lastScore', headerName: 'Score', minWidth: 80, align: 'center',
       renderCell: (r) => r.lastScore != null ? `${r.lastScore.toFixed(0)}%` : '—' },
     { field: 'completedAt', headerName: 'Completed', minWidth: 110, renderCell: (r) => formatDate(r.completedAt) },
+    {
+      field: 'actions', headerName: '', minWidth: 100, align: 'right',
+      renderCell: (r) => {
+        const examReady = r.examEnabled && r.status === 'IN_PROGRESS';
+        const complianceActive = ['IN_PROGRESS','PENDING_REVIEW','PENDING_HR_REVIEW','PENDING_QA_APPROVAL'].includes(r.status);
+        return (
+          <Box sx={{ display: 'flex', gap: 0.25 }}>
+            {complianceActive && (
+              <Tooltip title="Compliance Workflow">
+                <IconButton size="small" color="primary" onClick={(e) => { e.stopPropagation(); openCompliance(r.id); }}>
+                  <ComplianceIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
+            {examReady && (
+              <Tooltip title="Take Online Exam">
+                <IconButton size="small" color="secondary" onClick={(e) => { e.stopPropagation(); openExam(r); }}>
+                  <QuizIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
+          </Box>
+        );
+      },
+    },
   ];
 
   // ── Certificate columns ──────────────────────────────────────────────────────
@@ -457,12 +517,18 @@ const LmsPage = () => {
       renderCell: (r) => <Chip label={r.status} size="small" color={CERT_STATUS_COLORS[r.status] || 'default'} /> },
   ];
 
-  const PROGRAM_STATUS_FILTER_OPTS = ['', 'DRAFT','UNDER_REVIEW','APPROVED','PLANNED','ACTIVE','COMPLETED','REJECTED','ARCHIVED'];
+  const PROGRAM_STATUS_FILTER_OPTS    = ['', 'DRAFT','UNDER_REVIEW','APPROVED','PLANNED','ACTIVE','COMPLETED','REJECTED','ARCHIVED'];
   const ENROLLMENT_STATUS_FILTER_OPTS = ['', 'ALLOCATED','IN_PROGRESS','PENDING_REVIEW','PENDING_HR_REVIEW','PENDING_QA_APPROVAL','COMPLETED','FAILED','RETRAINING','EXPIRED','WAIVED','CANCELLED'];
+  const COMPLIANCE_STATUS_FILTER_OPTS = ['PENDING_REVIEW','PENDING_HR_REVIEW','PENDING_QA_APPROVAL'];
 
-  const currentColumns = [programColumns, enrollmentColumns, certColumns][tab] || programColumns;
-  const currentRows    = [programRows, enrollmentRows, certRows][tab] || [];
-  const statusOpts = tab === 0 ? PROGRAM_STATUS_FILTER_OPTS : ENROLLMENT_STATUS_FILTER_OPTS;
+  // tab 0=Programs, 1=Enrollments, 2=Compliance (pending), 3=Certificates
+  const currentColumns = [programColumns, enrollmentColumns, enrollmentColumns, certColumns][tab] || programColumns;
+  const currentRows    = [programRows, enrollmentRows, enrollmentRows, certRows][tab] || [];
+  const statusOpts     = tab === 0
+    ? PROGRAM_STATUS_FILTER_OPTS
+    : tab === 2
+      ? COMPLIANCE_STATUS_FILTER_OPTS
+      : ENROLLMENT_STATUS_FILTER_OPTS;
   const statusLabelMap = tab === 0 ? PROGRAM_STATUS_LABELS : ENROLLMENT_STATUS_LABELS;
 
   return (
@@ -493,12 +559,12 @@ const LmsPage = () => {
           sx={{ width: 260 }}
           InputProps={{ startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment> }}
         />
-        {tab < 2 && (
+        {tab !== 3 && (
           <FormControl size="small" sx={{ minWidth: 180 }}>
             <InputLabel>Status</InputLabel>
             <Select value={statusFilter} label="Status"
               onChange={(e) => { setStatusFilter(e.target.value); setPage(0); }}>
-              <MenuItem value="">All Statuses</MenuItem>
+              {tab !== 2 && <MenuItem value="">All Statuses</MenuItem>}
               {statusOpts.filter(Boolean).map((s) => (
                 <MenuItem key={s} value={s}>{statusLabelMap[s] || s}</MenuItem>
               ))}
@@ -513,6 +579,11 @@ const LmsPage = () => {
             <Button variant="contained" startIcon={<AddIcon />} onClick={() => setCreateOpen(true)}>
               Create Program
             </Button>
+          )}
+          {tab === 2 && (
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <ComplianceIcon fontSize="small" /> Pending compliance reviews
+            </Typography>
           )}
         </Box>
       </Box>
@@ -552,6 +623,23 @@ const LmsPage = () => {
         onEnrolled={() => { setEnrollOpen(false); fetchTab(); }}
         programId={enrollProgram?.id}
         programTitle={enrollProgram?.title}
+      />
+
+      {/* Compliance Workflow Dialog */}
+      <ComplianceDialog
+        open={complianceOpen}
+        onClose={() => setComplianceOpen(false)}
+        enrollmentId={complianceEnrollId}
+        onUpdated={fetchTab}
+      />
+
+      {/* Online MCQ Exam Dialog */}
+      <ExamDialog
+        open={examOpen}
+        onClose={() => setExamOpen(false)}
+        enrollmentId={examEnrollment?.id}
+        programTitle={examEnrollment?.programTitle}
+        onCompleted={fetchTab}
       />
     </Box>
   );

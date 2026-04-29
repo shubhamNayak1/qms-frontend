@@ -53,12 +53,22 @@ export const hrReviewComplianceApi  = (enrollmentId, data) => apiClient.post(`/a
 export const qaApproveComplianceApi = (enrollmentId, data) => apiClient.post(`/api/v1/lms/enrollments/${enrollmentId}/compliance/qa-approve`, data);
 export const getPendingComplianceApi= (enrollmentId)       => apiClient.get(`/api/v1/lms/enrollments/${enrollmentId}/compliance/pending`);
 
-// ── Assessments ───────────────────────────────────────────────────────────────
+// ── Assessment Setup (Program-level MCQ configuration) ────────────────────────
+export const getProgramAssessmentApi    = (programId)              => apiClient.get(`/api/v1/lms/programs/${programId}/assessment`);
+export const updateProgramAssessmentApi = (programId, data)        => apiClient.put(`/api/v1/lms/programs/${programId}/assessment`, data);
+export const addQuestionApi             = (programId, data)        => apiClient.post(`/api/v1/lms/programs/${programId}/assessment/questions`, data);
+export const updateQuestionApi          = (programId, qId, data)   => apiClient.put(`/api/v1/lms/programs/${programId}/assessment/questions/${qId}`, data);
+export const deleteQuestionApi          = (programId, qId)         => apiClient.delete(`/api/v1/lms/programs/${programId}/assessment/questions/${qId}`);
+
+// ── Assessments (Enrollment-level exam taking) ────────────────────────────────
 export const startAssessmentApi            = (enrollmentId)              => apiClient.post(`/api/v1/lms/enrollments/${enrollmentId}/assessment/start`);
 export const submitAssessmentApi           = (enrollmentId, data)        => apiClient.post(`/api/v1/lms/enrollments/${enrollmentId}/assessment/submit`, data);
 export const getAssessmentAttemptsApi      = (enrollmentId)              => apiClient.get(`/api/v1/lms/enrollments/${enrollmentId}/assessment/attempts`);
 export const reviewAssessmentApi           = (enrollmentId, attemptId, data) => apiClient.post(`/api/v1/lms/enrollments/${enrollmentId}/assessment/review/${attemptId}`, data);
 export const getPendingAssessmentReviewsApi= (enrollmentId)              => apiClient.get(`/api/v1/lms/enrollments/${enrollmentId}/assessment/pending-reviews`);
+
+// ── Content Progress ──────────────────────────────────────────────────────────
+export const updateContentProgressApi = (enrollmentId, data) => apiClient.post(`/api/v1/lms/enrollments/${enrollmentId}/progress`, data);
 
 // ── TNI ───────────────────────────────────────────────────────────────────────
 export const getTniByEnrollmentApi = (enrollmentId) => apiClient.get(`/api/v1/lms/tni/enrollment/${enrollmentId}`);
@@ -66,6 +76,7 @@ export const getTniByUserApi       = (userId)       => apiClient.get(`/api/v1/lm
 export const updateTniApi          = (enrollmentId, data) => apiClient.put(`/api/v1/lms/tni/enrollment/${enrollmentId}`, data);
 
 // ── Certificates ──────────────────────────────────────────────────────────────
+export const getCertificatesApi            = (params)            => apiClient.get('/api/v1/lms/certificates', { params });
 export const getCertificatesByUserApi      = (userId)            => apiClient.get(`/api/v1/lms/certificates/user/${userId}`);
 export const getCertificateByNumberApi     = (certificateNumber) => apiClient.get(`/api/v1/lms/certificates/number/${certificateNumber}`);
 export const getCertificateByEnrollmentApi = (enrollmentId)      => apiClient.get(`/api/v1/lms/certificates/enrollment/${enrollmentId}`);

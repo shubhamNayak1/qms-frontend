@@ -22,6 +22,7 @@ import {
   TRAINING_SUBTYPE_LABELS, PROGRAM_TRANSITIONS,
 } from './lmsConstants';
 import SessionDialog from './SessionDialog';
+import AssessmentSetupPanel from './AssessmentSetupPanel';
 
 const CONTENT_ICONS = { DOCUMENT: <DocIcon fontSize="small" />, VIDEO: <VideoIcon fontSize="small" />, default: <LinkIcon fontSize="small" /> };
 
@@ -314,6 +315,14 @@ const ProgramDetailDrawer = ({ open, onClose, programId, onUpdated }) => {
                     ))}
                   </Stack>
                 </>
+              )}
+
+              {/* ── Assessment / Online Exam Setup ── */}
+              {program.examEnabled && (
+                <AssessmentSetupPanel
+                  programId={program.id}
+                  programExamEnabled={program.examEnabled}
+                />
               )}
 
               {/* ── Enrollment Compliance bar ── */}
