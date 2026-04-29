@@ -3,8 +3,7 @@ import {
   Dialog, DialogTitle, DialogContent, DialogActions,
   Button, Alert, CircularProgress, Typography, Box,
   Chip, Divider, Stack, RadioGroup, FormControlLabel, Radio,
-  FormGroup, Checkbox, TextField, LinearProgress, Stepper,
-  Step, StepLabel, IconButton, Tooltip,
+  FormGroup, Checkbox, TextField, LinearProgress, IconButton, Tooltip,
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -183,7 +182,6 @@ const ResultPanel = ({ result, programTitle, onClose, onRetry, canRetry }) => {
 // ── Main ExamDialog ───────────────────────────────────────────────────────────
 const ExamDialog = ({ open, onClose, enrollmentId, programTitle, onCompleted }) => {
   const [phase,      setPhase]      = useState('info');   // info | taking | result
-  const [attempt,    setAttempt]    = useState(null);
   const [questions,  setQuestions]  = useState([]);
   const [answers,    setAnswers]    = useState({});        // { questionId: answerString }
   const [result,     setResult]     = useState(null);
@@ -226,7 +224,6 @@ const ExamDialog = ({ open, onClose, enrollmentId, programTitle, onCompleted }) 
     try {
       const { data } = await startAssessmentApi(enrollmentId);
       const att = data?.data || data;
-      setAttempt(att);
       setQuestions(att.questions || []);
       setAnswers({});
       setCurrentQ(0);
