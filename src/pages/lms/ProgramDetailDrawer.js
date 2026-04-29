@@ -9,8 +9,7 @@ import {
   Close as CloseIcon, Refresh as RefreshIcon,
   Add as AddIcon, CheckCircle as CheckIcon, Cancel as CancelIcon,
   Article as DocIcon, VideoLibrary as VideoIcon, Link as LinkIcon,
-  CalendarMonth as CalIcon, Person as PersonIcon,
-  School as TrainIcon, Badge as MandatoryIcon,
+  CalendarMonth as CalIcon, Badge as MandatoryIcon,
   WarningAmber as RejectIcon,
 } from '@mui/icons-material';
 import { getProgramByIdApi, getProgramSessionsApi, raiseReviewApi, approveProgramApi,
