@@ -208,7 +208,7 @@ const ExamDialog = ({ open, onClose, enrollmentId, programTitle, onCompleted }) 
   useEffect(() => {
     if (open) {
       setPhase('info');
-      setAttempt(null);
+      setAttempts(null);
       setQuestions([]);
       setAnswers({});
       setResult(null);
