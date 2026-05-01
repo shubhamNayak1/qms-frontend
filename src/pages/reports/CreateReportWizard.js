@@ -37,6 +37,16 @@ const EMPTY_FORM = {
   metrics:     [],
 };
 
+// ── Date helpers ───────────────────────────────────────────────────────────
+const toDateStr = (d) => d.toISOString().split('T')[0];
+
+const getTodayStr    = () => toDateStr(new Date());
+const getOneYearAgo  = () => {
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - 1);
+  return toDateStr(d);
+};
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 const toggle = (arr, val) =>
   arr.includes(val) ? arr.filter((v) => v !== val) : [...arr, val];
@@ -141,6 +151,22 @@ const CreateReportWizard = ({ open, onClose, onCreated }) => {
     if (step === 0 && !step1Valid) {
       setError('Report Name and Module are required.');
       return;
+    }
+    if (step === 1) {
+      const today      = getTodayStr();
+      const oneYearAgo = getOneYearAgo();
+      if (form.dateFrom && form.dateFrom < oneYearAgo) {
+        setError('From date cannot be more than 1 year in the past.');
+        return;
+      }
+      if (form.dateTo && form.dateTo > today) {
+        setError('To date cannot be a future date.');
+        return;
+      }
+      if (form.dateFrom && form.dateTo && form.dateFrom > form.dateTo) {
+        setError('From date must not be later than To date.');
+        return;
+      }
     }
     setError(null);
     setStep((s) => s + 1);
@@ -275,8 +301,21 @@ const CreateReportWizard = ({ open, onClose, onCreated }) => {
                   fullWidth
                   size="small"
                   InputLabelProps={{ shrink: true }}
+                  inputProps={{
+                    min: getOneYearAgo(),
+                    max: form.dateTo || getTodayStr(),
+                  }}
                   value={form.dateFrom}
-                  onChange={set('dateFrom')}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setForm((f) => ({
+                      ...f,
+                      dateFrom: val,
+                      // if existing dateTo is now before new dateFrom, clear it
+                      dateTo: f.dateTo && f.dateTo < val ? '' : f.dateTo,
+                    }));
+                  }}
+                  helperText={`Min: up to 1 year ago`}
                 />
               </Grid>
               <Grid item xs={6}>
@@ -286,8 +325,21 @@ const CreateReportWizard = ({ open, onClose, onCreated }) => {
                   fullWidth
                   size="small"
                   InputLabelProps={{ shrink: true }}
+                  inputProps={{
+                    min: form.dateFrom || getOneYearAgo(),
+                    max: getTodayStr(),
+                  }}
                   value={form.dateTo}
-                  onChange={set('dateTo')}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setForm((f) => ({
+                      ...f,
+                      dateTo: val,
+                      // if existing dateFrom is now after new dateTo, clear it
+                      dateFrom: f.dateFrom && f.dateFrom > val ? '' : f.dateFrom,
+                    }));
+                  }}
+                  helperText={`Max: today`}
                 />
               </Grid>
             </Grid>
