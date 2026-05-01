@@ -72,6 +72,7 @@ const normProgram = (p) => ({
   status:       p.status,
   isMandatory:  p.isMandatory,
   examEnabled:  p.examEnabled,
+  disabled:     p.disabled || false,
   totalEnrollments:    p.totalEnrollments ?? 0,
   completedEnrollments:p.completedEnrollments ?? 0,
   complianceRate:      p.complianceRate ?? 0,
@@ -416,7 +417,12 @@ const LmsPage = () => {
     { field: 'department',headerName: 'Dept',        minWidth: 100 },
     { field: 'isMandatory', headerName: 'Mandatory', minWidth: 90, align: 'center',
       renderCell: (r) => r.isMandatory ? <Chip label="Yes" size="small" color="warning" /> : <Typography variant="caption" color="text.disabled">No</Typography> },
-    { field: 'status', headerName: 'Status', minWidth: 130, renderCell: (r) => <ProgramStatusChip status={r.status} /> },
+    { field: 'status', headerName: 'Status', minWidth: 160, renderCell: (r) => (
+      <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', alignItems: 'center' }}>
+        <ProgramStatusChip status={r.status} />
+        {r.disabled && <Chip label="Disabled" size="small" color="default" variant="outlined" sx={{ fontSize: '0.65rem', height: 20 }} />}
+      </Box>
+    )},
     { field: 'complianceRate', headerName: 'Compliance', minWidth: 140,
       renderCell: (r) => {
         const pct = Math.round(r.complianceRate);

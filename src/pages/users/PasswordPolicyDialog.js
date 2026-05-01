@@ -7,7 +7,7 @@ import {
 } from '@mui/material';
 import {
   Edit as EditIcon,
-  Delete as DeleteIcon,
+  Block as DisableIcon,
   Add as AddIcon,
   Close as CloseIcon,
   Save as SaveIcon,
@@ -184,15 +184,15 @@ const PasswordPolicyDialog = ({ open, onClose }) => {
     }
   };
 
-  // ── Delete policy ────────────────────────────────────────────────────────
+  // ── Disable policy ───────────────────────────────────────────────────────
   const handleDelete = async (id) => {
-    if (!window.confirm('Delete this password policy?')) return;
+    if (!window.confirm('Disable this password policy?')) return;
     try {
       await deletePolicyApi(id);
       fetchAll();
       fetchActive();
     } catch (err) {
-      setListError(err.response?.data?.message || 'Failed to delete policy.');
+      setListError(err.response?.data?.message || 'Failed to disable policy.');
     }
   };
 
@@ -357,20 +357,23 @@ const PasswordPolicyDialog = ({ open, onClose }) => {
                             <TableCell>{p.numberOfLoginAttempts}</TableCell>
                             <TableCell>{p.validPeriod}</TableCell>
                             <TableCell>
-                              {p.active
-                                ? <Chip label="Active" size="small" color="success" />
-                                : <Chip label="Inactive" size="small" variant="outlined" />}
+                              <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                                {p.active
+                                  ? <Chip label="Active" size="small" color="success" />
+                                  : <Chip label="Inactive" size="small" variant="outlined" />}
+                                {p.disabled && <Chip label="Disabled" size="small" color="default" variant="outlined" sx={{ fontSize: '0.65rem', height: 20 }} />}
+                              </Box>
                             </TableCell>
                             {canEdit && (
                               <TableCell align="right">
-                                <Tooltip title="Delete">
+                                <Tooltip title="Disable">
                                   <IconButton
                                     size="small"
                                     color="error"
                                     onClick={() => handleDelete(p.id)}
-                                    disabled={p.active}
+                                    disabled={p.active || p.disabled}
                                   >
-                                    <DeleteIcon fontSize="small" />
+                                    <DisableIcon fontSize="small" />
                                   </IconButton>
                                 </Tooltip>
                               </TableCell>

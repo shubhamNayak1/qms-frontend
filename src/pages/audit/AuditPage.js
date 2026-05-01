@@ -596,14 +596,14 @@ const AuditPage = () => {
   };
 
   const handleDelete = async (audit) => {
-    if (!window.confirm(`Remove audit "${audit.title}"?`)) return;
+    if (!window.confirm(`Disable audit "${audit.title}"?`)) return;
     setBusy(audit.id, true);
     try {
       await deleteQmsAuditApi(audit.id);
-      showToast('Audit removed.');
+      showToast('Audit disabled.');
       fetchAudits(auditPage, auditRpp);
     } catch (err) {
-      showToast(err.response?.data?.message || 'Delete failed.', 'error');
+      showToast(err.response?.data?.message || 'Disable failed.', 'error');
     } finally { setBusy(audit.id, false); }
   };
 
@@ -766,7 +766,7 @@ const AuditPage = () => {
                         const canComplete = ['PLANNED', 'IN_PROGRESS'].includes(row.status);
                         const canCancel   = ['PLANNED', 'IN_PROGRESS'].includes(row.status);
                         return (
-                          <TableRow key={row.id} hover>
+                          <TableRow key={row.id} hover sx={{ opacity: row.disabled ? 0.55 : 1 }}>
                             <TableCell>
                               <Typography variant="body2" fontWeight={600} color="primary.main" noWrap>
                                 {row.recordNumber || `#${row.id}`}
@@ -774,7 +774,11 @@ const AuditPage = () => {
                             </TableCell>
                             <TableCell sx={{ maxWidth: 220 }}>
                               <Typography variant="body2" noWrap title={row.title}>{row.title}</Typography>
-                              {row.overdue && (
+                              {row.disabled && (
+                                <Chip label="Disabled" size="small" color="default" variant="outlined"
+                                  sx={{ fontSize: '0.6rem', height: 16, mt: 0.25 }} />
+                              )}
+                              {!row.disabled && row.overdue && (
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.3 }}>
                                   <OverdueIcon sx={{ fontSize: 12, color: 'error.main' }} />
                                   <Typography variant="caption" color="error.main">Overdue</Typography>
@@ -846,12 +850,15 @@ const AuditPage = () => {
                                     </IconButton>
                                   </Tooltip>
                                 )}
-                                {/* Delete */}
-                                <Tooltip title="Remove">
-                                  <IconButton size="small" color="error" disabled={busy}
-                                    onClick={() => handleDelete(row)}>
-                                    <DeleteIcon fontSize="small" />
-                                  </IconButton>
+                                {/* Disable */}
+                                <Tooltip title={row.disabled ? 'Already Disabled' : 'Disable'}>
+                                  <span>
+                                    <IconButton size="small" color="error"
+                                      disabled={busy || row.disabled}
+                                      onClick={() => handleDelete(row)}>
+                                      <DeleteIcon fontSize="small" />
+                                    </IconButton>
+                                  </span>
                                 </Tooltip>
                               </Box>
                             </TableCell>

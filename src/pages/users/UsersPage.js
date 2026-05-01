@@ -5,7 +5,7 @@ import {
 } from '@mui/material';
 import {
   Add as AddIcon, Search as SearchIcon,
-  Edit as EditIcon, Delete as DeleteIcon, Refresh as RefreshIcon,
+  Edit as EditIcon, Block as DisableIcon, Refresh as RefreshIcon,
   Security as PolicyIcon,
 } from '@mui/icons-material';
 import PageHeader from '../../components/PageHeader';
@@ -30,6 +30,7 @@ const normalizeUser = (u) => {
     roleId: firstRole?.id ?? null,               // id  — used for form
     department: u.department || '',
     status: u.isActive !== undefined ? (u.isActive ? 'ACTIVE' : 'INACTIVE') : (u.status || 'ACTIVE'),
+    disabled: u.disabled || false,
     createdAt: u.createdAt,
   };
 };
@@ -151,12 +152,12 @@ const UsersPage = () => {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Delete this user?')) return;
+    if (!window.confirm('Disable this user? They will no longer be able to log in.')) return;
     try {
       await deleteUserApi(id);
       fetchUsers();
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to delete user.');
+      setError(err.response?.data?.message || 'Failed to disable user.');
     }
   };
 
@@ -172,14 +173,19 @@ const UsersPage = () => {
       return <Chip label={label} size="small" color={color} />;
     }},
     { field: 'department', headerName: 'Department', minWidth: 130 },
-    { field: 'status', headerName: 'Status', minWidth: 100, renderCell: (row) => <Chip label={row.status} size="small" color={getStatusColor(row.status)} /> },
+    { field: 'status', headerName: 'Status', minWidth: 140, renderCell: (row) => (
+      <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+        <Chip label={row.status} size="small" color={getStatusColor(row.status)} />
+        {row.disabled && <Chip label="Disabled" size="small" color="default" variant="outlined" sx={{ fontSize: '0.65rem', height: 20, opacity: 0.8 }} />}
+      </Box>
+    )},
     { field: 'createdAt', headerName: 'Created', minWidth: 120, renderCell: (row) => formatDate(row.createdAt) },
     {
       field: 'actions', headerName: 'Actions', align: 'right', minWidth: 100,
       renderCell: (row) => (
         <Box>
           <Tooltip title="Edit"><IconButton size="small" onClick={() => openEdit(row)}><EditIcon fontSize="small" /></IconButton></Tooltip>
-          <Tooltip title="Delete"><IconButton size="small" color="error" onClick={() => handleDelete(row.id)}><DeleteIcon fontSize="small" /></IconButton></Tooltip>
+          <Tooltip title="Disable"><IconButton size="small" color="error" onClick={() => handleDelete(row.id)} disabled={row.disabled}><DisableIcon fontSize="small" /></IconButton></Tooltip>
         </Box>
       ),
     },

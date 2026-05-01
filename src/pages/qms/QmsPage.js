@@ -67,6 +67,7 @@ const normCapa = (r) => ({
   status: r.status,
   dueDate: r.dueDate,
   overdue: r.overdue,
+  disabled: r.disabled || false,
 });
 const normDeviation = (r) => ({
   id: r.id,
@@ -79,6 +80,7 @@ const normDeviation = (r) => ({
   status: r.status,
   createdAt: r.createdAt,
   overdue: r.overdue,
+  disabled: r.disabled || false,
 });
 const normIncident = (r) => ({
   id: r.id,
@@ -91,6 +93,7 @@ const normIncident = (r) => ({
   status: r.status,
   occurrenceDate: r.occurrenceDate || r.createdAt,
   overdue: r.overdue,
+  disabled: r.disabled || false,
 });
 const normComplaint = (r) => ({
   id: r.id,
@@ -103,6 +106,7 @@ const normComplaint = (r) => ({
   status: r.status,
   receivedDate: r.receivedDate || r.createdAt,
   overdue: r.overdue,
+  disabled: r.disabled || false,
 });
 const normChangeControl = (r) => ({
   id: r.id,
@@ -114,14 +118,20 @@ const normChangeControl = (r) => ({
   status: r.status,
   implementationDate: r.implementationDate,
   overdue: r.overdue,
+  disabled: r.disabled || false,
 });
 
 
 // ── Columns per module ────────────────────────────────────────────────────────
+const DisabledBadge = ({ disabled }) =>
+  disabled ? <Chip label="Disabled" size="small" color="default" variant="outlined"
+    sx={{ fontSize: '0.6rem', height: 16, mt: 0.25 }} /> : null;
+
 const makeColumns = (openDetail) => ({
   capa: [
     { field: 'refNumber',   headerName: 'CAPA #',      minWidth: 140 },
-    { field: 'title',       headerName: 'Title',        minWidth: 220 },
+    { field: 'title',       headerName: 'Title',        minWidth: 220,
+      renderCell: (r) => <Box sx={{ opacity: r.disabled ? 0.55 : 1 }}><Typography variant="body2" noWrap>{r.title}</Typography><DisabledBadge disabled={r.disabled} /></Box> },
     { field: 'capaType',    headerName: 'Type',         minWidth: 110 },
     { field: 'source',      headerName: 'Source',       minWidth: 100 },
     { field: 'department',  headerName: 'Dept',         minWidth: 100 },
@@ -133,7 +143,8 @@ const makeColumns = (openDetail) => ({
   ],
   deviation: [
     { field: 'refNumber',     headerName: 'DEV #',       minWidth: 140 },
-    { field: 'title',         headerName: 'Title',        minWidth: 220 },
+    { field: 'title',         headerName: 'Title',        minWidth: 220,
+      renderCell: (r) => <Box sx={{ opacity: r.disabled ? 0.55 : 1 }}><Typography variant="body2" noWrap>{r.title}</Typography><DisabledBadge disabled={r.disabled} /></Box> },
     { field: 'deviationType', headerName: 'Type',         minWidth: 110 },
     { field: 'department',    headerName: 'Dept',         minWidth: 100 },
     { field: 'productBatch',  headerName: 'Batch',        minWidth: 110 },
@@ -145,7 +156,8 @@ const makeColumns = (openDetail) => ({
   ],
   incident: [
     { field: 'refNumber',      headerName: 'INC #',        minWidth: 140 },
-    { field: 'title',          headerName: 'Title',         minWidth: 220 },
+    { field: 'title',          headerName: 'Title',         minWidth: 220,
+      renderCell: (r) => <Box sx={{ opacity: r.disabled ? 0.55 : 1 }}><Typography variant="body2" noWrap>{r.title}</Typography><DisabledBadge disabled={r.disabled} /></Box> },
     { field: 'incidentType',   headerName: 'Type',          minWidth: 110 },
     { field: 'incidentSubType',headerName: 'Sub-Type',      minWidth: 100 },
     { field: 'severity',       headerName: 'Severity',      minWidth: 90,  renderCell: (r) => <Chip label={r.severity || '—'} size="small" color={PRIORITY_COLORS[r.severity?.toUpperCase()] || 'default'} variant="outlined" /> },
@@ -157,7 +169,8 @@ const makeColumns = (openDetail) => ({
   ],
   marketComplaint: [
     { field: 'refNumber',        headerName: 'MC #',          minWidth: 140 },
-    { field: 'title',            headerName: 'Complaint',      minWidth: 200 },
+    { field: 'title',            headerName: 'Complaint',      minWidth: 200,
+      renderCell: (r) => <Box sx={{ opacity: r.disabled ? 0.55 : 1 }}><Typography variant="body2" noWrap>{r.title}</Typography><DisabledBadge disabled={r.disabled} /></Box> },
     { field: 'customerName',     headerName: 'Customer',       minWidth: 130 },
     { field: 'productName',      headerName: 'Product',        minWidth: 120 },
     { field: 'complaintCategory',headerName: 'Category',       minWidth: 110 },
@@ -169,7 +182,8 @@ const makeColumns = (openDetail) => ({
   ],
   changeControl: [
     { field: 'refNumber',        headerName: 'CC #',           minWidth: 140 },
-    { field: 'title',            headerName: 'Change Title',    minWidth: 200 },
+    { field: 'title',            headerName: 'Change Title',    minWidth: 200,
+      renderCell: (r) => <Box sx={{ opacity: r.disabled ? 0.55 : 1 }}><Typography variant="body2" noWrap>{r.title}</Typography><DisabledBadge disabled={r.disabled} /></Box> },
     { field: 'changeType',       headerName: 'Type',            minWidth: 110 },
     { field: 'riskLevel',        headerName: 'Risk',            minWidth: 90,  renderCell: (r) => <Chip label={r.riskLevel} size="small" color={r.riskLevel === 'High' ? 'error' : r.riskLevel === 'Medium' ? 'warning' : 'success'} variant="outlined" /> },
     { field: 'priority',         headerName: 'Priority',        minWidth: 100, renderCell: (r) => <PriorityChip priority={r.priority} /> },

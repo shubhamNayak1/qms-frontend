@@ -50,6 +50,7 @@ const normDoc = (d) => ({
   status:       d.status || 'DRAFT',
   accessLevel:  d.accessLevel || '—',
   isControlled: d.isControlled || false,
+  disabled:     d.disabled || false,
   owner:        d.owner?.fullName || d.owner?.username || d.createdBy?.fullName || '—',
   department:   d.department || '—',
   updatedAt:    d.updatedAt || d.createdAt,
@@ -221,14 +222,20 @@ const DmsPage = () => {
       headerName: 'Title',
       minWidth: 220,
       renderCell: (r) => (
-        <Box>
+        <Box sx={{ opacity: r.disabled ? 0.55 : 1 }}>
           <Typography variant="body2" fontWeight={500} noWrap sx={{ maxWidth: 260 }}>
             {r.title}
           </Typography>
-          {r.isControlled && (
-            <Chip label="Controlled" size="small" variant="outlined" color="warning"
-              sx={{ fontSize: '0.6rem', height: 16, mt: 0.25 }} />
-          )}
+          <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 0.25 }}>
+            {r.isControlled && (
+              <Chip label="Controlled" size="small" variant="outlined" color="warning"
+                sx={{ fontSize: '0.6rem', height: 16 }} />
+            )}
+            {r.disabled && (
+              <Chip label="Disabled" size="small" color="default" variant="outlined"
+                sx={{ fontSize: '0.6rem', height: 16 }} />
+            )}
+          </Box>
         </Box>
       ),
     },
