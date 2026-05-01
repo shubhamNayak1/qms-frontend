@@ -3,7 +3,7 @@ import {
   Box, Button, Chip, Tabs, Tab, TextField, InputAdornment,
   IconButton, Tooltip, Grid, Card, CardContent, Typography,
   MenuItem, Select, FormControl, InputLabel,
-  LinearProgress, Stack, Paper, Collapse,
+  LinearProgress, Stack, Paper, Collapse, FormControlLabel, Switch,
 } from '@mui/material';
 import {
   Add as AddIcon, Search as SearchIcon, Refresh as RefreshIcon,
@@ -495,6 +495,7 @@ const QmsPage = () => {
     capa: false, deviation: false, incident: false, marketComplaint: false, changeControl: false,
   });
   const [insightOpen, setInsightOpen] = useState(false);
+  const [includeDisabled, setIncludeDisabled] = useState(false);
 
   const currentKey = TABS[tab].key;
 
@@ -522,14 +523,15 @@ const QmsPage = () => {
       const res = await FETCH_APIS[currentKey](params);
       const payload = res.data?.data;
       const items = payload?.content ?? (Array.isArray(payload) ? payload : []);
-      setRows((prev) => ({ ...prev, [currentKey]: items.map(NORM_FNS[currentKey]) }));
+      const normalized = items.map(NORM_FNS[currentKey]);
+      setRows((prev) => ({ ...prev, [currentKey]: includeDisabled ? normalized : normalized.filter((r) => !r.disabled) }));
       setTotalCounts((prev) => ({ ...prev, [currentKey]: payload?.totalElements ?? items.length }));
     } catch {
       setError('Failed to load data.');
     } finally {
       setLoading(false);
     }
-  }, [currentKey, search, statusFilter, page, rowsPerPage]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [currentKey, search, statusFilter, page, rowsPerPage, includeDisabled]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { fetchCurrentTab(); }, [fetchCurrentTab]);
 
@@ -614,6 +616,16 @@ const QmsPage = () => {
         <Tooltip title="Refresh">
           <IconButton onClick={fetchCurrentTab}><RefreshIcon /></IconButton>
         </Tooltip>
+        <FormControlLabel
+          control={
+            <Switch
+              size="small"
+              checked={includeDisabled}
+              onChange={(e) => { setIncludeDisabled(e.target.checked); setPage(0); }}
+            />
+          }
+          label="Include Disabled"
+        />
         <Box sx={{ ml: 'auto' }}>
           <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
             {MODULE_META[currentKey].addLabel}

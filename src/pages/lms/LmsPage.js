@@ -3,7 +3,7 @@ import {
   Box, Button, Chip, Tabs, Tab, TextField, InputAdornment,
   IconButton, Tooltip, Grid, Card, Typography,
   LinearProgress, Stack, Paper, Collapse, MenuItem, Select,
-  FormControl, InputLabel,
+  FormControl, InputLabel, FormControlLabel, Switch,
 } from '@mui/material';
 import {
   Add as AddIcon, Search as SearchIcon, Refresh as RefreshIcon,
@@ -315,6 +315,7 @@ const LmsPage = () => {
   const [dash,        setDash]        = useState(null);
   const [insightOpen, setInsightOpen] = useState(false);
 
+  const [includeDisabled, setIncludeDisabled] = useState(false);
   const [createOpen, setCreateOpen]  = useState(false);
   const [detailOpen, setDetailOpen]  = useState(false);
   const [detailId,   setDetailId]    = useState(null);
@@ -341,7 +342,8 @@ const LmsPage = () => {
         const { data } = await getProgramsApi(params);
         const payload = data?.data;
         const items = payload?.content ?? (Array.isArray(payload) ? payload : []);
-        setProgramRows(items.map(normProgram));
+        const normalized = items.map(normProgram);
+        setProgramRows(includeDisabled ? normalized : normalized.filter((p) => !p.disabled));
         setTotalCount(payload?.totalElements ?? items.length);
       } else if (tab === 1) {
         const { data } = await getEnrollmentsApi(params);
@@ -381,7 +383,7 @@ const LmsPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [tab, search, statusFilter, page, rowsPerPage]);
+  }, [tab, search, statusFilter, page, rowsPerPage, includeDisabled]);
 
   useEffect(() => { fetchTab(); }, [fetchTab]);
 
@@ -580,6 +582,18 @@ const LmsPage = () => {
         <Tooltip title="Refresh">
           <IconButton onClick={fetchTab}><RefreshIcon /></IconButton>
         </Tooltip>
+        {tab === 0 && (
+          <FormControlLabel
+            control={
+              <Switch
+                size="small"
+                checked={includeDisabled}
+                onChange={(e) => { setIncludeDisabled(e.target.checked); setPage(0); }}
+              />
+            }
+            label="Include Disabled"
+          />
+        )}
         <Box sx={{ ml: 'auto' }}>
           {tab === 0 && (
             <Button variant="contained" startIcon={<AddIcon />} onClick={() => setCreateOpen(true)}>

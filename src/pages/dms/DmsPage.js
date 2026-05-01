@@ -3,7 +3,7 @@ import {
   Box, Button, Chip, TextField, InputAdornment, IconButton,
   Tooltip, Typography, Alert, MenuItem, Select, FormControl,
   InputLabel, Grid, Card, CardContent, ToggleButton,
-  ToggleButtonGroup, Snackbar,
+  ToggleButtonGroup, Snackbar, FormControlLabel, Switch,
 } from '@mui/material';
 import {
   Search        as SearchIcon,
@@ -88,6 +88,7 @@ const DmsPage = () => {
   const [statusFilter,   setStatusFilter]   = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [viewMode,       setViewMode]       = useState('all'); // 'all' | 'effective'
+  const [includeDisabled, setIncludeDisabled] = useState(false);
 
   // ── Stats ────────────────────────────────────────────────────────────────
   const [stats, setStats] = useState(null);
@@ -121,14 +122,15 @@ const DmsPage = () => {
       const { data } = await getDocumentsApi(params);
       const payload  = data?.data;
       const items    = payload?.content ?? (Array.isArray(payload) ? payload : []);
-      setRows(items.map(normDoc));
+      const normalized = items.map(normDoc);
+      setRows(includeDisabled ? normalized : normalized.filter((d) => !d.disabled));
       setTotalCount(payload?.totalElements ?? items.length);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to load documents.');
     } finally {
       setLoading(false);
     }
-  }, [page, rowsPerPage, search, statusFilter, categoryFilter, viewMode]);
+  }, [page, rowsPerPage, search, statusFilter, categoryFilter, viewMode, includeDisabled]);
 
   // Fetch stats once on mount
   useEffect(() => {
@@ -417,6 +419,17 @@ const DmsPage = () => {
             <RefreshIcon />
           </IconButton>
         </Tooltip>
+
+        <FormControlLabel
+          control={
+            <Switch
+              size="small"
+              checked={includeDisabled}
+              onChange={(e) => { setIncludeDisabled(e.target.checked); setPage(0); }}
+            />
+          }
+          label="Include Disabled"
+        />
 
         <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto' }}>
           {totalCount} document{totalCount !== 1 ? 's' : ''}

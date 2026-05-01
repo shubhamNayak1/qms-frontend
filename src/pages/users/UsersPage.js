@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box, Button, Chip, IconButton, Tooltip, TextField, InputAdornment,
   Dialog, DialogTitle, DialogContent, DialogActions, Grid, MenuItem, Alert,
+  FormControlLabel, Switch,
 } from '@mui/material';
 import {
   Add as AddIcon, Search as SearchIcon,
@@ -50,22 +51,25 @@ const UsersPage = () => {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState(null);
   const [policyOpen, setPolicyOpen] = useState(false);
+  const [includeDisabled, setIncludeDisabled] = useState(false);
 
   const fetchUsers = useCallback(async () => {
+    // re-runs when includeDisabled changes
     setLoading(true);
     setError(null);
     try {
       const { data } = await getUsersApi({ search: search || undefined, page, size: rowsPerPage });
       const payload = data?.data;
       const items = payload?.content ?? (Array.isArray(payload) ? payload : []);
-      setRows(items.map(normalizeUser));
+      const normalized = items.map(normalizeUser);
+      setRows(includeDisabled ? normalized : normalized.filter((u) => !u.disabled));
       setTotalCount(payload?.totalElements ?? items.length);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to load users.');
     } finally {
       setLoading(false);
     }
-  }, [search, page, rowsPerPage]);
+  }, [search, page, rowsPerPage, includeDisabled]);
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
@@ -221,6 +225,17 @@ const UsersPage = () => {
         <Tooltip title="Refresh">
           <IconButton onClick={fetchUsers}><RefreshIcon /></IconButton>
         </Tooltip>
+        <FormControlLabel
+          control={
+            <Switch
+              size="small"
+              checked={includeDisabled}
+              onChange={(e) => { setIncludeDisabled(e.target.checked); setPage(0); }}
+            />
+          }
+          label="Include Disabled"
+          sx={{ ml: 1 }}
+        />
       </Box>
 
       {error && <ErrorAlert message={error} onRetry={fetchUsers} />}

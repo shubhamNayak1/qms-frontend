@@ -5,7 +5,7 @@ import {
   Dialog, DialogTitle, DialogContent, DialogActions, MenuItem,
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   Paper, TablePagination, Avatar, Stack, Collapse, CircularProgress,
-  Alert, Snackbar,
+  Alert, Snackbar, FormControlLabel, Switch,
 } from '@mui/material';
 import {
   Add            as AddIcon,
@@ -454,6 +454,7 @@ const AuditPage = () => {
   const [completeOpen,   setCompleteOpen]   = useState(false);
   const [completeTarget, setCompleteTarget] = useState(null);
   const [toast, setToast] = useState({ open: false, message: '', severity: 'success' });
+  const [includeDisabled, setIncludeDisabled] = useState(false);
 
   // ── Activity Trail state ────────────────────────────────────────────────
   const [trailRows,     setTrailRows]     = useState([]);
@@ -491,14 +492,14 @@ const AuditPage = () => {
       const res = await getQmsAuditsApi(params);
       const payload = res.data?.data;
       const items   = payload?.content ?? (Array.isArray(payload) ? payload : []);
-      setAuditRows(items);
+      setAuditRows(includeDisabled ? items : items.filter((a) => !a.disabled));
       setAuditTotal(payload?.totalElements ?? items.length);
     } catch (err) {
       setAuditError(err.response?.data?.message || 'Failed to load audits.');
     } finally {
       setAuditLoading(false);
     }
-  }, [auditPage, auditRpp, auditSearch, statusFilter, typeFilter, dateFrom, dateTo]);
+  }, [auditPage, auditRpp, auditSearch, statusFilter, typeFilter, dateFrom, dateTo, includeDisabled]);
 
   // ── Fetch activity trail ────────────────────────────────────────────────
   const fetchTrail = useCallback(async () => {
@@ -721,6 +722,16 @@ const AuditPage = () => {
                 {auditLoading ? <CircularProgress size={20} /> : <RefreshIcon />}
               </IconButton>
             </Tooltip>
+            <FormControlLabel
+              control={
+                <Switch
+                  size="small"
+                  checked={includeDisabled}
+                  onChange={(e) => { setIncludeDisabled(e.target.checked); setAuditPage(0); }}
+                />
+              }
+              label="Include Disabled"
+            />
             <Typography variant="caption" color="text.secondary" sx={{ ml: 'auto !important' }}>
               {auditTotal} audit{auditTotal !== 1 ? 's' : ''}
             </Typography>

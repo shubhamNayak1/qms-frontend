@@ -4,6 +4,7 @@ import {
   Button, Tabs, Tab, Box, Typography, Grid, TextField,
   IconButton, Tooltip, Chip, Alert, Divider, CircularProgress,
   Table, TableHead, TableRow, TableCell, TableBody, Paper,
+  FormControlLabel, Switch,
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -110,6 +111,7 @@ const PasswordPolicyDialog = ({ open, onClose }) => {
   const [createForm, setCreateForm]       = useState(EMPTY_POLICY);
   const [creating, setCreating]           = useState(false);
   const [createError, setCreateError]     = useState(null);
+  const [includeDisabled, setIncludeDisabled] = useState(false);
 
   // ── Load active policy ───────────────────────────────────────────────────
   const fetchActive = useCallback(() => {
@@ -308,8 +310,18 @@ const PasswordPolicyDialog = ({ open, onClose }) => {
               </>
             ) : (
               <>
-                {canEdit && (
-                  <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 1.5 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        size="small"
+                        checked={includeDisabled}
+                        onChange={(e) => setIncludeDisabled(e.target.checked)}
+                      />
+                    }
+                    label="Include Disabled"
+                  />
+                  {canEdit && (
                     <Button
                       size="small"
                       variant="contained"
@@ -318,8 +330,8 @@ const PasswordPolicyDialog = ({ open, onClose }) => {
                     >
                       New Policy
                     </Button>
-                  </Box>
-                )}
+                  )}
+                </Box>
 
                 {listLoading ? (
                   <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress size={32} /></Box>
@@ -340,14 +352,14 @@ const PasswordPolicyDialog = ({ open, onClose }) => {
                         </TableRow>
                       </TableHead>
                       <TableBody>
-                        {policies.length === 0 && (
+                        {policies.filter((p) => includeDisabled || !p.disabled).length === 0 && (
                           <TableRow>
                             <TableCell colSpan={9} align="center" sx={{ py: 3, color: 'text.secondary' }}>
                               No policies found
                             </TableCell>
                           </TableRow>
                         )}
-                        {policies.map((p) => (
+                        {policies.filter((p) => includeDisabled || !p.disabled).map((p) => (
                           <TableRow key={p.id} hover>
                             <TableCell>{formatDate(p.effectiveDate)}</TableCell>
                             <TableCell>{p.passwordLengthMin}</TableCell>
