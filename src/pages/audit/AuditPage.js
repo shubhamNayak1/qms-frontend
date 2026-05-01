@@ -15,7 +15,7 @@ import {
   Login          as LoginIcon,
   Logout         as LogoutIcon,
   Edit           as EditIcon,
-  Delete         as DeleteIcon,
+  Block          as DisableIcon,
   Visibility     as ViewIcon,
   CloudUpload    as UploadIcon,
   KeyboardArrowDown as ExpandMoreIcon,
@@ -85,7 +85,7 @@ const ACTION_ICON = {
   CREATE: <AddIcon fontSize="small" />,
   UPDATE: <EditIcon fontSize="small" />,
   UPLOAD: <UploadIcon fontSize="small" />,
-  DELETE: <DeleteIcon fontSize="small" />,
+  DELETE: <DisableIcon fontSize="small" />,
   DOWNLOAD: <DownloadIcon fontSize="small" />,
 };
 
@@ -856,7 +856,7 @@ const AuditPage = () => {
                                     <IconButton size="small" color="error"
                                       disabled={busy || row.disabled}
                                       onClick={() => handleDelete(row)}>
-                                      <DeleteIcon fontSize="small" />
+                                      <DisableIcon fontSize="small" />
                                     </IconButton>
                                   </span>
                                 </Tooltip>
