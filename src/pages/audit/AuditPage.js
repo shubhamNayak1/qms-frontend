@@ -629,8 +629,14 @@ const AuditPage = () => {
   const formatTimestamp = (iso) => {
     if (!iso) return '-';
     return new Date(iso).toLocaleString('en-US', {
-      month: 'short', day: '2-digit',
-      hour: '2-digit', minute: '2-digit', hour12: true,
+      year:     'numeric',
+      month:    'short',
+      day:      '2-digit',
+      hour:     '2-digit',
+      minute:   '2-digit',
+      second:   '2-digit',
+      hour12:   true,
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     });
   };
 
