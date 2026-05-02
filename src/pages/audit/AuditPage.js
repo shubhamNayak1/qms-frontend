@@ -628,15 +628,17 @@ const AuditPage = () => {
 
   const formatTimestamp = (iso) => {
     if (!iso) return '-';
-    return new Date(iso).toLocaleString('en-US', {
-      year:     'numeric',
-      month:    'short',
-      day:      '2-digit',
-      hour:     '2-digit',
-      minute:   '2-digit',
-      second:   '2-digit',
-      hour12:   true,
-      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    // Backend stores UTC. If the string has no timezone offset or Z suffix,
+    // append Z so JavaScript parses it as UTC instead of treating it as local time.
+    const utc = /Z$|[+-]\d{2}:\d{2}$/.test(iso.trim()) ? iso.trim() : iso.trim() + 'Z';
+    return new Date(utc).toLocaleString('en-US', {
+      year:   'numeric',
+      month:  'short',
+      day:    '2-digit',
+      hour:   '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true,
     });
   };
 
