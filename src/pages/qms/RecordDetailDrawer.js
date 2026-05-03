@@ -25,7 +25,7 @@ import {
   BRANCH_TRANSITIONS, getPrimaryForward, ACTION_LABELS,
 } from './qmsConstants';
 import WorkflowActionDialog from './WorkflowActionDialog';
-import { formatDate } from '../../utils/helpers';
+import { formatDate, formatDateTime } from '../../utils/helpers';
 
 // ── API map per module ────────────────────────────────────────────────────────
 const MODULE_APIS = {
@@ -154,7 +154,7 @@ const StatusHistoryTimeline = ({ history }) => {
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
               <Chip label={STATUS_LABELS[h.toStatus] || h.toStatus} size="small" color={STATUS_COLORS[h.toStatus] || 'default'} />
               <Typography variant="caption" color="text.secondary">
-                by <strong>{h.changedByUsername}</strong> · {formatDate(h.changedAt)}
+                by <strong>{h.changedByUsername}</strong> · {formatDateTime(h.changedAt)}
               </Typography>
             </Box>
             {h.comment && (

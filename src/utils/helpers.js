@@ -31,6 +31,27 @@ export const formatDate = (dateStr) => {
   });
 };
 
+/**
+ * formatDateTime — date + 24-hour time, used wherever an action timestamp
+ * is shown (audit history, workflow comments, etc.).
+ * Example: "02 May 2026, 14:35"
+ */
+export const formatDateTime = (dateStr) => {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr);
+  const datePart = d.toLocaleDateString('en-GB', {
+    year: 'numeric',
+    month: 'short',
+    day: '2-digit',
+  });
+  const timePart = d.toLocaleTimeString('en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  return `${datePart}, ${timePart}`;
+};
+
 export const getStatusColor = (status) => {
   const map = {
     ACTIVE: 'success',

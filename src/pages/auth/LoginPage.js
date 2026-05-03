@@ -65,9 +65,10 @@ const LoginPage = () => {
 
           {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-          <Box component="form" onSubmit={handleSubmit} noValidate>
+          <Box component="form" onSubmit={handleSubmit} noValidate autoComplete="off">
             <TextField
               label="Username"
+              required
               fullWidth
               margin="normal"
               value={form.username}
@@ -75,18 +76,19 @@ const LoginPage = () => {
               error={!!fieldErrors.username}
               helperText={fieldErrors.username}
               autoFocus
-              autoComplete="username"
+              inputProps={{ autoComplete: 'off' }}
             />
             <TextField
               label="Password"
               type={showPassword ? 'text' : 'password'}
+              required
               fullWidth
               margin="normal"
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
               error={!!fieldErrors.password}
               helperText={fieldErrors.password}
-              autoComplete="current-password"
+              inputProps={{ autoComplete: 'new-password' }}
               InputProps={{
                 endAdornment: (
                   <InputAdornment position="end">

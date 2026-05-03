@@ -1,32 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import {
   Box, Paper, Typography, TextField, Button, Alert, InputAdornment,
-  IconButton, Divider, List, ListItem, ListItemIcon, ListItemText, Chip,
+  IconButton, Divider, Chip,
 } from '@mui/material';
 import {
   Lock as LockIcon,
   Visibility, VisibilityOff,
   CheckCircle as CheckIcon,
-  Cancel as CrossIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { changePasswordApi } from '../../api/authApi';
 import { getActivePolicyApi } from '../../api/passwordPolicyApi';
 import { useAuth } from '../../store/AuthContext';
 import { ROUTES } from '../../utils/constants';
-
-// Check a single password against the active policy
-const buildChecks = (password, policy) => {
-  if (!policy) return [];
-  return [
-    { label: `At least ${policy.passwordLengthMin} characters`, ok: password.length >= policy.passwordLengthMin },
-    policy.passwordLengthMax > 0 && { label: `At most ${policy.passwordLengthMax} characters`, ok: password.length <= policy.passwordLengthMax },
-    policy.alphaMin > 0    && { label: `At least ${policy.alphaMin} letter(s)`,           ok: (password.match(/[a-zA-Z]/g) || []).length >= policy.alphaMin },
-    policy.upperCaseMin > 0 && { label: `At least ${policy.upperCaseMin} uppercase letter(s)`, ok: (password.match(/[A-Z]/g) || []).length >= policy.upperCaseMin },
-    policy.numericMin > 0  && { label: `At least ${policy.numericMin} number(s)`,          ok: (password.match(/[0-9]/g) || []).length >= policy.numericMin },
-    policy.specialCharMin > 0 && { label: `At least ${policy.specialCharMin} special char(s)`, ok: (password.match(/[^a-zA-Z0-9]/g) || []).length >= policy.specialCharMin },
-  ].filter(Boolean);
-};
+import PasswordPolicyChecklist from '../../components/PasswordPolicyChecklist';
 
 const ChangePasswordPage = () => {
   const { user, clearMustChangePassword, logout } = useAuth();
@@ -47,8 +34,7 @@ const ChangePasswordPage = () => {
       .catch(() => {}); // policy fetch is best-effort
   }, []);
 
-  const checks = buildChecks(form.newPassword, policy);
-  const allChecksPassed = checks.length === 0 || checks.every((c) => c.ok);
+  const [allChecksPassed, setAllChecksPassed] = useState(false);
   const passwordsMatch = form.newPassword === form.confirmPassword && form.confirmPassword.length > 0;
   const canSubmit = form.currentPassword.length > 0 && form.newPassword.length > 0 && passwordsMatch && allChecksPassed;
 
@@ -111,7 +97,7 @@ const ChangePasswordPage = () => {
               Password changed successfully! Redirecting…
             </Alert>
           ) : (
-            <Box component="form" onSubmit={handleSubmit} noValidate>
+            <Box component="form" onSubmit={handleSubmit} noValidate autoComplete="off">
               {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
               <TextField
@@ -122,6 +108,7 @@ const ChangePasswordPage = () => {
                 value={form.currentPassword}
                 onChange={(e) => setForm({ ...form, currentPassword: e.target.value })}
                 sx={{ mb: 2 }}
+                inputProps={{ autoComplete: 'new-password' }}
                 InputProps={{
                   endAdornment: (
                     <InputAdornment position="end">
@@ -141,6 +128,7 @@ const ChangePasswordPage = () => {
                 value={form.newPassword}
                 onChange={(e) => setForm({ ...form, newPassword: e.target.value })}
                 sx={{ mb: 2 }}
+                inputProps={{ autoComplete: 'new-password' }}
                 InputProps={{
                   endAdornment: (
                     <InputAdornment position="end">
@@ -161,6 +149,7 @@ const ChangePasswordPage = () => {
                 onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
                 error={form.confirmPassword.length > 0 && !passwordsMatch}
                 helperText={form.confirmPassword.length > 0 && !passwordsMatch ? 'Passwords do not match' : ''}
+                inputProps={{ autoComplete: 'new-password' }}
                 InputProps={{
                   endAdornment: (
                     <InputAdornment position="end">
@@ -173,27 +162,12 @@ const ChangePasswordPage = () => {
               />
 
               {/* Policy checks — shown as soon as user starts typing */}
-              {checks.length > 0 && form.newPassword.length > 0 && (
-                <Box sx={{ mt: 2, p: 1.5, bgcolor: 'action.hover', borderRadius: 1.5 }}>
-                  <Typography variant="caption" fontWeight={600} color="text.secondary" textTransform="uppercase" letterSpacing={0.5}>
-                    Password requirements
-                  </Typography>
-                  <List dense disablePadding sx={{ mt: 0.5 }}>
-                    {checks.map((c) => (
-                      <ListItem key={c.label} disableGutters sx={{ py: 0.2 }}>
-                        <ListItemIcon sx={{ minWidth: 22 }}>
-                          {c.ok
-                            ? <CheckIcon sx={{ fontSize: 14, color: 'success.main' }} />
-                            : <CrossIcon sx={{ fontSize: 14, color: 'error.main' }} />}
-                        </ListItemIcon>
-                        <ListItemText
-                          primary={c.label}
-                          primaryTypographyProps={{ variant: 'caption', color: c.ok ? 'success.main' : 'text.secondary' }}
-                        />
-                      </ListItem>
-                    ))}
-                  </List>
-                </Box>
+              {form.newPassword.length > 0 && (
+                <PasswordPolicyChecklist
+                  password={form.newPassword}
+                  policy={policy}
+                  onAllPassed={setAllChecksPassed}
+                />
               )}
 
               <Button

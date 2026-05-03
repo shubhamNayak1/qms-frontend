@@ -31,3 +31,8 @@ export const deactivateUserApi = (id) =>
 // ChangePasswordRequest: { currentPassword, newPassword, confirmPassword }
 export const changePasswordApi = (id, data) =>
   apiClient.patch(`/api/v1/users/${id}/change-password`, data);
+
+// AdminResetPasswordRequest: { newPassword }
+// SUPER_ADMIN-only — sets a temporary password and forces the user to change it on next login.
+export const adminResetPasswordApi = (id, newPassword) =>
+  apiClient.patch(`/api/v1/users/${id}/admin-reset-password`, { newPassword });

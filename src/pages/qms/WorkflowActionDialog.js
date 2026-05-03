@@ -10,14 +10,16 @@ import {
   Lock as CloseIcon,
 } from '@mui/icons-material';
 
+// Per 21 CFR Part 11 / GxP — every workflow action MUST carry a non-blank
+// comment so the audit trail records an intelligible reason for the change.
 const ACTION_META = {
-  submit:   { label: 'Submit for Review',    icon: <SubmitIcon />,  color: 'primary',   requireComment: false },
-  approve:  { label: 'Approve / Forward',    icon: <ApproveIcon />, color: 'success',   requireComment: false },
-  close:    { label: 'Close Record',         icon: <CloseIcon />,   color: 'success',   requireComment: false },
-  reject:   { label: 'Reject / Send Back',   icon: <RejectIcon />,  color: 'error',     requireComment: true  },
-  cancel:   { label: 'Cancel Record',        icon: <RejectIcon />,  color: 'error',     requireComment: true  },
-  reopen:   { label: 'Reopen Record',        icon: <SubmitIcon />,  color: 'warning',   requireComment: false },
-  transition: { label: 'Transition',         icon: <ApproveIcon />, color: 'primary',   requireComment: false },
+  submit:   { label: 'Submit for Review',    icon: <SubmitIcon />,  color: 'primary',   requireComment: true },
+  approve:  { label: 'Approve / Forward',    icon: <ApproveIcon />, color: 'success',   requireComment: true },
+  close:    { label: 'Close Record',         icon: <CloseIcon />,   color: 'success',   requireComment: true },
+  reject:   { label: 'Reject / Send Back',   icon: <RejectIcon />,  color: 'error',     requireComment: true },
+  cancel:   { label: 'Cancel Record',        icon: <RejectIcon />,  color: 'error',     requireComment: true },
+  reopen:   { label: 'Reopen Record',        icon: <SubmitIcon />,  color: 'warning',   requireComment: true },
+  transition: { label: 'Transition',         icon: <ApproveIcon />, color: 'primary',   requireComment: true },
 };
 
 /**
@@ -77,14 +79,16 @@ const WorkflowActionDialog = ({ open, onClose, onConfirm, action, actionLabel, r
           <Chip label={error} color="error" size="small" sx={{ mb: 1.5, maxWidth: '100%', height: 'auto', '& .MuiChip-label': { whiteSpace: 'normal' } }} />
         )}
         <TextField
-          label={needsComment ? 'Comment (required)' : 'Comment (optional)'}
+          label="Comment"
+          required
           multiline
           rows={3}
           fullWidth
           value={comment}
           onChange={(e) => setComment(e.target.value)}
-          placeholder="Add a comment for the workflow history…"
+          placeholder="Explain the reason for this action — recorded in the audit trail."
           autoFocus
+          inputProps={{ autoComplete: 'off' }}
         />
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
