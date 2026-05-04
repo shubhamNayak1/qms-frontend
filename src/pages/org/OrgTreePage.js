@@ -103,7 +103,6 @@ const EmployeeRow = ({ user, isHod, dimmed, dense = false }) => {
 // ── A department card (recursive — sub-depts render as nested mini-cards) ──
 const DepartmentCard = ({ dept, search, expanded, onToggle, expansionMap, depth = 0 }) => {
   const memberCount = (dept.members?.length || 0) + (dept.hod ? 1 : 0);
-  const subCount    = dept.subDepartments?.length || 0;
   const totalCount  = dept.totalMemberCount ?? memberCount;
 
   // Filter visible members based on search
