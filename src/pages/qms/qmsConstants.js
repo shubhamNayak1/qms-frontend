@@ -96,6 +96,71 @@ export const BRANCH_TRANSITIONS   = new Set(['PENDING_SITE_HEAD', 'PENDING_CUSTO
 // Transitions that are "destructive" (shown as danger buttons)
 export const DANGER_TRANSITIONS   = new Set(['REJECTED', 'CANCELLED']);
 
+// ── Per-module workflow stages ────────────────────────────────────────────────
+// The canonical happy-path stages each module walks through. Used by
+// <WorkflowStageStepper /> to show "where am I in the pipeline".
+//
+// Each stage has:
+//   key       : QmsStatus (matches backend)
+//   label     : short human label (fits in a stepper)
+//   actor     : who acts at this stage (UX hint)
+//   optional  : true if this stage is conditional / branch
+export const WORKFLOW_STAGES = {
+  capa: [
+    { key: 'DRAFT',                    label: 'Draft',                 actor: 'Initiator' },
+    { key: 'PENDING_HOD',              label: 'HOD Review',            actor: 'Dept HOD' },
+    { key: 'PENDING_QA_REVIEW',        label: 'QA Review',             actor: 'QA Reviewer' },
+    { key: 'PENDING_DEPT_COMMENT',     label: 'Dept Comment',          actor: 'Targeted HOD',  optional: true },
+    { key: 'PENDING_HEAD_QA',          label: 'Head QA',               actor: 'QA Head' },
+    { key: 'CLOSED',                   label: 'Closed',                actor: 'QA Head' },
+  ],
+  deviation: [
+    { key: 'DRAFT',                    label: 'Draft',                 actor: 'Initiator' },
+    { key: 'PENDING_HOD',              label: 'HOD Review',            actor: 'Dept HOD' },
+    { key: 'PENDING_QA_REVIEW',        label: 'QA Review',             actor: 'QA Reviewer' },
+    { key: 'PENDING_RA_REVIEW',        label: 'RA Review',             actor: 'RA Head' },
+    { key: 'PENDING_SITE_HEAD',        label: 'Site Head',             actor: 'Site Head',     optional: true },
+    { key: 'PENDING_INVESTIGATION',    label: 'Investigation',         actor: 'Assignee' },
+    { key: 'PENDING_VERIFICATION',     label: 'Verification',          actor: 'QA Reviewer' },
+    { key: 'CLOSED',                   label: 'Closed',                actor: 'QA Head' },
+  ],
+  incident: [
+    { key: 'DRAFT',                    label: 'Draft',                 actor: 'Initiator' },
+    { key: 'PENDING_HOD',              label: 'HOD Review',            actor: 'Dept HOD' },
+    { key: 'PENDING_INVESTIGATION',    label: 'Investigation',         actor: 'Assignee' },
+    { key: 'PENDING_ATTACHMENTS',      label: 'Attachments',           actor: 'Initiator',     optional: true },
+    { key: 'PENDING_VERIFICATION',     label: 'Verification',          actor: 'QA Reviewer' },
+    { key: 'PENDING_HEAD_QA',          label: 'Head QA',               actor: 'QA Head' },
+    { key: 'CLOSED',                   label: 'Closed',                actor: 'QA Head' },
+  ],
+  marketComplaint: [
+    { key: 'DRAFT',                    label: 'Draft',                 actor: 'Initiator' },
+    { key: 'PENDING_HOD',              label: 'HOD Review',            actor: 'Dept HOD' },
+    { key: 'PENDING_INVESTIGATION',    label: 'Investigation',         actor: 'Assignee' },
+    { key: 'PENDING_ATTACHMENTS',      label: 'Attachments',           actor: 'Initiator' },
+    { key: 'PENDING_VERIFICATION',     label: 'Verification',          actor: 'QA Reviewer' },
+    { key: 'CLOSED',                   label: 'Closed',                actor: 'QA Head' },
+  ],
+  // Change Control follows the printed VI-Pharma form most closely, so it has
+  // the longest pipeline. PENDING_SITE_HEAD and PENDING_CUSTOMER_COMMENT are
+  // optional branches taken only when siteHeadRequired / customerCommunicationRequired.
+  changeControl: [
+    { key: 'DRAFT',                    label: 'Initiation',            actor: 'Initiator' },
+    { key: 'PENDING_HOD',              label: 'HOD Review',            actor: 'Dept HOD' },
+    { key: 'PENDING_QA_REVIEW',        label: 'QA Evaluation',         actor: 'QA Reviewer' },
+    { key: 'PENDING_DEPT_COMMENT',     label: 'Dept Comments',         actor: 'Targeted HODs' },
+    { key: 'PENDING_RA_REVIEW',        label: 'RA Evaluation',         actor: 'RA Head' },
+    { key: 'PENDING_SITE_HEAD',        label: 'Site Head',             actor: 'Site Head',     optional: true },
+    { key: 'PENDING_CUSTOMER_COMMENT', label: 'Customer Comment',      actor: 'Customer Rep',  optional: true },
+    { key: 'PENDING_HEAD_QA',          label: 'Head QA Approval',      actor: 'QA Head' },
+    { key: 'PENDING_VERIFICATION',     label: 'Verification',          actor: 'QA Reviewer' },
+    { key: 'CLOSED',                   label: 'Closed',                actor: 'QA Head' },
+  ],
+};
+
+/** Returns the WORKFLOW_STAGES list for a moduleKey, or [] if unknown. */
+export const getWorkflowStages = (moduleKey) => WORKFLOW_STAGES[moduleKey] || [];
+
 /**
  * From the full allowedTransitions array, pick the canonical "forward"
  * transitions — i.e. PENDING_* states that are not optional branch states.

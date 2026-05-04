@@ -260,32 +260,66 @@ export const CreateIncidentDialog = ({ open, onClose, onCreated }) => (
 export const CreateChangeControlDialog = ({ open, onClose, onCreated }) => (
   <BaseDialog
     open={open} onClose={onClose} title="Initiate Change Control"
-    initialForm={{ title: '', changeType: 'Process', riskLevel: 'Medium', priority: 'MEDIUM', departmentId: null, department: '', validationRequired: false, regulatorySubmissionRequired: false, siteHeadRequired: false, customerCommentRequired: false }}
+    initialForm={{ title: '', changeType: 'Process', riskLevel: 'Medium',
+                   priority: 'MEDIUM', category: '',
+                   departmentId: null, department: '',
+                   validationRequired: false, regulatorySubmissionRequired: false,
+                   siteHeadRequired: false, customerCommentRequired: false,
+                   customerCommunicationRequired: false }}
     onSubmit={async (form) => { await createChangeControlApi(form); onCreated?.(); }}
   >
     {({ form, setForm }) => {
       const p = { form, setForm };
       return (<>
-        <SectionLabel>Basic Info</SectionLabel>
+        {/* Initiation of Change — matches the printable VI-Pharma form */}
+        <SectionLabel>Initiation of Change</SectionLabel>
         <F {...p} label="Change Title" name="title" required xs={12} />
-        <F {...p} label="Change Type" name="changeType" options={['Process', 'Equipment', 'Document', 'System', 'Supplier', 'Facility']} />
+        <F {...p} label="Change Type" name="changeType"
+           options={['Process', 'Equipment', 'Document', 'System', 'Supplier', 'Facility']} />
         <F {...p} label="Risk Level" name="riskLevel" options={['Low', 'Medium', 'High']} />
         <F {...p} label="Priority" name="priority" options={PRIORITY_OPTS} />
         <DeptField form={form} setForm={setForm} required />
         <F {...p} label="Category" name="category" options={CATEGORY_OPTS} />
+        <F {...p} label="Target Completion Date" name="targetCompletionDate" type="date" />
         <F {...p} label="Implementation Date" name="implementationDate" type="date" />
-        <SectionLabel>Risk & Planning</SectionLabel>
         <F {...p} label="Reason for Change" name="changeReason" multiline xs={12} />
+        <F {...p} label="Description" name="description" multiline xs={12} />
+
+        {/* Risk & Planning */}
+        <SectionLabel>Risk Assessment &amp; Plan</SectionLabel>
         <F {...p} label="Risk Assessment" name="riskAssessment" multiline xs={12} />
         <F {...p} label="Implementation Plan" name="implementationPlan" multiline xs={12} />
         <F {...p} label="Rollback Plan" name="rollbackPlan" multiline xs={12} />
+
+        {/* Approval routing — drives which optional branches the workflow engine
+            expects (Site Head, Customer comment). */}
         <SectionLabel>Approval Routing</SectionLabel>
-        <SW {...p} label="Validation Required" name="validationRequired" />
-        <SW {...p} label="Regulatory Submission Required" name="regulatorySubmissionRequired" />
         <SW {...p} label="Site Head Approval Required" name="siteHeadRequired" />
         <SW {...p} label="Customer Communication Required" name="customerCommunicationRequired" />
-        <SW {...p} label="(legacy) Customer Comment Required" name="customerCommentRequired" />
-        <F {...p} label="Description" name="description" multiline xs={12} />
+        <SW {...p} label="Customer Comment branch (legacy)" name="customerCommentRequired" />
+
+        {/* Regulatory & Validation */}
+        <SectionLabel>Regulatory &amp; Validation</SectionLabel>
+        <SW {...p} label="Regulatory Submission Required" name="regulatorySubmissionRequired" />
+        {form.regulatorySubmissionRequired && (
+          <F {...p} label="Submission Reference" name="regulatorySubmissionReference" xs={6} />
+        )}
+        <SW {...p} label="Validation Required" name="validationRequired" />
+        {form.validationRequired && (
+          <>
+            <F {...p} label="Validation Completion Date"
+               name="validationCompletionDate" type="date" xs={6} />
+            <F {...p} label="Validation Details" name="validationDetails" multiline xs={12} />
+          </>
+        )}
+
+        {/* Customer block — only meaningful when one of the customer flags is on. */}
+        {(form.customerCommentRequired || form.customerCommunicationRequired) && (
+          <>
+            <SectionLabel>Customer</SectionLabel>
+            <F {...p} label="Customer Representative" name="customerRepresentative" xs={6} />
+          </>
+        )}
       </>);
     }}
   </BaseDialog>

@@ -28,6 +28,7 @@ import {
   MODULE_META,
 } from './qmsConstants';
 import WorkflowActionDialog from './WorkflowActionDialog';
+import WorkflowStageStepper from './WorkflowStageStepper';
 import QmsLineItemsSection from './QmsLineItemsSection';
 import QmsDepartmentCommentsSection from './QmsDepartmentCommentsSection';
 import TargetDateExtensionPanel from './TargetDateExtensionPanel';
@@ -111,19 +112,87 @@ const ModuleExtraFields = ({ moduleKey, record }) => {
         </Grid>
       );
     case 'changeControl':
+      // Organised by section so it mirrors the printable Change Control Form
+      // (Initiation → Risk & Routing → Regulatory & Validation → Implementation).
+      // Common fields like riskAssessment / customerComment are rendered by
+      // the shared "Risk & Customer" block below the module section, so we
+      // don't duplicate them here.
       return (
-        <Grid container spacing={1}>
-          <Grid item xs={6}><Field label="Change Type" value={record.changeType} /></Grid>
-          <Grid item xs={6}><Field label="Risk Level" value={record.riskLevel} /></Grid>
-          <Grid item xs={6}><Field label="Validation Required" value={record.validationRequired ? 'Yes' : 'No'} /></Grid>
-          <Grid item xs={6}><Field label="Regulatory Submission" value={record.regulatorySubmissionRequired ? 'Yes' : 'No'} /></Grid>
-          <Grid item xs={6}><Field label="Site Head Required" value={record.siteHeadRequired ? 'Yes' : 'No'} /></Grid>
-          <Grid item xs={6}><Field label="Customer Comment Req." value={record.customerCommentRequired ? 'Yes' : 'No'} /></Grid>
-          <Grid item xs={12}><Field label="Change Reason" value={record.changeReason} /></Grid>
-          <Grid item xs={12}><Field label="Risk Assessment" value={record.riskAssessment} /></Grid>
-          <Grid item xs={12}><Field label="Implementation Plan" value={record.implementationPlan} /></Grid>
-          {record.customerComment && <Grid item xs={12}><Field label="Customer Comment" value={record.customerComment} /></Grid>}
-        </Grid>
+        <Box>
+          {/* Initiation of Change */}
+          <Typography variant="caption" fontWeight={700} color="primary.main"
+                      textTransform="uppercase" letterSpacing={0.4} display="block" sx={{ mb: 0.5 }}>
+            Initiation of Change
+          </Typography>
+          <Grid container spacing={1} sx={{ mb: 1.5 }}>
+            <Grid item xs={6}><Field label="Change Type" value={record.changeType} /></Grid>
+            <Grid item xs={6}><Field label="Risk Level" value={record.riskLevel} /></Grid>
+            <Grid item xs={6}><Field label="Implementation Date" value={formatDate(record.implementationDate)} /></Grid>
+            <Grid item xs={6}><Field label="Target Completion" value={formatDate(record.targetCompletionDate)} /></Grid>
+            <Grid item xs={12}><Field label="Reason for Change" value={record.changeReason} /></Grid>
+          </Grid>
+
+          {/* Approval routing */}
+          <Typography variant="caption" fontWeight={700} color="primary.main"
+                      textTransform="uppercase" letterSpacing={0.4} display="block" sx={{ mb: 0.5 }}>
+            Approval Routing
+          </Typography>
+          <Grid container spacing={1} sx={{ mb: 1.5 }}>
+            <Grid item xs={6}><Field label="Site Head Required" value={record.siteHeadRequired ? 'Yes' : 'No'} /></Grid>
+            <Grid item xs={6}><Field label="Customer Comment Req." value={record.customerCommentRequired ? 'Yes' : 'No'} /></Grid>
+          </Grid>
+
+          {/* Regulatory + Validation */}
+          {(record.regulatorySubmissionRequired || record.regulatorySubmissionReference
+            || record.validationRequired || record.validationDetails || record.validationCompletionDate) && (
+            <>
+              <Typography variant="caption" fontWeight={700} color="primary.main"
+                          textTransform="uppercase" letterSpacing={0.4} display="block" sx={{ mb: 0.5 }}>
+                Regulatory &amp; Validation
+              </Typography>
+              <Grid container spacing={1} sx={{ mb: 1.5 }}>
+                <Grid item xs={6}>
+                  <Field label="Regulatory Submission Required"
+                         value={record.regulatorySubmissionRequired ? 'Yes' : 'No'} />
+                </Grid>
+                {record.regulatorySubmissionReference && (
+                  <Grid item xs={6}>
+                    <Field label="Submission Reference" value={record.regulatorySubmissionReference} />
+                  </Grid>
+                )}
+                <Grid item xs={6}>
+                  <Field label="Validation Required" value={record.validationRequired ? 'Yes' : 'No'} />
+                </Grid>
+                {record.validationCompletionDate && (
+                  <Grid item xs={6}>
+                    <Field label="Validation Completion" value={formatDate(record.validationCompletionDate)} />
+                  </Grid>
+                )}
+                {record.validationDetails && (
+                  <Grid item xs={12}><Field label="Validation Details" value={record.validationDetails} /></Grid>
+                )}
+              </Grid>
+            </>
+          )}
+
+          {/* Implementation */}
+          {(record.implementationPlan || record.rollbackPlan) && (
+            <>
+              <Typography variant="caption" fontWeight={700} color="primary.main"
+                          textTransform="uppercase" letterSpacing={0.4} display="block" sx={{ mb: 0.5 }}>
+                Implementation Plan
+              </Typography>
+              <Grid container spacing={1}>
+                {record.implementationPlan && (
+                  <Grid item xs={12}><Field label="Implementation Plan" value={record.implementationPlan} /></Grid>
+                )}
+                {record.rollbackPlan && (
+                  <Grid item xs={12}><Field label="Rollback Plan" value={record.rollbackPlan} /></Grid>
+                )}
+              </Grid>
+            </>
+          )}
+        </Box>
       );
     case 'marketComplaint':
       return (
@@ -344,6 +413,9 @@ const RecordDetailDrawer = ({ open, onClose, recordId, moduleKey, onUpdated }) =
 
           {record && !loading && (
             <>
+              {/* Workflow stage pipeline — visual position in the approval flow */}
+              <WorkflowStageStepper moduleKey={moduleKey} status={record.status} />
+
               {/* Banners */}
               {record.deviationRequired && (
                 <Alert severity="warning" sx={{ mb: 2 }} icon={<WarnIcon />}>
