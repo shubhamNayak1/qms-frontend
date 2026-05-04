@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Paper, Typography, Grid, TextField, MenuItem, Stack, Button,
-  Alert, FormControlLabel, Switch, Tooltip,
+  Alert, FormControlLabel, Switch, Tooltip, Chip,
 } from '@mui/material';
 import {
   Save as SaveIcon, ArrowForward as ForwardIcon, Cancel as RejectIcon,
@@ -10,6 +10,7 @@ import {
   updateChangeControlApi, approveChangeControlApi, rejectChangeControlApi,
   closeChangeControlApi, transitionChangeControlApi,
 } from '../../api/qmsApi';
+import { listDeptCommentsApi } from '../../api/qmsCommonApi';
 
 /**
  * ChangeControlStagePanel — stage-aware editable form for Change Control.
@@ -267,6 +268,11 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
   const [rejecting, setRejecting] = useState(false);
   const [error, setError]     = useState(null);
 
+  // Department-comment progress — only fetched while in PENDING_DEPT_COMMENT.
+  // We use it to disable "Forward to RA Evaluation" until every requested
+  // dept HOD has filled their comment, mirroring the backend guard.
+  const [deptComments, setDeptComments] = useState([]);
+
   // Reset the form whenever the record changes (or its status flips).
   useEffect(() => {
     if (!record || !desc) { setForm({}); setComment(''); return; }
@@ -282,7 +288,29 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
     setError(null);
   }, [record?.id, status]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Pull dept-comment rows when the record is at the dept-comment gate so we
+  // can show progress + gate the forward button. Re-runs whenever the panel
+  // reopens or onUpdated() refetches.
+  useEffect(() => {
+    if (status !== 'PENDING_DEPT_COMMENT' || !record?.id) {
+      setDeptComments([]);
+      return;
+    }
+    listDeptCommentsApi('change-control', record.id)
+      .then(({ data }) => setDeptComments(data?.data || []))
+      .catch(() => setDeptComments([]));
+  }, [record?.id, status]);
+
   if (!desc) return null;  // DRAFT or terminal — handled by main workflow buttons
+
+  // PENDING_DEPT_COMMENT only — block "Forward to RA Evaluation" until every
+  // requested dept HOD has filled their comment. The backend enforces the
+  // same guard; surfacing it in the UI gives clearer feedback than a 400.
+  const deptPending     = deptComments.filter((r) => r.status === 'PENDING').length;
+  const deptTotal       = deptComments.length;
+  const deptCompleted   = deptTotal - deptPending;
+  const isDeptCommentStage = status === 'PENDING_DEPT_COMMENT';
+  const blockForward       = isDeptCommentStage && deptPending > 0;
 
   const submit = async (action) => {
     if (!record) return;
@@ -353,6 +381,25 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
+      {/* Dept-comment progress + forward gate (PENDING_DEPT_COMMENT only) */}
+      {isDeptCommentStage && (
+        <Alert severity={blockForward ? 'warning' : 'success'} sx={{ mb: 2 }}>
+          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+            <Typography variant="body2">
+              Department comments: <strong>{deptCompleted}</strong>/<strong>{deptTotal || 0}</strong> completed
+            </Typography>
+            {deptTotal === 0 && (
+              <Chip size="small" label="No departments requested yet" />
+            )}
+            {blockForward && (
+              <Typography variant="caption" color="text.secondary">
+                · Each requested department&apos;s HOD must fill their comment before this can be forwarded to RA Evaluation.
+              </Typography>
+            )}
+          </Stack>
+        </Alert>
+      )}
+
       {desc.fields.length > 0 && (
         <Grid container spacing={2} sx={{ mb: 2 }}>
           {desc.fields.map((f) => (
@@ -370,14 +417,16 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
       />
 
       <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-        <Tooltip title={`POST .../${desc.primary}?comment=…`}>
+        <Tooltip title={blockForward
+            ? `Cannot forward — ${deptPending} department comment(s) still pending`
+            : `POST .../${desc.primary}?comment=…`}>
           <span>
             <Button
               variant="contained"
               startIcon={desc.primary === 'close' ? <SaveIcon /> : <ForwardIcon />}
               color={desc.primary === 'close' ? 'success' : 'primary'}
               onClick={() => submit(desc.primary)}
-              disabled={saving || rejecting || !comment.trim()}
+              disabled={saving || rejecting || !comment.trim() || blockForward}
             >
               {saving ? 'Saving…' : desc.primaryLabel}
             </Button>
