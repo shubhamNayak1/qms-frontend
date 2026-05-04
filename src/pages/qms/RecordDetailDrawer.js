@@ -2,11 +2,13 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Drawer, Box, Typography, Chip, Divider, IconButton, Tooltip,
   CircularProgress, Alert, Button, Stack, Paper, Grid,
+  Accordion, AccordionSummary, AccordionDetails,
 } from '@mui/material';
 import {
   Close as CloseIcon,
   Refresh as RefreshIcon,
   Warning as WarnIcon,
+  ExpandMore as ExpandMoreIcon,
 } from '@mui/icons-material';
 import {
   getCapaByIdApi, submitCapaApi, approveCapaApi, rejectCapaApi,
@@ -23,8 +25,13 @@ import {
 import {
   STATUS_COLORS, STATUS_LABELS, PRIORITY_COLORS,
   BRANCH_TRANSITIONS, getPrimaryForward, ACTION_LABELS,
+  MODULE_META,
 } from './qmsConstants';
 import WorkflowActionDialog from './WorkflowActionDialog';
+import QmsLineItemsSection from './QmsLineItemsSection';
+import QmsDepartmentCommentsSection from './QmsDepartmentCommentsSection';
+import TargetDateExtensionPanel from './TargetDateExtensionPanel';
+import { useAuth } from '../../store/AuthContext';
 import { formatDate, formatDateTime } from '../../utils/helpers';
 
 // ── API map per module ────────────────────────────────────────────────────────
@@ -238,6 +245,7 @@ const WorkflowButtons = ({ record, moduleKey, onAction }) => {
 
 // ══════════════════════════════════════════════════════════════════════════════
 const RecordDetailDrawer = ({ open, onClose, recordId, moduleKey, onUpdated }) => {
+  const { user: currentUser } = useAuth();
   const [record, setRecord]   = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState(null);
@@ -248,7 +256,9 @@ const RecordDetailDrawer = ({ open, onClose, recordId, moduleKey, onUpdated }) =
   const [wfLabel, setWfLabel]         = useState('');
   const [wfTargetStatus, setWfTarget] = useState(null);       // for /transition
 
-  const apis = useMemo(() => MODULE_APIS[moduleKey] || {}, [moduleKey]);
+  const apis        = useMemo(() => MODULE_APIS[moduleKey] || {}, [moduleKey]);
+  const commonSlug  = useMemo(() => MODULE_META[moduleKey]?.commonSlug, [moduleKey]);
+  const isTerminal  = ['CLOSED', 'CANCELLED'].includes(record?.status);
 
   const fetchRecord = useCallback(async () => {
     if (!recordId || !apis.getById) return;
@@ -362,6 +372,126 @@ const RecordDetailDrawer = ({ open, onClose, recordId, moduleKey, onUpdated }) =
               <Box sx={{ mt: 1.5 }}>
                 <ModuleExtraFields moduleKey={moduleKey} record={record} />
               </Box>
+
+              {/* ── Common QMS sections — work uniformly for every module ──────── */}
+              {commonSlug && recordId && (
+                <>
+                  <Divider sx={{ my: 2 }} />
+
+                  {/* Risk + categorisation + customer block (only show fields that exist) */}
+                  {(record.riskAssessment || record.category
+                    || record.customerCommunicationRequired || record.customerComment
+                    || record.customerRepresentative) && (
+                    <>
+                      <Typography variant="caption" fontWeight={700} textTransform="uppercase"
+                                  letterSpacing={0.5} color="text.secondary">
+                        Risk &amp; Customer
+                      </Typography>
+                      <Grid container spacing={1} sx={{ mt: 0.5, mb: 1 }}>
+                        {record.category && <Grid item xs={6}><Field label="Category" value={record.category} /></Grid>}
+                        {record.customerCommunicationRequired != null && (
+                          <Grid item xs={6}>
+                            <Field label="Customer Comm. Required"
+                                   value={record.customerCommunicationRequired ? 'Yes' : 'No'} />
+                          </Grid>
+                        )}
+                        {record.customerRepresentative && (
+                          <Grid item xs={6}><Field label="Customer Rep" value={record.customerRepresentative} /></Grid>
+                        )}
+                        {record.riskAssessment && (
+                          <Grid item xs={12}><Field label="Risk Assessment" value={record.riskAssessment} /></Grid>
+                        )}
+                        {record.customerComment && (
+                          <Grid item xs={12}><Field label="Customer Comment" value={record.customerComment} /></Grid>
+                        )}
+                      </Grid>
+                    </>
+                  )}
+
+                  {/* Verification phase */}
+                  {(record.verificationActionTaken || record.verificationEffectiveOn
+                    || record.verificationDocumentsReissue != null
+                    || record.verificationOtherComments
+                    || record.verificationRegCommunication) && (
+                    <>
+                      <Typography variant="caption" fontWeight={700} textTransform="uppercase"
+                                  letterSpacing={0.5} color="text.secondary">
+                        Verification of Implementation
+                      </Typography>
+                      <Grid container spacing={1} sx={{ mt: 0.5, mb: 1 }}>
+                        {record.verificationActionTaken && (
+                          <Grid item xs={12}><Field label="Action Taken" value={record.verificationActionTaken} /></Grid>
+                        )}
+                        {record.verificationEffectiveOn && (
+                          <Grid item xs={6}><Field label="Effective On" value={formatDate(record.verificationEffectiveOn)} /></Grid>
+                        )}
+                        {record.verificationDocumentsReissue != null && (
+                          <Grid item xs={6}>
+                            <Field label="Docs Reissue"
+                                   value={record.verificationDocumentsReissue ? 'Yes' : 'No'} />
+                          </Grid>
+                        )}
+                        {record.verificationRegCommunication && (
+                          <Grid item xs={12}><Field label="Reg. Communication" value={record.verificationRegCommunication} /></Grid>
+                        )}
+                        {record.verificationOtherComments && (
+                          <Grid item xs={12}><Field label="Other Comments" value={record.verificationOtherComments} /></Grid>
+                        )}
+                      </Grid>
+                    </>
+                  )}
+
+                  <Divider sx={{ my: 2 }} />
+
+                  {/* Line items — collapsible (default expanded) */}
+                  <Accordion defaultExpanded disableGutters elevation={0}
+                             sx={{ '&:before': { display: 'none' }, border: '1px solid',
+                                    borderColor: 'divider', borderRadius: 1.5, mb: 1.5 }}>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Typography variant="body2" fontWeight={700}>Line Items</Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <QmsLineItemsSection
+                        commonSlug={commonSlug}
+                        recordId={recordId}
+                        readOnly={isTerminal}
+                      />
+                    </AccordionDetails>
+                  </Accordion>
+
+                  {/* Department comments */}
+                  <Accordion defaultExpanded disableGutters elevation={0}
+                             sx={{ '&:before': { display: 'none' }, border: '1px solid',
+                                    borderColor: 'divider', borderRadius: 1.5, mb: 1.5 }}>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Typography variant="body2" fontWeight={700}>Department-Wise Comments</Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <QmsDepartmentCommentsSection
+                        commonSlug={commonSlug}
+                        recordId={recordId}
+                        currentUser={currentUser}
+                      />
+                    </AccordionDetails>
+                  </Accordion>
+
+                  {/* Target date extension */}
+                  <Accordion disableGutters elevation={0}
+                             sx={{ '&:before': { display: 'none' }, border: '1px solid',
+                                    borderColor: 'divider', borderRadius: 1.5, mb: 1.5 }}>
+                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                      <Typography variant="body2" fontWeight={700}>Target Date Extension</Typography>
+                    </AccordionSummary>
+                    <AccordionDetails>
+                      <TargetDateExtensionPanel
+                        commonSlug={commonSlug}
+                        recordId={recordId}
+                        currentTargetDate={record.targetCompletionDate}
+                      />
+                    </AccordionDetails>
+                  </Accordion>
+                </>
+              )}
 
               <Divider sx={{ my: 2 }} />
 

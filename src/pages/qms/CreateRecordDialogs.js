@@ -13,9 +13,29 @@ import {
   createCapaApi, createDeviationApi, createIncidentApi,
   createComplaintApi, createChangeControlApi,
 } from '../../api/qmsApi';
+import { listDepartmentsApi } from '../../api/orgApi';
 
 const PRIORITY_OPTS = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
-const DEPT_OPTS     = ['QA', 'Production', 'Warehouse', 'Packaging', 'Lab', 'Regulatory', 'Manufacturing'];
+const CATEGORY_OPTS = ['Critical', 'Major', 'Minor'];
+
+// Fetch real departments once and cache. Keeps the form snappy across dialog opens.
+let _deptCache = null;
+let _deptPromise = null;
+const useDepartments = () => {
+  const [list, setList] = useState(_deptCache || []);
+  useEffect(() => {
+    if (_deptCache) return;
+    if (!_deptPromise) {
+      _deptPromise = listDepartmentsApi()
+        .then(({ data }) => { _deptCache = data?.data || []; setList(_deptCache); })
+        .catch(() => { _deptCache = []; })
+        .finally(() => { _deptPromise = null; });
+    } else {
+      _deptPromise.then(() => setList(_deptCache || []));
+    }
+  }, []);
+  return list;
+};
 
 // ── Reusable field helpers ────────────────────────────────────────────────────
 const F = ({ label, name, form, setForm, type = 'text', options, multiline, required, xs = 6, shrinkLabel }) => {
@@ -40,6 +60,41 @@ const F = ({ label, name, form, setForm, type = 'text', options, multiline, requ
           InputLabelProps={type === 'date' || shrinkLabel ? { shrink: true } : undefined}
         />
       )}
+    </Grid>
+  );
+};
+
+/**
+ * Department dropdown — wired to /api/v1/org/departments.
+ * Sets BOTH `departmentId` (FK, used by the new positional checks) and
+ * `department` (legacy free-text label, kept populated for backwards compat
+ * during the migration).
+ */
+const DeptField = ({ form, setForm, xs = 6, required }) => {
+  const list = useDepartments();
+  return (
+    <Grid item xs={xs}>
+      <TextField
+        label="Department" select fullWidth size="small" required={required}
+        value={form.departmentId || ''}
+        onChange={(e) => {
+          const id = e.target.value;
+          const matched = list.find(d => String(d.id) === String(id));
+          setForm(p => ({
+            ...p,
+            departmentId: id || null,
+            department:   matched ? matched.name : p.department,
+          }));
+        }}
+      >
+        {list.length === 0 && <MenuItem value=""><em>Loading…</em></MenuItem>}
+        {list.map(d => (
+          <MenuItem key={d.id} value={d.id}>
+            {d.name} ({d.code})
+            {d.deptType !== 'STANDARD' ? ` · ${d.deptType}` : ''}
+          </MenuItem>
+        ))}
+      </TextField>
     </Grid>
   );
 };
@@ -112,7 +167,7 @@ const BaseDialog = ({ open, onClose, title, initialForm, onSubmit, children }) =
 export const CreateCapaDialog = ({ open, onClose, onCreated }) => (
   <BaseDialog
     open={open} onClose={onClose} title="Create CAPA"
-    initialForm={{ title: '', capaType: 'Corrective', priority: 'MEDIUM', source: 'Internal', department: 'QA' }}
+    initialForm={{ title: '', capaType: 'Corrective', priority: 'MEDIUM', source: 'Internal', departmentId: null, department: '' }}
     onSubmit={async (form) => { await createCapaApi(form); onCreated?.(); }}
   >
     {({ form, setForm }) => {
@@ -123,7 +178,8 @@ export const CreateCapaDialog = ({ open, onClose, onCreated }) => (
         <F {...p} label="CAPA Type" name="capaType" options={['Corrective', 'Preventive']} />
         <F {...p} label="Priority" name="priority" options={PRIORITY_OPTS} />
         <F {...p} label="Source" name="source" options={['Audit', 'Customer', 'Internal', 'Regulatory']} />
-        <F {...p} label="Department" name="department" options={DEPT_OPTS} />
+        <DeptField form={form} setForm={setForm} required />
+        <F {...p} label="Category (impact)" name="category" options={CATEGORY_OPTS} />
         <F {...p} label="Due Date" name="dueDate" type="date" />
         <F {...p} label="Target Completion Date" name="targetCompletionDate" type="date" />
         <F {...p} label="Effectiveness Check Date" name="effectivenessCheckDate" type="date" />
@@ -142,7 +198,7 @@ export const CreateCapaDialog = ({ open, onClose, onCreated }) => (
 export const CreateDeviationDialog = ({ open, onClose, onCreated }) => (
   <BaseDialog
     open={open} onClose={onClose} title="Report Deviation"
-    initialForm={{ title: '', deviationType: 'Unplanned', priority: 'MEDIUM', department: 'QA', capaRequired: false, regulatoryReportable: false }}
+    initialForm={{ title: '', deviationType: 'Unplanned', priority: 'MEDIUM', departmentId: null, department: '', capaRequired: false, regulatoryReportable: false }}
     onSubmit={async (form) => { await createDeviationApi(form); onCreated?.(); }}
   >
     {({ form, setForm }) => {
@@ -152,11 +208,13 @@ export const CreateDeviationDialog = ({ open, onClose, onCreated }) => (
         <F {...p} label="Title" name="title" required xs={12} />
         <F {...p} label="Deviation Type" name="deviationType" options={['Planned', 'Unplanned', 'Temporary']} />
         <F {...p} label="Priority" name="priority" options={PRIORITY_OPTS} />
-        <F {...p} label="Department" name="department" options={DEPT_OPTS} />
+        <DeptField form={form} setForm={setForm} required />
+        <F {...p} label="Category" name="category" options={CATEGORY_OPTS} />
         <F {...p} label="Product / Batch" name="productBatch" />
         <F {...p} label="Process Area" name="processArea" />
         <F {...p} label="Due Date" name="dueDate" type="date" />
         <SectionLabel>Assessment</SectionLabel>
+        <F {...p} label="Risk Assessment" name="riskAssessment" multiline xs={12} />
         <F {...p} label="Impact Assessment" name="impactAssessment" multiline xs={12} />
         <SW {...p} label="CAPA Required" name="capaRequired" />
         <SW {...p} label="Regulatory Reportable" name="regulatoryReportable" />
@@ -170,7 +228,7 @@ export const CreateDeviationDialog = ({ open, onClose, onCreated }) => (
 export const CreateIncidentDialog = ({ open, onClose, onCreated }) => (
   <BaseDialog
     open={open} onClose={onClose} title="Report Incident"
-    initialForm={{ title: '', incidentType: 'Quality', incidentSubType: 'GENERAL', severity: 'Minor', priority: 'MEDIUM', injuryInvolved: false, retestingRequired: false, deviationRequired: false }}
+    initialForm={{ title: '', incidentType: 'Quality', incidentSubType: 'GENERAL', severity: 'Minor', priority: 'MEDIUM', departmentId: null, department: '', injuryInvolved: false, retestingRequired: false, deviationRequired: false }}
     onSubmit={async (form) => { await createIncidentApi(form); onCreated?.(); }}
   >
     {({ form, setForm }) => {
@@ -182,6 +240,8 @@ export const CreateIncidentDialog = ({ open, onClose, onCreated }) => (
         <F {...p} label="Sub-Type" name="incidentSubType" options={['LABORATORY', 'GENERAL']} />
         <F {...p} label="Severity" name="severity" options={['Minor', 'Major', 'Critical']} />
         <F {...p} label="Priority" name="priority" options={PRIORITY_OPTS} />
+        <DeptField form={form} setForm={setForm} required />
+        <F {...p} label="Category" name="category" options={CATEGORY_OPTS} />
         <F {...p} label="Location" name="location" required />
         <F {...p} label="Occurrence Date" name="occurrenceDate" type="date" />
         <F {...p} label="Reported By" name="reportedBy" />
@@ -200,7 +260,7 @@ export const CreateIncidentDialog = ({ open, onClose, onCreated }) => (
 export const CreateChangeControlDialog = ({ open, onClose, onCreated }) => (
   <BaseDialog
     open={open} onClose={onClose} title="Initiate Change Control"
-    initialForm={{ title: '', changeType: 'Process', riskLevel: 'Medium', priority: 'MEDIUM', validationRequired: false, regulatorySubmissionRequired: false, siteHeadRequired: false, customerCommentRequired: false }}
+    initialForm={{ title: '', changeType: 'Process', riskLevel: 'Medium', priority: 'MEDIUM', departmentId: null, department: '', validationRequired: false, regulatorySubmissionRequired: false, siteHeadRequired: false, customerCommentRequired: false }}
     onSubmit={async (form) => { await createChangeControlApi(form); onCreated?.(); }}
   >
     {({ form, setForm }) => {
@@ -211,6 +271,8 @@ export const CreateChangeControlDialog = ({ open, onClose, onCreated }) => (
         <F {...p} label="Change Type" name="changeType" options={['Process', 'Equipment', 'Document', 'System', 'Supplier', 'Facility']} />
         <F {...p} label="Risk Level" name="riskLevel" options={['Low', 'Medium', 'High']} />
         <F {...p} label="Priority" name="priority" options={PRIORITY_OPTS} />
+        <DeptField form={form} setForm={setForm} required />
+        <F {...p} label="Category" name="category" options={CATEGORY_OPTS} />
         <F {...p} label="Implementation Date" name="implementationDate" type="date" />
         <SectionLabel>Risk & Planning</SectionLabel>
         <F {...p} label="Reason for Change" name="changeReason" multiline xs={12} />
@@ -221,7 +283,8 @@ export const CreateChangeControlDialog = ({ open, onClose, onCreated }) => (
         <SW {...p} label="Validation Required" name="validationRequired" />
         <SW {...p} label="Regulatory Submission Required" name="regulatorySubmissionRequired" />
         <SW {...p} label="Site Head Approval Required" name="siteHeadRequired" />
-        <SW {...p} label="Customer Comment Required" name="customerCommentRequired" />
+        <SW {...p} label="Customer Communication Required" name="customerCommunicationRequired" />
+        <SW {...p} label="(legacy) Customer Comment Required" name="customerCommentRequired" />
         <F {...p} label="Description" name="description" multiline xs={12} />
       </>);
     }}
@@ -232,7 +295,7 @@ export const CreateChangeControlDialog = ({ open, onClose, onCreated }) => (
 export const CreateComplaintDialog = ({ open, onClose, onCreated }) => (
   <BaseDialog
     open={open} onClose={onClose} title="Log Market Complaint"
-    initialForm={{ title: '', priority: 'MEDIUM', complaintCategory: 'Quality', complaintSource: 'Email', reportableToAuthority: false, sampleReturned: false }}
+    initialForm={{ title: '', priority: 'MEDIUM', complaintCategory: 'Quality', complaintSource: 'Email', departmentId: null, department: '', reportableToAuthority: false, sampleReturned: false }}
     onSubmit={async (form) => { await createComplaintApi(form); onCreated?.(); }}
   >
     {({ form, setForm }) => {
@@ -243,9 +306,12 @@ export const CreateComplaintDialog = ({ open, onClose, onCreated }) => (
         <F {...p} label="Priority" name="priority" options={PRIORITY_OPTS} />
         <F {...p} label="Category" name="complaintCategory" options={['Quality', 'Safety', 'Regulatory', 'Labeling']} />
         <F {...p} label="Source" name="complaintSource" options={['Email', 'Phone', 'Portal', 'Regulatory']} />
+        <DeptField form={form} setForm={setForm} required />
+        <F {...p} label="Impact Category" name="category" options={CATEGORY_OPTS} />
         <F {...p} label="Received Date" name="receivedDate" type="date" />
         <SectionLabel>Customer & Product</SectionLabel>
         <F {...p} label="Customer Name" name="customerName" required />
+        <F {...p} label="Customer Representative" name="customerRepresentative" />
         <F {...p} label="Country" name="customerCountry" />
         <F {...p} label="Product Name" name="productName" required />
         <F {...p} label="Batch Number" name="batchNumber" />

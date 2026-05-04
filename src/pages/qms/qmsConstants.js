@@ -44,11 +44,14 @@ export const PRIORITY_COLORS = {
 };
 
 // ── Module meta ───────────────────────────────────────────────────────────────
-// moduleKey must match TABS key and the API path segment
+// moduleKey must match TABS key and the per-module API path segment.
+// commonSlug is the kebab-case enum used by the cross-module
+// /api/v1/qms/{recordType}/* endpoints (line items, dept comments, extension).
 export const MODULE_META = {
   capa: {
     label:        'CAPA',
     endpoint:     'capa',
+    commonSlug:   'capa',
     recordPrefix: 'CAPA',
     numberField:  'recordNumber',
     addLabel:     'Create CAPA',
@@ -56,6 +59,7 @@ export const MODULE_META = {
   deviation: {
     label:        'Deviation',
     endpoint:     'deviations',
+    commonSlug:   'deviation',
     recordPrefix: 'DEV',
     numberField:  'recordNumber',
     addLabel:     'Report Deviation',
@@ -63,6 +67,7 @@ export const MODULE_META = {
   incident: {
     label:        'Incident',
     endpoint:     'incidents',
+    commonSlug:   'incident',
     recordPrefix: 'INC',
     numberField:  'recordNumber',
     addLabel:     'Report Incident',
@@ -70,6 +75,7 @@ export const MODULE_META = {
   marketComplaint: {
     label:        'Market Complaint',
     endpoint:     'complaints',
+    commonSlug:   'market-complaint',
     recordPrefix: 'MC',
     numberField:  'recordNumber',
     addLabel:     'Log Complaint',
@@ -77,6 +83,7 @@ export const MODULE_META = {
   changeControl: {
     label:        'Change Control',
     endpoint:     'change-controls',
+    commonSlug:   'change-control',
     recordPrefix: 'CC',
     numberField:  'recordNumber',
     addLabel:     'Initiate Change',
