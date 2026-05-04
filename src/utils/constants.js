@@ -6,6 +6,11 @@ export const ROUTES = {
   CHANGE_PASSWORD: '/change-password',
   DASHBOARD: '/dashboard',
   USERS: '/users',
+  ORG: '/org',
+  ORG_TREE:        '/org/tree',
+  ORG_DEPARTMENTS: '/org/departments',
+  ORG_SITE:        '/org/site',
+  LICENSES: '/licenses',
   QMS: '/qms',
   QMS_CAPA:             '/qms/capa',
   QMS_DEVIATION:        '/qms/deviation',
@@ -21,6 +26,14 @@ export const ROUTES = {
   REPORTS: '/reports',
   AUDIT: '/audit',
 };
+
+/**
+ * Department type — mirrors the backend DepartmentType enum.
+ * Drives QMS workflow gating: QA = central reviewer, RA = regulatory.
+ */
+export const DEPARTMENT_TYPES = ['QA', 'RA', 'STANDARD'];
+
+export const LICENSE_STATUS = ['AVAILABLE', 'ASSIGNED', 'REVOKED', 'EXPIRED'];
 
 export const ROLES = {
   ADMIN: 'ADMIN',

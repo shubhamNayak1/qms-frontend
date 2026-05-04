@@ -10,6 +10,10 @@ const LoginPage = lazy(() => import('../pages/auth/LoginPage'));
 const ChangePasswordPage = lazy(() => import('../pages/auth/ChangePasswordPage'));
 const DashboardPage = lazy(() => import('../pages/dashboard/DashboardPage'));
 const UsersPage = lazy(() => import('../pages/users/UsersPage'));
+const OrgTreePage = lazy(() => import('../pages/org/OrgTreePage'));
+const DepartmentsPage = lazy(() => import('../pages/org/DepartmentsPage'));
+const SiteProfilePage = lazy(() => import('../pages/org/SiteProfilePage'));
+const LicensesPage = lazy(() => import('../pages/licenses/LicensesPage'));
 const QmsPage = lazy(() => import('../pages/qms/QmsPage'));
 const DmsPage = lazy(() => import('../pages/dms/DmsPage'));
 const LmsPage = lazy(() => import('../pages/lms/LmsPage'));
@@ -33,6 +37,11 @@ const AppRoutes = () => (
         <Route index element={<Navigate to={ROUTES.DASHBOARD} replace />} />
         <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
         <Route path={ROUTES.USERS}   element={<ModuleRoute moduleKey="USER">  <UsersPage />   </ModuleRoute>} />
+        <Route path={ROUTES.ORG} element={<Navigate to={ROUTES.ORG_TREE} replace />} />
+        <Route path={ROUTES.ORG_TREE}        element={<OrgTreePage />} />
+        <Route path={ROUTES.ORG_DEPARTMENTS} element={<DepartmentsPage />} />
+        <Route path={ROUTES.ORG_SITE}        element={<SiteProfilePage />} />
+        <Route path={ROUTES.LICENSES}        element={<LicensesPage />} />
         <Route path={`${ROUTES.QMS}/*`} element={<ModuleRoute moduleKey="QMS"><QmsPage /></ModuleRoute>} />
         <Route path={ROUTES.DMS}    element={<ModuleRoute moduleKey="DMS">   <DmsPage />     </ModuleRoute>} />
         <Route path={`${ROUTES.LMS}/*`} element={<ModuleRoute moduleKey="LMS"><LmsPage /></ModuleRoute>} />

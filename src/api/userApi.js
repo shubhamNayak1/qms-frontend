@@ -36,3 +36,8 @@ export const changePasswordApi = (id, data) =>
 // SUPER_ADMIN-only — sets a temporary password and forces the user to change it on next login.
 export const adminResetPasswordApi = (id, newPassword) =>
   apiClient.patch(`/api/v1/users/${id}/admin-reset-password`, { newPassword });
+
+// BulkUserUploadRequest: { users: CreateUserRequest[], autoGeneratePasswords: bool }
+// Returns BulkUserUploadResponse { total, created, failed, createdUsers[], errors[] }
+export const bulkUploadUsersApi = (data) =>
+  apiClient.post('/api/v1/users/bulk', data);

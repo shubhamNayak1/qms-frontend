@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import {
   Box, Card, CardContent, TextField, Button, Typography,
-  InputAdornment, IconButton, Alert, CircularProgress, Avatar,
+  InputAdornment, IconButton, Alert, AlertTitle, CircularProgress, Avatar,
 } from '@mui/material';
 import {
   Visibility, VisibilityOff, LockOutlined,
+  VpnKeyOff as NoLicenseIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../store/AuthContext';
@@ -63,7 +64,19 @@ const LoginPage = () => {
             </Typography>
           </Box>
 
-          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+          {error && (
+            // Surface the license-required error with extra context — this is the
+            // single most common reason a fresh tester will fail to log in.
+            /license/i.test(error) ? (
+              <Alert severity="warning" icon={<NoLicenseIcon />} sx={{ mb: 2 }}>
+                <AlertTitle>License required</AlertTitle>
+                {error} Ask your administrator to assign one of the available
+                licenses to your account.
+              </Alert>
+            ) : (
+              <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>
+            )
+          )}
 
           <Box component="form" onSubmit={handleSubmit} noValidate autoComplete="off">
             <TextField

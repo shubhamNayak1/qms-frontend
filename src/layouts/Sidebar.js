@@ -11,6 +11,8 @@ import {
   School as LmsIcon,
   BarChart as ReportsIcon,
   ManageSearch as AuditIcon,
+  AccountTree as OrgIcon,
+  VpnKey as LicenseIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ROUTES } from '../utils/constants';
@@ -20,14 +22,20 @@ export const DRAWER_WIDTH = 240;
 
 // moduleKey maps to the key used in moduleAccess from /auth/me
 // null = always visible (Dashboard)
+// Sidebar nav. moduleKey controls visibility via /auth/me's moduleAccess map.
+//   - null            => always visible
+//   - 'SUPER_ADMIN'   => only the SUPER_ADMIN role (handled below)
+//   - <module key>    => requires the module access flag
 const navItems = [
-  { label: 'Dashboard',   icon: <DashboardIcon />, path: ROUTES.DASHBOARD, moduleKey: null },
-  { label: 'QMS',         icon: <QmsIcon />,       path: ROUTES.QMS,       moduleKey: 'QMS' },
-  { label: 'DMS',         icon: <DmsIcon />,       path: ROUTES.DMS,       moduleKey: 'DMS' },
-  { label: 'LMS',         icon: <LmsIcon />,       path: ROUTES.LMS,       moduleKey: 'LMS' },
-  { label: 'Reports',     icon: <ReportsIcon />,   path: ROUTES.REPORTS,   moduleKey: 'REPORT' },
-  { label: 'Audit Trail', icon: <AuditIcon />,     path: ROUTES.AUDIT,     moduleKey: 'AUDIT' },
-  { label: 'Users',       icon: <PeopleIcon />,    path: ROUTES.USERS,     moduleKey: 'USER' },
+  { label: 'Dashboard',   icon: <DashboardIcon />, path: ROUTES.DASHBOARD,    moduleKey: null },
+  { label: 'QMS',         icon: <QmsIcon />,       path: ROUTES.QMS,          moduleKey: 'QMS' },
+  { label: 'DMS',         icon: <DmsIcon />,       path: ROUTES.DMS,          moduleKey: 'DMS' },
+  { label: 'LMS',         icon: <LmsIcon />,       path: ROUTES.LMS,          moduleKey: 'LMS' },
+  { label: 'Reports',     icon: <ReportsIcon />,   path: ROUTES.REPORTS,      moduleKey: 'REPORT' },
+  { label: 'Audit Trail', icon: <AuditIcon />,     path: ROUTES.AUDIT,        moduleKey: 'AUDIT' },
+  { label: 'Users',       icon: <PeopleIcon />,    path: ROUTES.USERS,        moduleKey: 'USER' },
+  { label: 'Organisation',icon: <OrgIcon />,       path: ROUTES.ORG_TREE,     moduleKey: null },
+  { label: 'Licenses',    icon: <LicenseIcon />,   path: ROUTES.LICENSES,     moduleKey: 'SUPER_ADMIN' },
 ];
 
 const Sidebar = ({ mobileOpen, onMobileClose }) => {
@@ -36,9 +44,19 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
   const { user, canAccessModule } = useAuth();
 
   // Memoize so the list doesn't recompute on every navigation render
+  const isSuperAdmin = useMemo(() => {
+    const roles = user?.roles;
+    if (!roles) return false;
+    return Array.isArray(roles) ? roles.includes('SUPER_ADMIN') : roles === 'SUPER_ADMIN';
+  }, [user]);
+
   const visibleItems = useMemo(
-    () => navItems.filter(({ moduleKey }) => moduleKey === null || canAccessModule(moduleKey)),
-    [canAccessModule]
+    () => navItems.filter(({ moduleKey }) => {
+      if (moduleKey === null)            return true;
+      if (moduleKey === 'SUPER_ADMIN')   return isSuperAdmin;
+      return canAccessModule(moduleKey);
+    }),
+    [canAccessModule, isSuperAdmin]
   );
 
   const roleName = Array.isArray(user?.roles) ? user.roles[0] : (user?.role || 'USER');
