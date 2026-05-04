@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   Box, Button, Chip, IconButton, Tooltip,
   Dialog, DialogTitle, DialogContent, DialogActions, Grid, MenuItem, Alert, TextField,
@@ -112,6 +112,29 @@ const DepartmentsPage = () => {
   // Prevent self-as-parent in the dropdown when editing.
   const parentOptions = rows.filter(r => !editing || r.id !== editing.id);
 
+  // ── HOD candidates ──────────────────────────────────────
+  // The HOD dropdown should only list active users that already belong to
+  // THIS department — assigning someone from another dept as HOD would
+  // make the org tree inconsistent. When creating a brand-new department
+  // there are no members yet, so we show an explanatory empty state.
+  // The currently-set HOD is always included (even if their dept changed
+  // out from under us) so the form value never disappears.
+  const hodCandidates = useMemo(() => {
+    const isActive = (u) => u.isActive !== false && !u.disabled;
+    if (!editing) return [];
+
+    const inDept = users.filter((u) => isActive(u) && u.departmentId === editing.id);
+
+    // If a current HOD is set but they're no longer in this dept, keep them
+    // in the list (with a marker) so the form still renders their name.
+    const currentHodId = form.hodUserId;
+    if (currentHodId && !inDept.some((u) => String(u.id) === String(currentHodId))) {
+      const stale = users.find((u) => String(u.id) === String(currentHodId));
+      if (stale) return [{ ...stale, _staleHod: true }, ...inDept];
+    }
+    return inDept;
+  }, [editing, users, form.hodUserId]);
+
   const columns = [
     { field: 'name', headerName: 'Name', minWidth: 180 },
     { field: 'code', headerName: 'Code', minWidth: 100 },
@@ -207,13 +230,27 @@ const DepartmentsPage = () => {
               </TextField>
             </Grid>
             <Grid item xs={12}>
-              <TextField label="Head of Department" select fullWidth value={form.hodUserId}
-                         onChange={e => setForm({ ...form, hodUserId: e.target.value })}
-                         helperText="The HOD approves PENDING_HOD QMS records originating in this department.">
+              <TextField
+                label="Head of Department"
+                select
+                fullWidth
+                value={form.hodUserId}
+                onChange={e => setForm({ ...form, hodUserId: e.target.value })}
+                disabled={!editing}
+                helperText={
+                  !editing
+                    ? 'Save the department first, then add users to it before assigning an HOD.'
+                    : hodCandidates.length === 0
+                      ? 'No active members in this department yet — add users to this department on the Users page, then return here.'
+                      : 'Only active users already belonging to this department are listed.'
+                }
+              >
                 <MenuItem value=""><em>None / TBD</em></MenuItem>
-                {users.map(u => (
+                {hodCandidates.map(u => (
                   <MenuItem key={u.id} value={u.id}>
-                    {u.fullName || u.username} {u.designation ? `· ${u.designation}` : ''}
+                    {u.fullName || u.username}
+                    {u.designation ? ` · ${u.designation}` : ''}
+                    {u._staleHod ? ' · ⚠ no longer in this dept' : ''}
                   </MenuItem>
                 ))}
               </TextField>
