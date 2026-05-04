@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   Box, Typography, Chip, IconButton, Tooltip,
   Stack, Button, Skeleton, TextField, InputAdornment, Switch, FormControlLabel,
-  Drawer, Avatar, List, ListItem, ListItemAvatar, ListItemText, Divider,
+  Avatar,
 } from '@mui/material';
 import {
   Refresh as RefreshIcon,
@@ -12,8 +12,7 @@ import {
   Star as HodIcon,
   CheckCircle as LicenseIcon,
   Cancel as NoLicenseIcon,
-  Close as CloseIcon,
-  Groups as MembersIcon,
+  Warning as WarnIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import PageHeader from '../../components/PageHeader';
@@ -31,75 +30,71 @@ const TYPE_COLOR = {
 const initialsOf = (user) =>
   (user?.initials || (user?.fullName || user?.username || '?')).slice(0, 2).toUpperCase();
 
-// ── A single rectangular org-chart box (3 horizontal sections) ───
+// ── A single employee box (3 horizontal sections, dept shown as a tag) ──
 //
-// Mirrors the wireframe:
-//   ┌──────────────┐
-//   │   Title       │  ← role / dept name
-//   ├──────────────┤
-//   │ Employee name │  ← HOD or Site Head
-//   ├──────────────┤
-//   │  Permission   │  ← role chips + license indicator
-//   └──────────────┘
-const OrgBox = ({
-  title, subtitle, name, designation, permissionChips,
-  kind, deptType, onClick, dimmed,
+//   ┌──────────────────────┐
+//   │   ROLE (title)        │   ← "SITE HEAD" / "HOD" / "MEMBER"
+//   ├──────────────────────┤
+//   │  👤 Employee name     │
+//   │     designation       │
+//   ├──────────────────────┤
+//   │ [Dept tag] [chips]   │   ← department chip + role flags + license
+//   └──────────────────────┘
+const EmployeeBox = ({
+  role, name, designation, deptTag, permissionChips, dimmed,
 }) => {
-  const accent = kind === 'site'      ? 'primary.main'
-              : deptType === 'QA'    ? 'success.main'
-              : deptType === 'RA'    ? 'warning.main'
-              : 'grey.500';
-  const bg     = kind === 'site' ? 'primary.50' : 'background.paper';
+  const isHod      = role === 'site-head' || role === 'hod';
+  const accent     = role === 'site-head' ? 'primary.main'
+                   : role === 'hod'       ? 'primary.light'
+                   : 'grey.400';
+  const titleColor = isHod ? 'primary.main' : 'text.secondary';
+  const bg         = role === 'site-head' ? 'primary.50'
+                   : role === 'hod'       ? 'background.paper'
+                   : 'grey.50';
 
   return (
-    <Box
-      onClick={onClick}
-      sx={{
+    <Box sx={{
         position: 'relative',
-        display: 'inline-flex',
-        flexDirection: 'column',
+        display: 'inline-flex', flexDirection: 'column',
         width: 220,
         border: '2px solid', borderColor: accent,
-        borderRadius: 1.5, bgcolor: bg,
-        boxShadow: 1,
+        borderRadius: 1.5, bgcolor: bg, boxShadow: 1,
         overflow: 'hidden',
-        cursor: onClick ? 'pointer' : 'default',
         opacity: dimmed ? 0.35 : 1,
-        transition: 'transform 120ms, box-shadow 120ms',
-        '&:hover': onClick ? { transform: 'translateY(-2px)', boxShadow: 4 } : {},
-      }}
-    >
-      {/* Title */}
+        transition: 'opacity 120ms',
+      }}>
+      {/* Title — role */}
       <Box sx={{
-          textAlign: 'center', p: 1.2,
+          textAlign: 'center', p: 0.8,
           borderBottom: '1px solid', borderColor: 'divider',
-          minHeight: 60,
+          minHeight: 32,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.4,
         }}>
+        {isHod && <HodIcon sx={{ fontSize: 14, color: titleColor }} />}
         <Typography variant="caption" fontWeight={800}
-                    color={kind === 'site' ? 'primary.main' : 'text.primary'}
-                    textTransform="uppercase" letterSpacing={0.5} display="block">
-          {title}
+                    color={titleColor}
+                    textTransform="uppercase" letterSpacing={0.5}>
+          {role === 'site-head' ? 'Site Head'
+            : role === 'hod'    ? 'Head of Department'
+            : 'Member'}
         </Typography>
-        {subtitle && (
-          <Typography variant="caption" color="text.secondary" display="block">
-            {subtitle}
-          </Typography>
-        )}
       </Box>
 
-      {/* Employee name */}
+      {/* Employee */}
       <Box sx={{
-          textAlign: 'center', px: 1, py: 1.4,
+          textAlign: 'center', px: 1, py: 1.2,
           borderBottom: '1px solid', borderColor: 'divider',
-          minHeight: 70,
+          minHeight: 76,
           display: 'flex', flexDirection: 'column', alignItems: 'center',
           justifyContent: 'center', gap: 0.6,
         }}>
         {name ? (
           <>
-            <Avatar sx={{ width: 32, height: 32, fontSize: 13, fontWeight: 700,
-                          bgcolor: kind === 'site' ? 'primary.main' : accent,
-                          color: 'white' }}>
+            <Avatar sx={{
+                width: 32, height: 32, fontSize: 13, fontWeight: 700,
+                bgcolor: isHod ? 'primary.main' : 'grey.500',
+                color: 'white',
+              }}>
               {initialsOf({ fullName: name })}
             </Avatar>
             <Typography variant="body2" fontWeight={700} noWrap sx={{ maxWidth: '100%' }}>
@@ -112,37 +107,48 @@ const OrgBox = ({
             )}
           </>
         ) : (
-          <Typography variant="caption" color="warning.dark" fontStyle="italic">
-            Not assigned
-          </Typography>
+          <>
+            <Avatar sx={{ width: 32, height: 32, bgcolor: 'warning.light' }}>
+              <WarnIcon sx={{ fontSize: 18 }} />
+            </Avatar>
+            <Typography variant="caption" color="warning.dark" fontStyle="italic">
+              Not assigned
+            </Typography>
+          </>
         )}
       </Box>
 
-      {/* Permission chips */}
+      {/* Department tag + permission chips */}
       <Box sx={{
           textAlign: 'center', px: 1, py: 0.8,
-          minHeight: 42,
+          minHeight: 44,
           display: 'flex', flexWrap: 'wrap', alignItems: 'center',
           justifyContent: 'center', gap: 0.5,
         }}>
-        {permissionChips?.length
-          ? permissionChips
-          : <Typography variant="caption" color="text.disabled">—</Typography>}
+        {deptTag && (
+          <Tooltip title={`${deptTag.name} (${deptTag.deptType})`}>
+            <Chip
+              size="small"
+              label={deptTag.code}
+              color={TYPE_COLOR[deptTag.deptType] || 'default'}
+              variant={deptTag.deptType === 'STANDARD' ? 'outlined' : 'filled'}
+              sx={{ fontWeight: 700, height: 20 }}
+            />
+          </Tooltip>
+        )}
+        {permissionChips}
       </Box>
     </Box>
   );
 };
 
-// ── CSS-tree styles applied via sx ─────────────────────────
-// Classic pattern: <ul> rows with ::before / ::after to draw connector lines.
+// ── CSS-tree styles ────────────────────────────────────────
 const treeSx = {
-  // outer ul
   '& ul': {
     display: 'flex', justifyContent: 'center', flexWrap: 'nowrap',
     listStyle: 'none', padding: 0, margin: 0,
     position: 'relative', paddingTop: '24px',
   },
-  // vertical line from parent down to its row of children
   '& ul ul::before': {
     content: '""', position: 'absolute',
     top: 0, left: 'calc(50% - 1px)',
@@ -150,10 +156,9 @@ const treeSx = {
   },
   '& li': {
     position: 'relative',
-    padding: '24px 18px 0',
+    padding: '24px 14px 0',
     listStyle: 'none',
   },
-  // Each child draws two half-lines that together form the bus line above it.
   '& li::before, & li::after': {
     content: '""', position: 'absolute',
     top: 0, right: '50%',
@@ -165,18 +170,15 @@ const treeSx = {
     borderLeft: '2px solid', borderColor: 'grey.400',
     borderTop: 0,
   },
-  // Skip lines for an only child or at the ends of a sibling row.
   '& li:only-child::before, & li:only-child::after': { display: 'none' },
   '& li:first-of-type::before': { border: 0 },
   '& li:last-of-type::after':   { border: 0 },
   '& li:last-of-type::before': {
-    borderRight: '2px solid',
-    borderColor: 'grey.400',
+    borderRight: '2px solid', borderColor: 'grey.400',
     borderRadius: '0 4px 0 0',
   },
   '& li:first-of-type::after': {
-    borderLeft: '2px solid',
-    borderColor: 'grey.400',
+    borderLeft: '2px solid', borderColor: 'grey.400',
     borderRadius: '4px 0 0 0',
   },
 };
@@ -184,7 +186,7 @@ const treeSx = {
 // ── Recursive node renderer ────────────────────────────────
 const TreeNode = ({ node }) => (
   <li>
-    <OrgBox {...node.box} onClick={node.onClick} dimmed={node.dimmed} />
+    <EmployeeBox {...node.box} dimmed={node.dimmed} />
     {node.children?.length > 0 && (
       <ul>
         {node.children.map((c) => (
@@ -195,130 +197,36 @@ const TreeNode = ({ node }) => (
   </li>
 );
 
-// ── Permission chip helpers ────────────────────────────────
+// ── Permission chips for an employee ───────────────────────
 const permissionChipsFor = (user) => {
-  if (!user) return [];
+  if (!user) return null;
   const out = [];
-  if (user.isQaReviewer)   out.push(<Chip key="qa"  size="small" label="QA Reviewer"   color="success" sx={{ height: 18, fontSize: 10 }} />);
-  if (user.isDeptReviewer) out.push(<Chip key="dr"  size="small" label="Dept Reviewer" color="info"    sx={{ height: 18, fontSize: 10 }} />);
+  if (user.isQaReviewer) {
+    out.push(
+      <Tooltip key="qa" title="QA Reviewer">
+        <Chip size="small" label="QA Rev" color="success"
+              sx={{ height: 20, fontSize: 10 }} />
+      </Tooltip>
+    );
+  }
+  if (user.isDeptReviewer) {
+    out.push(
+      <Tooltip key="dr" title="Department Reviewer">
+        <Chip size="small" label="Dept Rev" color="info"
+              sx={{ height: 20, fontSize: 10 }} />
+      </Tooltip>
+    );
+  }
   out.push(
     user.hasActiveLicense
-      ? <Tooltip key="lic" title="Active license"><Chip size="small" icon={<LicenseIcon sx={{ fontSize: 12 }} />} label="Licensed" color="success" variant="outlined" sx={{ height: 18, fontSize: 10 }} /></Tooltip>
-      : <Tooltip key="lic" title="No active license"><Chip size="small" icon={<NoLicenseIcon sx={{ fontSize: 12 }} />} label="No license" color="error" variant="outlined" sx={{ height: 18, fontSize: 10 }} /></Tooltip>
+      ? <Tooltip key="lic" title="Active license">
+          <LicenseIcon sx={{ fontSize: 18, color: 'success.main' }} />
+        </Tooltip>
+      : <Tooltip key="lic" title="No active license">
+          <NoLicenseIcon sx={{ fontSize: 18, color: 'error.light' }} />
+        </Tooltip>
   );
   return out;
-};
-
-const sitePermissionChips = (user) =>
-  user
-    ? [<Chip key="head" size="small" icon={<HodIcon sx={{ fontSize: 12 }} />} label="Site Head" color="primary" sx={{ height: 18, fontSize: 10 }} />,
-        ...permissionChipsFor(user)]
-    : [];
-
-// ── Members drawer (click a dept to see its members) ───────
-const MembersDrawer = ({ open, onClose, dept }) => {
-  if (!dept) return null;
-  return (
-    <Drawer anchor="right" open={open} onClose={onClose}
-            PaperProps={{ sx: { width: { xs: '100%', sm: 380 } } }}>
-      <Box sx={{ p: 2, display: 'flex', alignItems: 'center', gap: 1,
-                 borderBottom: '1px solid', borderColor: 'divider' }}>
-        <Box sx={{ flex: 1 }}>
-          <Typography variant="caption" color="text.secondary" textTransform="uppercase" letterSpacing={0.5}>
-            Department
-          </Typography>
-          <Typography variant="h6" fontWeight={700} lineHeight={1.2}>
-            {dept.name} <Typography component="span" variant="caption" color="text.secondary">({dept.code})</Typography>
-          </Typography>
-          <Chip size="small" label={dept.deptType}
-                color={TYPE_COLOR[dept.deptType] || 'default'}
-                variant={dept.deptType === 'STANDARD' ? 'outlined' : 'filled'} sx={{ mt: 0.5 }} />
-        </Box>
-        <IconButton size="small" onClick={onClose}><CloseIcon /></IconButton>
-      </Box>
-
-      {/* HOD */}
-      {dept.hod && (
-        <>
-          <Box sx={{ px: 2, pt: 2 }}>
-            <Typography variant="caption" color="text.secondary" fontWeight={700} textTransform="uppercase" letterSpacing={0.5}>
-              Head of Department
-            </Typography>
-          </Box>
-          <List dense>
-            <ListItem>
-              <ListItemAvatar>
-                <Avatar sx={{ bgcolor: 'primary.main', fontWeight: 700 }}>
-                  {initialsOf(dept.hod)}
-                </Avatar>
-              </ListItemAvatar>
-              <ListItemText
-                primary={dept.hod.fullName || dept.hod.username}
-                secondary={dept.hod.designation || 'Head of Department'}
-              />
-              <Stack direction="column" spacing={0.4} alignItems="flex-end">
-                {permissionChipsFor(dept.hod)}
-              </Stack>
-            </ListItem>
-          </List>
-          <Divider />
-        </>
-      )}
-
-      {/* Members */}
-      <Box sx={{ px: 2, pt: 2 }}>
-        <Typography variant="caption" color="text.secondary" fontWeight={700} textTransform="uppercase" letterSpacing={0.5}>
-          Members ({dept.members?.length || 0})
-        </Typography>
-      </Box>
-      <List dense>
-        {dept.members?.length ? dept.members.map((m) => (
-          <ListItem key={m.id}>
-            <ListItemAvatar>
-              <Avatar sx={{ bgcolor: 'grey.300', color: 'text.primary', fontWeight: 700 }}>
-                {initialsOf(m)}
-              </Avatar>
-            </ListItemAvatar>
-            <ListItemText
-              primary={m.fullName || m.username}
-              secondary={m.designation || 'Member'}
-            />
-            <Stack direction="column" spacing={0.4} alignItems="flex-end">
-              {permissionChipsFor(m)}
-            </Stack>
-          </ListItem>
-        )) : (
-          <ListItem>
-            <ListItemText primary="No members yet."
-                          primaryTypographyProps={{ variant: 'body2', color: 'text.secondary' }} />
-          </ListItem>
-        )}
-      </List>
-
-      {/* Sub-departments */}
-      {dept.subDepartments?.length > 0 && (
-        <>
-          <Divider />
-          <Box sx={{ px: 2, pt: 2 }}>
-            <Typography variant="caption" color="text.secondary" fontWeight={700} textTransform="uppercase" letterSpacing={0.5}>
-              Sub-departments ({dept.subDepartments.length})
-            </Typography>
-          </Box>
-          <List dense>
-            {dept.subDepartments.map((s) => (
-              <ListItem key={s.id}>
-                <ListItemAvatar><Avatar sx={{ bgcolor: 'info.light' }}><MembersIcon /></Avatar></ListItemAvatar>
-                <ListItemText
-                  primary={`${s.name} (${s.code})`}
-                  secondary={s.hod ? `HOD: ${s.hod.fullName}` : 'HOD not set'}
-                />
-              </ListItem>
-            ))}
-          </List>
-        </>
-      )}
-    </Drawer>
-  );
 };
 
 // ── Page ────────────────────────────────────────────────────
@@ -328,10 +236,7 @@ const OrgTreePage = () => {
   const [loading, setLoad] = useState(false);
   const [error, setError]  = useState(null);
   const [search, setSearch] = useState('');
-  const [hideEmpty, setHideEmpty] = useState(true);
-
-  // Members-drawer state
-  const [drawerDept, setDrawerDept] = useState(null);
+  const [showMembers, setShowMembers] = useState(true);
 
   const fetchTree = useCallback(async () => {
     setLoad(true); setError(null);
@@ -366,77 +271,95 @@ const OrgTreePage = () => {
     return { total, licensed, hods, departments: (site.departments || []).length };
   }, [site]);
 
-  // Build the recursive tree data structure. Each dept becomes a TreeNode; a
-  // matching `search` substring keeps the dept (and its ancestors) visible
-  // and dims non-matches.
+  // ── Build employee-wise tree ─────────────────────────────
+  // Each tree node represents ONE employee. Department info travels with
+  // the employee as a coloured tag in the box's bottom section.
+  //
+  // Reporting structure:
+  //   Site Head (root)
+  //     └── HOD of dept A   (tag: A)
+  //          ├── Member 1   (tag: A)
+  //          ├── Member 2   (tag: A)
+  //          └── HOD of sub-dept A.1   (tag: A.1)
+  //               └── Sub-member 1     (tag: A.1)
+  //     └── HOD of dept B   (tag: B)
+  //          └── …
   const treeRoot = useMemo(() => {
     if (!site) return null;
 
-    const matchesSearch = (dept) => {
+    const matchesSearch = (user, dept) => {
       if (!search) return true;
       const t = search.toLowerCase();
       const fields = [
-        dept.name, dept.code,
-        dept.hod?.fullName, dept.hod?.username, dept.hod?.designation,
+        user?.fullName, user?.username, user?.designation,
+        dept?.name, dept?.code,
       ].filter(Boolean).map((s) => String(s).toLowerCase());
       return fields.some((s) => s.includes(t));
     };
 
-    // Recurse: returns a TreeNode if this dept (or any descendant) matches
-    // the search. When `search` is empty everything passes through unchanged.
-    const buildDept = (dept) => {
-      const subs = (dept.subDepartments || [])
-        .map(buildDept)
-        .filter(Boolean)
-        .filter((n) => !hideEmpty || n._matters);
+    // Recurse through a department, returning the HOD's node with their
+    // members and any sub-dept HODs as children. If the dept has no HOD,
+    // return a placeholder so its members are still surfaced.
+    const buildDeptBranch = (dept) => {
+      const deptTag = { name: dept.name, code: dept.code, deptType: dept.deptType };
 
-      const selfMatters = !!dept.hod || (dept.members?.length || 0) > 0;
-      if (hideEmpty && !selfMatters && subs.length === 0) return null;
-
-      const matched = matchesSearch(dept);
-      if (search && !matched && subs.length === 0) return null;
-
-      return {
-        id: `dept-${dept.id}`,
-        _matters: true,
-        dimmed: !!search && !matched,
+      // Members under this HOD (only if showMembers is on)
+      const memberNodes = !showMembers ? [] : (dept.members || []).map((m) => ({
+        id: `member-${m.id}-${dept.id}`,
+        dimmed: !!search && !matchesSearch(m, dept),
         box: {
-          kind: 'dept',
-          deptType: dept.deptType,
-          title: dept.name,
-          subtitle: `${dept.code} · ${dept.deptType}`,
-          name:  dept.hod?.fullName,
-          designation: dept.hod?.designation || 'Head of Department',
+          role: 'member',
+          name: m.fullName || m.username,
+          designation: m.designation,
+          deptTag,
+          permissionChips: permissionChipsFor(m),
+        },
+        children: [],
+      }));
+
+      // Sub-departments cascade
+      const subNodes = (dept.subDepartments || [])
+        .map(buildDeptBranch)
+        .filter(Boolean);
+
+      // Build the HOD node (or placeholder)
+      const hodNode = {
+        id: `hod-${dept.id}`,
+        dimmed: !!search && !matchesSearch(dept.hod, dept),
+        box: {
+          role: 'hod',
+          name: dept.hod?.fullName || dept.hod?.username,
+          designation: dept.hod?.designation || (dept.hod ? 'Head of Department' : null),
+          deptTag,
           permissionChips: permissionChipsFor(dept.hod),
         },
-        onClick: () => setDrawerDept(dept),
-        children: subs,
+        children: [...memberNodes, ...subNodes],
       };
+
+      return hodNode;
     };
 
-    const deptNodes = (site.departments || [])
-      .map(buildDept)
-      .filter(Boolean);
+    const deptBranches = (site.departments || []).map(buildDeptBranch).filter(Boolean);
 
     return {
       id: 'site',
+      dimmed: !!search && !matchesSearch(site.head, null),
       box: {
-        kind: 'site',
-        title: 'Site Head',
-        subtitle: site.name,
+        role: 'site-head',
         name: site.head?.fullName,
         designation: site.head?.designation,
-        permissionChips: sitePermissionChips(site.head),
+        deptTag: null,                      // site head doesn't belong to a dept
+        permissionChips: permissionChipsFor(site.head),
       },
-      children: deptNodes,
+      children: deptBranches,
     };
-  }, [site, search, hideEmpty]);
+  }, [site, search, showMembers]);
 
   return (
     <Box>
       <PageHeader
         title="Organisation Tree"
-        subtitle="Top-down org chart — Site Head at the top, departments below, click any box for details."
+        subtitle="Top-down employee hierarchy. Each box is one employee with their department shown as a coloured tag."
         breadcrumbs={[{ label: 'Dashboard', href: ROUTES.DASHBOARD }, { label: 'Organisation' }]}
         action={
           <Stack direction="row" spacing={1}>
@@ -474,9 +397,9 @@ const OrgTreePage = () => {
               }}
             />
             <FormControlLabel
-              control={<Switch size="small" checked={hideEmpty}
-                       onChange={(e) => setHideEmpty(e.target.checked)} />}
-              label={<Typography variant="caption">Hide empty departments</Typography>}
+              control={<Switch size="small" checked={showMembers}
+                       onChange={(e) => setShowMembers(e.target.checked)} />}
+              label={<Typography variant="caption">Show department members</Typography>}
             />
             <Box sx={{ flex: 1 }} />
             {stats && (
@@ -490,13 +413,11 @@ const OrgTreePage = () => {
             )}
           </Box>
 
-          {/* The actual top-down chart — horizontally scrollable for wide trees */}
+          {/* The chart — horizontally scrollable for wide trees */}
           <Box sx={{
               ...treeSx,
               overflowX: 'auto', overflowY: 'visible',
-              pb: 4,                       // breathing room below last row
-              minHeight: 200,
-              // Surrounding container styling
+              pb: 4, minHeight: 200,
               border: '1px dashed', borderColor: 'divider',
               borderRadius: 2, bgcolor: 'background.default',
               p: 3,
@@ -509,16 +430,12 @@ const OrgTreePage = () => {
           </Box>
 
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-            💡 Click any department box to see its members and sub-departments.
+            💡 Each box is one employee. The coloured tag at the bottom shows their department
+            (green = QA, amber = RA, outlined = standard). HODs are highlighted with a star and
+            primary border; members have a grey accent.
           </Typography>
         </>
       )}
-
-      <MembersDrawer
-        open={!!drawerDept}
-        onClose={() => setDrawerDept(null)}
-        dept={drawerDept}
-      />
     </Box>
   );
 };
