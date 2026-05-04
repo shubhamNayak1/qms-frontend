@@ -29,6 +29,7 @@ import {
 } from './qmsConstants';
 import WorkflowActionDialog from './WorkflowActionDialog';
 import WorkflowStageStepper from './WorkflowStageStepper';
+import ChangeControlStagePanel from './ChangeControlStagePanel';
 import QmsLineItemsSection from './QmsLineItemsSection';
 import QmsDepartmentCommentsSection from './QmsDepartmentCommentsSection';
 import TargetDateExtensionPanel from './TargetDateExtensionPanel';
@@ -415,6 +416,16 @@ const RecordDetailDrawer = ({ open, onClose, recordId, moduleKey, onUpdated }) =
             <>
               {/* Workflow stage pipeline — visual position in the approval flow */}
               <WorkflowStageStepper moduleKey={moduleKey} status={record.status} />
+
+              {/* Stage-aware action panel — Change Control only.
+                  Renders the right inputs for the current status, then
+                  bundles "save fields" and "transition" into one click. */}
+              {moduleKey === 'changeControl' && (
+                <ChangeControlStagePanel record={record} onUpdated={async () => {
+                  await fetchRecord();
+                  onUpdated?.();
+                }} />
+              )}
 
               {/* Banners */}
               {record.deviationRequired && (
