@@ -14,6 +14,7 @@ import {
   createComplaintApi, createChangeControlApi,
 } from '../../api/qmsApi';
 import { listDepartmentsApi } from '../../api/orgApi';
+import { useAuth } from '../../store/AuthContext';
 
 const PRIORITY_OPTS = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
 const CATEGORY_OPTS = ['Critical', 'Major', 'Minor'];
@@ -69,13 +70,20 @@ const F = ({ label, name, form, setForm, type = 'text', options, multiline, requ
  * Sets BOTH `departmentId` (FK, used by the new positional checks) and
  * `department` (legacy free-text label, kept populated for backwards compat
  * during the migration).
+ *
+ * When `locked` is true the field renders disabled — used by the Change
+ * Control dialog so an Initiator can only raise records on behalf of
+ * THEIR own department (and the workflow's HOD-of-record-dept check
+ * is meaningful).
  */
-const DeptField = ({ form, setForm, xs = 6, required }) => {
+const DeptField = ({ form, setForm, xs = 6, required, locked }) => {
   const list = useDepartments();
   return (
     <Grid item xs={xs}>
       <TextField
-        label="Department" select fullWidth size="small" required={required}
+        label="Department" select fullWidth size="small"
+        required={required}
+        disabled={locked}
         value={form.departmentId || ''}
         onChange={(e) => {
           const id = e.target.value;
@@ -86,6 +94,7 @@ const DeptField = ({ form, setForm, xs = 6, required }) => {
             department:   matched ? matched.name : p.department,
           }));
         }}
+        helperText={locked ? 'Auto-filled from your profile.' : undefined}
       >
         {list.length === 0 && <MenuItem value=""><em>Loading…</em></MenuItem>}
         {list.map(d => (
@@ -257,29 +266,53 @@ export const CreateIncidentDialog = ({ open, onClose, onCreated }) => (
 );
 
 // ── Change Control ────────────────────────────────────────────────────────────
-export const CreateChangeControlDialog = ({ open, onClose, onCreated }) => (
-  <BaseDialog
-    open={open} onClose={onClose} title="Initiate Change Control"
-    initialForm={{ title: '', changeType: 'Process', riskLevel: 'Medium',
-                   priority: 'MEDIUM', category: '',
-                   departmentId: null, department: '',
-                   validationRequired: false, regulatorySubmissionRequired: false,
-                   siteHeadRequired: false, customerCommentRequired: false,
-                   customerCommunicationRequired: false }}
-    onSubmit={async (form) => { await createChangeControlApi(form); onCreated?.(); }}
-  >
-    {({ form, setForm }) => {
-      const p = { form, setForm };
-      return (<>
-        {/* Initiation of Change — matches the printable VI-Pharma form */}
-        <SectionLabel>Initiation of Change</SectionLabel>
-        <F {...p} label="Change Title" name="title" required xs={12} />
-        <F {...p} label="Change Type" name="changeType"
-           options={['Process', 'Equipment', 'Document', 'System', 'Supplier', 'Facility']} />
-        <F {...p} label="Risk Level" name="riskLevel" options={['Low', 'Medium', 'High']} />
-        <F {...p} label="Priority" name="priority" options={PRIORITY_OPTS} />
-        <DeptField form={form} setForm={setForm} required />
-        <F {...p} label="Category" name="category" options={CATEGORY_OPTS} />
+export const CreateChangeControlDialog = ({ open, onClose, onCreated }) => {
+  // The Initiator can only raise a Change Control on behalf of THEIR own
+  // department. We pre-fill the form's departmentId/department from the
+  // logged-in user and render the dropdown disabled so the field can't
+  // be tampered with from the UI. The backend's positional check then
+  // enforces "HOD of record's dept" approves PENDING_HOD on the right side.
+  const { user } = useAuth();
+  const initialForm = {
+    title: '', changeType: 'Process', riskLevel: 'Medium',
+    priority: 'MEDIUM', category: '',
+    departmentId: user?.departmentId ?? null,
+    department:   user?.departmentName || user?.department || '',
+    validationRequired: false, regulatorySubmissionRequired: false,
+    siteHeadRequired: false, customerCommentRequired: false,
+    customerCommunicationRequired: false,
+  };
+
+  return (
+    <BaseDialog
+      open={open} onClose={onClose} title="Initiate Change Control"
+      initialForm={initialForm}
+      onSubmit={async (form) => { await createChangeControlApi(form); onCreated?.(); }}
+    >
+      {({ form, setForm }) => {
+        const p = { form, setForm };
+        return (<>
+          {/* If the Initiator has no department on their profile, block creation
+              with a clear message so the workflow doesn't break later. */}
+          {!user?.departmentId && (
+            <Grid item xs={12}>
+              <Alert severity="warning">
+                Your profile has no department assigned. Ask an admin to set
+                your department on the Users page before raising a Change
+                Control.
+              </Alert>
+            </Grid>
+          )}
+
+          {/* Initiation of Change — matches the printable VI-Pharma form */}
+          <SectionLabel>Initiation of Change</SectionLabel>
+          <F {...p} label="Change Title" name="title" required xs={12} />
+          <F {...p} label="Change Type" name="changeType"
+             options={['Process', 'Equipment', 'Document', 'System', 'Supplier', 'Facility']} />
+          <F {...p} label="Risk Level" name="riskLevel" options={['Low', 'Medium', 'High']} />
+          <F {...p} label="Priority" name="priority" options={PRIORITY_OPTS} />
+          <DeptField form={form} setForm={setForm} required locked />
+          <F {...p} label="Category" name="category" options={CATEGORY_OPTS} />
         <F {...p} label="Target Completion Date" name="targetCompletionDate" type="date" />
         <F {...p} label="Implementation Date" name="implementationDate" type="date" />
         <F {...p} label="Reason for Change" name="changeReason" multiline xs={12} />
@@ -322,8 +355,9 @@ export const CreateChangeControlDialog = ({ open, onClose, onCreated }) => (
         )}
       </>);
     }}
-  </BaseDialog>
-);
+    </BaseDialog>
+  );
+};
 
 // ── Market Complaint ──────────────────────────────────────────────────────────
 export const CreateComplaintDialog = ({ open, onClose, onCreated }) => (

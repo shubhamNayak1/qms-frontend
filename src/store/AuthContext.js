@@ -13,6 +13,8 @@ const buildUserFromMe = (me) => ({
   lastName: me.lastName,
   phone: me.phone,
   department: me.department,
+  departmentId: me.departmentId ?? null,
+  departmentName: me.departmentName || me.department || null,
   designation: me.designation,
   employeeId: me.employeeId,
   profilePictureUrl: me.profilePictureUrl || null,
