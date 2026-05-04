@@ -123,7 +123,10 @@ const UsersPage = () => {
   useEffect(() => {
     getAllRolesFlatApi()
       .then(({ data }) => {
-        const list = data?.data ?? [];
+        // Drop legacy soft-deleted roles (QA_MANAGER, QA_OFFICER, AUDITOR, HOD
+        // were deprecated by V18) — assigning them on create returns
+        // "One or more role IDs are invalid or do not exist." from the backend.
+        const list = (data?.data ?? []).filter((r) => !r.disabled);
         setRoles(list);
         if (list.length > 0) setForm((f) => ({ ...f, role: f.role || list[0].id }));
       })
