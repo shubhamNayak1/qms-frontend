@@ -1,17 +1,18 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
-  Box, Paper, Typography, Avatar, Chip, IconButton, Collapse, Tooltip,
-  Stack, Divider, Button, Skeleton,
+  Box, Paper, Typography, Avatar, Chip, IconButton, Tooltip,
+  Stack, Button, Skeleton, TextField, InputAdornment, Switch, FormControlLabel,
 } from '@mui/material';
 import {
   ExpandMore as ExpandIcon,
   ChevronRight as CollapseIcon,
   Refresh as RefreshIcon,
-  AccountCircle as UserIcon,
   CheckCircle as LicenseIcon,
   Cancel as NoLicenseIcon,
   Edit as EditIcon,
   Place as PlaceIcon,
+  Search as SearchIcon,
+  Star as HodIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import PageHeader from '../../components/PageHeader';
@@ -26,136 +27,261 @@ const TYPE_COLOR = {
   STANDARD: 'default',
 };
 
-// ── User chip ────────────────────────────────────────────────
-const UserChip = ({ user, isHod }) => {
+const roleHint = (role) =>
+  role === 'SITE_HEAD' ? 'Site Head'
+  : role === 'HOD'     ? 'Head of Department'
+  : 'Member';
+
+const initialsOf = (user) =>
+  (user.initials || (user.fullName || user.username || '?').slice(0, 2)).toUpperCase();
+
+// ── Single employee row ─────────────────────────────────────
+//
+// Shows one person with their department tag, designation and role badges.
+// Indented by `depth` so the visual hierarchy reflects the reporting line:
+//   Site Head (0) → HOD (1) → Member or Sub-HOD (2) → Sub-member (3) → …
+const EmployeeRow = ({ user, dept, role, depth, hasChildren, expanded, onToggle, isLastChild }) => {
   if (!user) return null;
-  const initials = user.initials || (user.fullName || user.username || '?').slice(0, 2).toUpperCase();
-  const license = user.hasActiveLicense
-    ? <Tooltip title="Has active license"><LicenseIcon sx={{ fontSize: 14, color: 'success.main' }} /></Tooltip>
-    : <Tooltip title="No active license"><NoLicenseIcon sx={{ fontSize: 14, color: 'error.light' }} /></Tooltip>;
+  const isHod = role === 'HOD' || role === 'SITE_HEAD';
 
   return (
     <Box sx={{
-      display: 'flex', alignItems: 'center', gap: 1,
-      px: 1, py: 0.6, mb: 0.5,
-      bgcolor: isHod ? 'primary.50' : 'background.paper',
-      border: '1px solid', borderColor: isHod ? 'primary.light' : 'divider',
-      borderRadius: 1.5,
+      position: 'relative',
+      pl: `${depth * 28}px`,    // indent per level
+      mb: 0.6,
     }}>
-      <Avatar sx={{
-        width: 28, height: 28, fontSize: 12, fontWeight: 700,
-        bgcolor: isHod ? 'primary.main' : 'grey.300',
-        color: isHod ? 'white' : 'text.primary',
-      }}>
-        {initials}
-      </Avatar>
-      <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography variant="body2" fontWeight={isHod ? 700 : 500} noWrap>
-          {user.fullName || user.username}
-        </Typography>
-        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
-          {user.designation || (isHod ? 'Head of Department' : 'Member')}
-        </Typography>
-      </Box>
-      <Stack direction="row" spacing={0.4} alignItems="center">
-        {user.isQaReviewer    && <Chip size="small" label="QA Reviewer"  color="success"  sx={{ height: 18, fontSize: 10 }} />}
-        {user.isDeptReviewer  && <Chip size="small" label="Dept Reviewer" color="info"     sx={{ height: 18, fontSize: 10 }} />}
-        {license}
-      </Stack>
+      {/* Connector — horizontal stub from the parent's vertical line.
+          Skipped for the root (depth 0). */}
+      {depth > 0 && (
+        <Box sx={{
+            position: 'absolute',
+            left: `${(depth - 1) * 28 + 12}px`,
+            top: 18, width: 14, height: 2,
+            bgcolor: 'divider',
+          }} />
+      )}
+      {/* Vertical line that runs through this node's level — drawn so children
+          can hang off it. Hidden on the last child of its parent below the row
+          to keep the visual tree tight. */}
+      {depth > 0 && !isLastChild && (
+        <Box sx={{
+            position: 'absolute',
+            left: `${(depth - 1) * 28 + 12}px`,
+            top: 0, bottom: -10, width: 2,
+            bgcolor: 'divider',
+          }} />
+      )}
+
+      <Paper
+        variant="outlined"
+        sx={{
+          display: 'flex', alignItems: 'center', gap: 1.2,
+          px: 1.4, py: 1, borderRadius: 1.5,
+          borderLeft: '4px solid',
+          borderLeftColor: dept
+            ? (dept.deptType === 'QA'  ? 'success.main'
+              : dept.deptType === 'RA'  ? 'warning.main'
+              : 'grey.400')
+            : 'primary.main',
+          bgcolor: isHod ? 'primary.50' : 'background.paper',
+        }}
+      >
+        {/* Expand/Collapse arrow — only for nodes with descendants */}
+        {hasChildren ? (
+          <IconButton size="small" onClick={onToggle} sx={{ p: 0.4 }}>
+            {expanded ? <ExpandIcon fontSize="inherit" /> : <CollapseIcon fontSize="inherit" />}
+          </IconButton>
+        ) : (
+          <Box sx={{ width: 28 }} />
+        )}
+
+        {/* Avatar */}
+        <Avatar sx={{
+            width: 36, height: 36, fontSize: 13, fontWeight: 700,
+            bgcolor: isHod ? 'primary.main' : 'grey.300',
+            color:   isHod ? 'white'        : 'text.primary',
+          }}>
+          {initialsOf(user)}
+        </Avatar>
+
+        {/* Identity */}
+        <Box sx={{ flex: 1, minWidth: 0 }}>
+          <Stack direction="row" alignItems="center" spacing={0.6} sx={{ flexWrap: 'wrap' }}>
+            <Typography variant="body2" fontWeight={isHod ? 700 : 500} noWrap>
+              {user.fullName || user.username}
+            </Typography>
+            {isHod && (
+              <Chip size="small"
+                    icon={<HodIcon sx={{ fontSize: 12 }} />}
+                    label={role === 'SITE_HEAD' ? 'Site Head' : 'HOD'}
+                    color="primary"
+                    sx={{ height: 18, fontSize: 10, '& .MuiChip-icon': { ml: '4px' } }} />
+            )}
+          </Stack>
+          <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
+            {user.designation || roleHint(role)}
+          </Typography>
+        </Box>
+
+        {/* Department tag */}
+        {dept ? (
+          <Tooltip title={`${dept.name} (${dept.deptType})`}>
+            <Chip
+              size="small"
+              label={dept.code}
+              color={TYPE_COLOR[dept.deptType] || 'default'}
+              variant={dept.deptType === 'STANDARD' ? 'outlined' : 'filled'}
+              sx={{ fontWeight: 600 }}
+            />
+          </Tooltip>
+        ) : (
+          <Chip size="small" label="—" variant="outlined" sx={{ opacity: 0.5 }} />
+        )}
+
+        {/* Reviewer flags */}
+        {user.isQaReviewer && (
+          <Tooltip title="QA Reviewer">
+            <Chip size="small" label="QA" color="success"
+                  sx={{ height: 20, fontSize: 10 }} />
+          </Tooltip>
+        )}
+        {user.isDeptReviewer && (
+          <Tooltip title="Department Reviewer">
+            <Chip size="small" label="DR" color="info"
+                  sx={{ height: 20, fontSize: 10 }} />
+          </Tooltip>
+        )}
+
+        {/* License */}
+        {user.hasActiveLicense
+          ? <Tooltip title="Active license"><LicenseIcon sx={{ fontSize: 18, color: 'success.main' }} /></Tooltip>
+          : <Tooltip title="No active license"><NoLicenseIcon sx={{ fontSize: 18, color: 'error.light' }} /></Tooltip>}
+      </Paper>
     </Box>
   );
 };
 
-// ── Recursive department node ───────────────────────────────
-const DeptNode = ({ dept, depth = 0 }) => {
-  const [open, setOpen] = useState(depth < 1);
-  const [showMembers, setShowMembers] = useState(false);
+// ── Recursive sub-tree ──────────────────────────────────────
+const SubTree = ({ dept, depth, expanded, onToggle, isLastChild, search, expandedMap }) => {
+  const childCount = (dept.members?.length || 0) + (dept.subDepartments?.length || 0);
+  const hodHasChildren = childCount > 0;
 
-  const hasSubs = (dept.subDepartments?.length || 0) > 0;
-  const memberCount = (dept.members?.length || 0) + (dept.hod ? 1 : 0);
+  // Filter member list by search (case-insensitive against name/dept code)
+  const matchesSearch = (u) => {
+    if (!search) return true;
+    const t = search.toLowerCase();
+    const name = (u.fullName || u.username || '').toLowerCase();
+    return name.includes(t) || (dept.code || '').toLowerCase().includes(t)
+        || (dept.name || '').toLowerCase().includes(t);
+  };
 
-  return (
-    <Box sx={{ ml: depth === 0 ? 0 : 2.5, mt: 1 }}>
-      <Paper
-        variant="outlined"
-        sx={{
+  // Build the list of children that will be rendered under this HOD.
+  const visibleMembers = (dept.members || []).filter(matchesSearch);
+  const visibleSubs    = (dept.subDepartments || []);
+
+  const totalRendered = visibleMembers.length + visibleSubs.length;
+
+  const renderHodPlaceholder = (
+    <Box sx={{ pl: `${depth * 28}px`, mb: 0.6, position: 'relative' }}>
+      {depth > 0 && (
+        <Box sx={{
+            position: 'absolute',
+            left: `${(depth - 1) * 28 + 12}px`,
+            top: 18, width: 14, height: 2,
+            bgcolor: 'divider',
+          }} />
+      )}
+      <Paper variant="outlined" sx={{
+          px: 1.4, py: 1, borderRadius: 1.5,
           borderLeft: '4px solid',
           borderLeftColor: dept.deptType === 'QA'  ? 'success.main'
-                         : dept.deptType === 'RA'  ? 'warning.main'
-                         : 'grey.400',
-          px: 2, py: 1.2, borderRadius: 1.5,
-        }}
-      >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-          {hasSubs && (
-            <IconButton size="small" onClick={() => setOpen(o => !o)}>
-              {open ? <ExpandIcon fontSize="small" /> : <CollapseIcon fontSize="small" />}
-            </IconButton>
-          )}
-          <Box sx={{ flex: 1, minWidth: 0 }}>
-            <Typography variant="subtitle1" fontWeight={700} noWrap>
-              {dept.name}
-              <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-                ({dept.code})
-              </Typography>
-            </Typography>
-          </Box>
-          <Chip
-            size="small"
-            label={dept.deptType}
-            color={TYPE_COLOR[dept.deptType] || 'default'}
-            variant={dept.deptType === 'STANDARD' ? 'outlined' : 'filled'}
-          />
-          <Chip
-            size="small"
-            label={`${dept.totalMemberCount ?? memberCount} member${(dept.totalMemberCount ?? memberCount) === 1 ? '' : 's'}`}
-            variant="outlined"
-            onClick={() => setShowMembers(s => !s)}
-            sx={{ cursor: 'pointer' }}
-          />
+                         : dept.deptType === 'RA'  ? 'warning.main' : 'grey.400',
+          display: 'flex', alignItems: 'center', gap: 1.2, bgcolor: 'warning.50',
+        }}>
+        <Box sx={{ width: 28 }} />
+        <Avatar sx={{ width: 36, height: 36, bgcolor: 'warning.light' }}>?</Avatar>
+        <Box sx={{ flex: 1 }}>
+          <Typography variant="body2" fontWeight={600} color="warning.dark">
+            HOD not set — {dept.name}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            Assign a Head of Department on the Departments page.
+          </Typography>
         </Box>
-
-        {/* HOD always visible */}
-        {dept.hod && (
-          <Box sx={{ mt: 1 }}>
-            <UserChip user={dept.hod} isHod />
-          </Box>
-        )}
-
-        {/* Members fold */}
-        <Collapse in={showMembers} unmountOnExit>
-          <Box sx={{ mt: 1 }}>
-            {dept.members?.length ? dept.members.map(m => (
-              <UserChip key={m.id} user={m} />
-            )) : (
-              <Typography variant="caption" color="text.secondary" sx={{ pl: 1 }}>
-                No members.
-              </Typography>
-            )}
-          </Box>
-        </Collapse>
+        <Chip size="small" label={dept.code} variant="outlined" />
       </Paper>
-
-      {/* Sub-departments */}
-      <Collapse in={open} unmountOnExit>
-        {dept.subDepartments?.map(sub => (
-          <DeptNode key={sub.id} dept={sub} depth={depth + 1} />
-        ))}
-      </Collapse>
     </Box>
+  );
+
+  return (
+    <>
+      {dept.hod
+        ? <EmployeeRow
+            user={dept.hod}
+            dept={dept}
+            role="HOD"
+            depth={depth}
+            hasChildren={hodHasChildren && totalRendered > 0}
+            expanded={expanded}
+            onToggle={onToggle}
+            isLastChild={isLastChild}
+          />
+        : renderHodPlaceholder}
+
+      {expanded && (
+        <>
+          {visibleMembers.map((m, i) => (
+            <EmployeeRow
+              key={m.id}
+              user={m}
+              dept={dept}
+              role="MEMBER"
+              depth={depth + 1}
+              isLastChild={i === visibleMembers.length - 1 && visibleSubs.length === 0}
+            />
+          ))}
+          {visibleSubs.map((sub, i) => {
+            const subKey  = `dept-${sub.id}`;
+            const subOpen = expandedMap[subKey] !== false; // default expanded
+            return (
+              <SubTree
+                key={sub.id}
+                dept={sub}
+                depth={depth + 1}
+                expanded={subOpen}
+                onToggle={() =>
+                  expandedMap.__set(subKey, !subOpen)
+                }
+                isLastChild={i === visibleSubs.length - 1}
+                search={search}
+                expandedMap={expandedMap}
+              />
+            );
+          })}
+        </>
+      )}
+    </>
   );
 };
 
 // ── Page ────────────────────────────────────────────────────
 const OrgTreePage = () => {
   const navigate = useNavigate();
-  const [data, setData]     = useState(null);
-  const [loading, setLoad]  = useState(false);
-  const [error, setError]   = useState(null);
+  const [data, setData]    = useState(null);
+  const [loading, setLoad] = useState(false);
+  const [error, setError]  = useState(null);
+  const [search, setSearch] = useState('');
+  const [showOrphans, setShowOrphans] = useState(false);
+
+  // Per-node expansion state. Default = expanded.
+  const [expanded, setExpanded] = useState({});
+  const expandedMap = useMemo(() => ({
+    ...expanded,
+    __set: (k, v) => setExpanded((p) => ({ ...p, [k]: v })),
+  }), [expanded]);
 
   const fetchTree = useCallback(async () => {
-    setLoad(true);
-    setError(null);
+    setLoad(true); setError(null);
     try {
       const { data: resp } = await getOrgTreeApi();
       setData(resp?.data || null);
@@ -170,11 +296,28 @@ const OrgTreePage = () => {
 
   const site = data?.site;
 
+  // Stats: total employees + license counts
+  const stats = useMemo(() => {
+    if (!site) return null;
+    let total = 0, licensed = 0, hods = 0;
+    const walk = (dept) => {
+      if (dept.hod) { total++; hods++; if (dept.hod.hasActiveLicense) licensed++; }
+      (dept.members || []).forEach((m) => {
+        total++;
+        if (m.hasActiveLicense) licensed++;
+      });
+      (dept.subDepartments || []).forEach(walk);
+    };
+    if (site.head) { total++; if (site.head.hasActiveLicense) licensed++; }
+    (site.departments || []).forEach(walk);
+    return { total, licensed, hods, departments: (site.departments || []).length };
+  }, [site]);
+
   return (
     <Box>
       <PageHeader
-        title="Organisation"
-        subtitle="Top-down view of the company. Site → Departments → Sub-Departments → Members."
+        title="Organisation Tree"
+        subtitle="Reporting hierarchy — Site Head at top, every employee as a node, department shown as a tag on each."
         breadcrumbs={[{ label: 'Dashboard', href: ROUTES.DASHBOARD }, { label: 'Organisation' }]}
         action={
           <Stack direction="row" spacing={1}>
@@ -193,56 +336,113 @@ const OrgTreePage = () => {
 
       {loading && !site && (
         <Stack spacing={1}>
-          {[1,2,3].map(i => <Skeleton key={i} height={70} variant="rounded" />)}
+          {[1,2,3,4].map(i => <Skeleton key={i} height={56} variant="rounded" />)}
         </Stack>
       )}
 
       {site && (
         <>
-          {/* Site card */}
-          <Paper
-            elevation={0}
-            sx={{
-              p: 2.5,
-              border: '2px solid',
-              borderColor: 'primary.main',
-              borderRadius: 2,
-              bgcolor: 'primary.50',
-              display: 'flex', alignItems: 'center', gap: 2,
-            }}
-          >
-            <Avatar sx={{ bgcolor: 'primary.main', width: 56, height: 56, fontSize: 22, fontWeight: 700 }}>
-              {site.name?.[0] || 'S'}
-            </Avatar>
-            <Box sx={{ flex: 1, minWidth: 0 }}>
-              <Typography variant="h6" fontWeight={700} noWrap>
-                {site.name}
-                <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 1 }}>
-                  ({site.code || '—'})
-                </Typography>
-              </Typography>
-              <Typography variant="body2" color="text.secondary" noWrap>
-                {site.address || 'Address not set'}
-              </Typography>
-            </Box>
-            {site.head ? (
-              <Box sx={{ minWidth: 240 }}>
-                <Typography variant="caption" color="text.secondary" textTransform="uppercase" letterSpacing={0.5}>
-                  Site Head
-                </Typography>
-                <UserChip user={site.head} isHod />
-              </Box>
-            ) : (
-              <Chip label="No Site Head set" color="warning" variant="outlined" icon={<UserIcon />} />
+          {/* Filters / counts row */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', mb: 2 }}>
+            <TextField
+              placeholder="Filter by name or department…"
+              size="small"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              sx={{ width: 280 }}
+              InputProps={{
+                startAdornment: <InputAdornment position="start"><SearchIcon fontSize="small" /></InputAdornment>,
+              }}
+            />
+            <FormControlLabel
+              control={<Switch size="small" checked={showOrphans}
+                       onChange={(e) => setShowOrphans(e.target.checked)} />}
+              label={<Typography variant="caption">Show empty departments</Typography>}
+            />
+            <Box sx={{ flex: 1 }} />
+            {stats && (
+              <Stack direction="row" spacing={0.8}>
+                <Chip size="small" label={`${stats.total} employees`} variant="outlined" />
+                <Chip size="small" label={`${stats.hods} HODs`} color="primary" variant="outlined" />
+                <Chip size="small" label={`${stats.licensed}/${stats.total} licensed`}
+                      color={stats.licensed === stats.total ? 'success' : 'warning'}
+                      variant="outlined" />
+              </Stack>
             )}
-          </Paper>
+          </Box>
 
-          <Divider sx={{ my: 2 }} />
+          {/* Site card — top of the reporting tree */}
+          <Box sx={{ mb: 2 }}>
+            <Paper elevation={0} sx={{
+                p: 2,
+                border: '2px solid', borderColor: 'primary.main',
+                borderRadius: 2, bgcolor: 'primary.50',
+                display: 'flex', alignItems: 'center', gap: 2,
+              }}>
+              <Avatar sx={{ bgcolor: 'primary.main', width: 44, height: 44, fontWeight: 700 }}>
+                {site.name?.[0] || 'S'}
+              </Avatar>
+              <Box sx={{ flex: 1, minWidth: 0 }}>
+                <Typography variant="subtitle1" fontWeight={700}>{site.name}</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {site.code || '—'}
+                  {site.address ? ` · ${site.address}` : ''}
+                </Typography>
+              </Box>
+            </Paper>
+          </Box>
 
-          {/* Top-level departments */}
-          {site.departments?.length ? site.departments.map(dept => (
-            <DeptNode key={dept.id} dept={dept} />
-          )) : (
+          {/* Site Head row (depth 0) */}
+          {site.head ? (
+            <EmployeeRow
+              user={site.head}
+              dept={null}
+              role="SITE_HEAD"
+              depth={0}
+              hasChildren={(site.departments?.length || 0) > 0}
+              expanded
+              onToggle={() => {}}
+              isLastChild
+            />
+          ) : (
+            <Paper variant="outlined" sx={{
+                p: 1.4, mb: 1, bgcolor: 'warning.50',
+                borderLeft: '4px solid', borderLeftColor: 'warning.main',
+                display: 'flex', alignItems: 'center', gap: 1,
+              }}>
+              <Avatar sx={{ width: 32, height: 32, bgcolor: 'warning.light' }}>?</Avatar>
+              <Box>
+                <Typography variant="body2" fontWeight={600}>Site Head not set</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Set one on the Site Profile page.
+                </Typography>
+              </Box>
+            </Paper>
+          )}
+
+          {/* Reporting tree — each top-level dept hangs off the Site Head's line */}
+          <Box sx={{ position: 'relative' }}>
+            {(site.departments || [])
+              .filter((d) => showOrphans || (d.hod) || (d.members?.length) || (d.subDepartments?.length))
+              .map((dept, i, arr) => {
+                const key  = `dept-${dept.id}`;
+                const open = expandedMap[key] !== false; // default expanded
+                return (
+                  <SubTree
+                    key={dept.id}
+                    dept={dept}
+                    depth={1}
+                    expanded={open}
+                    onToggle={() => expandedMap.__set(key, !open)}
+                    isLastChild={i === arr.length - 1}
+                    search={search}
+                    expandedMap={expandedMap}
+                  />
+                );
+              })}
+          </Box>
+
+          {site.departments?.length === 0 && (
             <Typography color="text.secondary" sx={{ mt: 2 }}>
               No departments configured yet. Click <strong>Manage Departments</strong> to add one.
             </Typography>
