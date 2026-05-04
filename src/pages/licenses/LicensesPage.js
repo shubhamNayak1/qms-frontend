@@ -82,7 +82,7 @@ const LicensesPage = () => {
   useEffect(() => { fetchData(); }, [fetchData]);
 
   useEffect(() => {
-    getUsersApi({ size: 200 })
+    getUsersApi({ size: 100 })
       .then(({ data }) => setUsers(data?.data?.content || []))
       .catch(() => {});
   }, []);
