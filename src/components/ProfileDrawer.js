@@ -201,7 +201,7 @@ const ProfileDrawer = ({ open, onClose }) => {
           <InfoRow
             icon={<DepartmentIcon sx={{ fontSize: 18 }} />}
             label="Department"
-            value={user?.department}
+            value={user?.departmentName}
           />
           <InfoRow
             icon={<DesignationIcon sx={{ fontSize: 18 }} />}
@@ -211,7 +211,7 @@ const ProfileDrawer = ({ open, onClose }) => {
           <InfoRow
             icon={<BadgeIcon sx={{ fontSize: 18 }} />}
             label="Employee ID"
-            value={user?.employeeId}
+            value={user?.id}
           />
         </List>
 
