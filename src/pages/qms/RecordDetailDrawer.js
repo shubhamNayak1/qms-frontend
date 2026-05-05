@@ -33,6 +33,7 @@ import ChangeControlStagePanel from './ChangeControlStagePanel';
 import MarketComplaintStagePanel from './MarketComplaintStagePanel';
 import DeviationStagePanel from './DeviationStagePanel';
 import IncidentStagePanel from './IncidentStagePanel';
+import CapaStagePanel from './CapaStagePanel';
 import QmsLineItemsSection from './QmsLineItemsSection';
 import QmsDepartmentCommentsSection from './QmsDepartmentCommentsSection';
 import TargetDateExtensionPanel from './TargetDateExtensionPanel';
@@ -446,6 +447,13 @@ const RecordDetailDrawer = ({ open, onClose, recordId, moduleKey, onUpdated }) =
 
               {moduleKey === 'incident' && (
                 <IncidentStagePanel record={record} onUpdated={async () => {
+                  await fetchRecord();
+                  onUpdated?.();
+                }} />
+              )}
+
+              {moduleKey === 'capa' && (
+                <CapaStagePanel record={record} onUpdated={async () => {
                   await fetchRecord();
                   onUpdated?.();
                 }} />

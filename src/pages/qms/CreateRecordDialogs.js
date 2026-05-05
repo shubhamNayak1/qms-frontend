@@ -11,7 +11,8 @@ import {
 } from '@mui/material';
 import {
   createCapaApi, createDeviationApi, createIncidentApi,
-  createComplaintApi, createChangeControlApi, getIncidentsApi,
+  createComplaintApi, createChangeControlApi,
+  getIncidentsApi, getDeviationsApi, getComplaintsApi, getChangeControlsApi,
 } from '../../api/qmsApi';
 import { createLineItemApi } from '../../api/qmsCommonApi';
 import { listDepartmentsApi } from '../../api/orgApi';
@@ -178,35 +179,190 @@ const BaseDialog = ({ open, onClose, title, initialForm, onSubmit, children }) =
 };
 
 // ── CAPA ──────────────────────────────────────────────────────────────────────
-export const CreateCapaDialog = ({ open, onClose, onCreated }) => (
-  <BaseDialog
-    open={open} onClose={onClose} title="Create CAPA"
-    initialForm={{ title: '', capaType: 'Corrective', priority: 'MEDIUM', source: 'Internal', departmentId: null, department: '' }}
-    onSubmit={async (form) => { await createCapaApi(form); onCreated?.(); }}
-  >
-    {({ form, setForm }) => {
-      const p = { form, setForm };
-      return (<>
-        <SectionLabel>Basic Info</SectionLabel>
-        <F {...p} label="Title" name="title" required xs={12} />
-        <F {...p} label="CAPA Type" name="capaType" options={['Corrective', 'Preventive']} />
-        <F {...p} label="Priority" name="priority" options={PRIORITY_OPTS} />
-        <F {...p} label="Source" name="source" options={['Audit', 'Customer', 'Internal', 'Regulatory']} />
-        <DeptField form={form} setForm={setForm} required />
-        <F {...p} label="Category (impact)" name="category" options={CATEGORY_OPTS} />
-        <F {...p} label="Due Date" name="dueDate" type="date" />
-        <F {...p} label="Target Completion Date" name="targetCompletionDate" type="date" />
-        <F {...p} label="Effectiveness Check Date" name="effectivenessCheckDate" type="date" />
-        <F {...p} label="Linked Deviation Number" name="linkedDeviationNumber" />
-        <SectionLabel>Root Cause & Actions</SectionLabel>
-        <F {...p} label="Root Cause" name="rootCause" multiline xs={12} />
-        <F {...p} label="Corrective Action" name="correctiveAction" multiline xs={12} />
-        <F {...p} label="Preventive Action" name="preventiveAction" multiline xs={12} />
-        <F {...p} label="Description / Notes" name="description" multiline xs={12} />
-      </>);
-    }}
-  </BaseDialog>
-);
+//
+// Per Kedar-sir spec, CAPA has two creation modes:
+//   • NEW       — fresh, no parent record (e.g. process improvement).
+//   • EXISTING  — raised against an Incident / Deviation / Change Control /
+//                 Market Complaint where the HOD or QA Reviewer ticked
+//                 "CAPA Required = Yes". The parent record is picked from
+//                 a single combined dropdown that lists all four types
+//                 with a "From" chip showing the source module.
+//
+// Fields that move to later stages (filled via the stage panel):
+//   • CAPA Type, Source, Initial Remedial Action, Preventive Action      → PENDING_HOD
+//   • Site Head Required                                                  → PENDING_QA_REVIEW (2nd pass)
+//   • Action Taken / Effective Document                                   → PENDING_VERIFICATION
+//   • Verification Review narrative                                       → PENDING_VERIFICATION_REVIEW
+//   • Effectiveness Frequency + Count                                     → CLOSED (Head QA)
+const CAPA_PARENT_TYPES = [
+  { type: 'INCIDENT',         label: 'Incident',          color: 'info' },
+  { type: 'DEVIATION',        label: 'Deviation',         color: 'warning' },
+  { type: 'CHANGE_CONTROL',   label: 'Change Control',    color: 'primary' },
+  { type: 'MARKET_COMPLAINT', label: 'Market Complaint',  color: 'secondary' },
+];
+
+const useCapaEligibleParents = (enabled) => {
+  const [list, setList] = useState([]);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    if (!enabled) { setList([]); return; }
+    setLoading(true);
+    Promise.allSettled([
+      getIncidentsApi({ size: 200 }).then(({ data }) => ({
+        type: 'INCIDENT',
+        rows: (data?.data?.content || data?.data || [])
+              .filter(r => r?.capaRequired === true && !r?.linkedCapaNumber),
+      })),
+      getDeviationsApi({ size: 200 }).then(({ data }) => ({
+        type: 'DEVIATION',
+        rows: (data?.data?.content || data?.data || [])
+              .filter(r => r?.capaRequired === true && !r?.linkedCapaNumber),
+      })),
+      getChangeControlsApi({ size: 200 }).then(({ data }) => ({
+        type: 'CHANGE_CONTROL',
+        rows: (data?.data?.content || data?.data || [])
+              .filter(r => !r?.linkedCapaNumber),
+      })),
+      getComplaintsApi({ size: 200 }).then(({ data }) => ({
+        type: 'MARKET_COMPLAINT',
+        rows: (data?.data?.content || data?.data || [])
+              .filter(r => r?.capaRequired === true && !r?.capaReference),
+      })),
+    ]).then(results => {
+      const combined = [];
+      results.forEach(r => {
+        if (r.status === 'fulfilled' && r.value?.rows) {
+          r.value.rows.forEach(row => combined.push({
+            type: r.value.type,
+            id: row.id,
+            recordNumber: row.recordNumber,
+            title: row.title,
+            departmentId: row.departmentId,
+            departmentName: row.department || row.departmentName,
+          }));
+        }
+      });
+      setList(combined);
+    }).finally(() => setLoading(false));
+  }, [enabled]);
+  return { list, loading };
+};
+
+export const CreateCapaDialog = ({ open, onClose, onCreated }) => {
+  const { user } = useAuth();
+  const initialForm = {
+    title: '',
+    capaOrigin: 'NEW',
+    parentRecordType: null,
+    parentRecordId: null,
+    parentRecordNumber: '',
+    capaType: 'Corrective',
+    priority: 'MEDIUM',
+    source: 'Internal',
+    departmentId: user?.departmentId ?? null,
+    department:   user?.departmentName || user?.department || '',
+    description: '',
+  };
+
+  return (
+    <BaseDialog
+      open={open} onClose={onClose} title="Create CAPA"
+      initialForm={initialForm}
+      onSubmit={async (form) => {
+        if (form.capaOrigin === 'EXISTING' && !form.parentRecordId) {
+          throw { response: { data: { message: 'Pick a parent record (Incident / Deviation / CC / Market Complaint) for an Existing CAPA.' } } };
+        }
+        await createCapaApi(form);
+        onCreated?.();
+      }}
+    >
+      {({ form, setForm }) => {
+        const p = { form, setForm };
+        const isExisting = form.capaOrigin === 'EXISTING';
+        return (
+          <CapaDialogBody p={p} form={form} setForm={setForm}
+                          isExisting={isExisting} user={user} />
+        );
+      }}
+    </BaseDialog>
+  );
+};
+
+const CapaDialogBody = ({ p, form, setForm, isExisting, user }) => {
+  const { list, loading } = useCapaEligibleParents(isExisting);
+
+  return (<>
+    {!user?.departmentId && (
+      <Grid item xs={12}>
+        <Alert severity="warning">
+          Your profile has no department assigned. Ask an admin to set
+          your department on the Users page before raising a CAPA.
+        </Alert>
+      </Grid>
+    )}
+
+    <SectionLabel>Origin</SectionLabel>
+    <F {...p} label="CAPA Origin" name="capaOrigin"
+       options={['NEW', 'EXISTING']} xs={6} />
+    {isExisting && (
+      <Grid item xs={12}>
+        <TextField
+          label="Parent Record" select required fullWidth size="small"
+          value={form.parentRecordId || ''}
+          onChange={(e) => {
+            const id = e.target.value;
+            const matched = list.find(r => String(r.id) === String(id));
+            setForm(prev => ({
+              ...prev,
+              parentRecordId: id || null,
+              parentRecordType: matched?.type || null,
+              parentRecordNumber: matched?.recordNumber || '',
+              // Pre-fill dept from parent (CAPA inherits the parent's dept).
+              departmentId: matched?.departmentId || prev.departmentId,
+              department:   matched?.departmentName || prev.department,
+            }));
+          }}
+          helperText={loading
+            ? 'Loading eligible parent records…'
+            : list.length === 0
+              ? 'No Incident / Deviation / CC / MC is currently flagged as CAPA Required (and not yet linked). Use NEW or wait for the upstream module to flag one.'
+              : 'CAPA inherits the parent record\'s department.'}
+        >
+          {loading && <MenuItem value=""><em>Loading…</em></MenuItem>}
+          {list.map(r => {
+            const meta = CAPA_PARENT_TYPES.find(t => t.type === r.type);
+            return (
+              <MenuItem key={`${r.type}-${r.id}`} value={r.id}>
+                [{meta?.label || r.type}] {r.recordNumber} — {r.title}
+              </MenuItem>
+            );
+          })}
+        </TextField>
+      </Grid>
+    )}
+
+    <SectionLabel>Basic Info</SectionLabel>
+    <F {...p} label="Title" name="title" required xs={12} />
+    <F {...p} label="CAPA Type" name="capaType"
+       options={['Corrective', 'Preventive', 'Both']} />
+    <F {...p} label="Priority" name="priority" options={PRIORITY_OPTS} />
+    <F {...p} label="Source" name="source"
+       options={['Audit', 'Customer', 'Internal', 'Regulatory', 'Incident',
+                 'Deviation', 'Change Control', 'Market Complaint']} />
+    <DeptField form={form} setForm={setForm} required locked={isExisting} />
+    <F {...p} label="Reason / Preliminary Investigation" name="description"
+       multiline xs={12} />
+
+    <Grid item xs={12}>
+      <Alert severity="info" sx={{ mt: 1 }}>
+        <strong>Initial Remedial Action + Preventive Action</strong> are
+        filled by the HOD at <em>Proposed CAPA by HOD</em>. Site Head Required is set during the 2nd QA Evaluation pass. Closure must
+        happen within <strong>30 days</strong>; Head QA selects the
+        effectiveness-assessment frequency at closure.
+      </Alert>
+    </Grid>
+  </>);
+};
 
 // ── Deviation ─────────────────────────────────────────────────────────────────
 //

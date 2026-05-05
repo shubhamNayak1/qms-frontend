@@ -104,6 +104,38 @@ export const getIncidentsApi = (params) =>
 export const spawnDeviationFromIncidentApi = (id, comment) =>
   apiClient.post(`/api/v1/qms/incidents/${id}/spawn-deviation`, null, { params: { comment } });
 
+// ── Cross-module CAPA spawn — one endpoint per parent module ─────────────
+// Each returns the new CapaResponse (or the parent's response in the CC case)
+// and stamps the CAPA's record number on the parent's linked_capa_number /
+// capa_reference field. Idempotent — repeated calls return the existing link.
+export const spawnCapaFromIncidentApi = (id, preliminaryInvestigation) =>
+  apiClient.post(`/api/v1/qms/incidents/${id}/spawn-capa`, null,
+                 { params: { preliminaryInvestigation } });
+
+export const spawnCapaFromDeviationApi = (id, preliminaryInvestigation) =>
+  apiClient.post(`/api/v1/qms/deviations/${id}/spawn-capa`, null,
+                 { params: { preliminaryInvestigation } });
+
+export const spawnCapaFromChangeControlApi = (id, preliminaryInvestigation) =>
+  apiClient.post(`/api/v1/qms/change-controls/${id}/spawn-capa`, null,
+                 { params: { preliminaryInvestigation } });
+
+export const spawnCapaFromComplaintApi = (id, preliminaryInvestigation) =>
+  apiClient.post(`/api/v1/qms/complaints/${id}/spawn-capa`, null,
+                 { params: { preliminaryInvestigation } });
+
+// ── CAPA effectiveness-assessment endpoints (post-closure) ───────────────
+export const listCapaAssessmentsApi = (capaId) =>
+  apiClient.get(`/api/v1/qms/capa/${capaId}/assessments`);
+
+// QmsCapaAssessmentRequest: { actionObserved, evidenceRef, isEffective }
+export const submitCapaAssessmentApi = (rowId, data) =>
+  apiClient.put(`/api/v1/qms/capa/assessments/${rowId}`, data);
+
+// QmsCapaAssessmentReviewRequest: { decision: ACCEPTED|REJECTED, comment }
+export const reviewCapaAssessmentApi = (rowId, data) =>
+  apiClient.post(`/api/v1/qms/capa/assessments/${rowId}/review`, data);
+
 export const getIncidentByIdApi = (id) =>
   apiClient.get(`/api/v1/qms/incidents/${id}`);
 
