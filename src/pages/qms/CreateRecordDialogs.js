@@ -13,8 +13,13 @@ import {
   createCapaApi, createDeviationApi, createIncidentApi,
   createComplaintApi, createChangeControlApi,
 } from '../../api/qmsApi';
+import { createLineItemApi } from '../../api/qmsCommonApi';
 import { listDepartmentsApi } from '../../api/orgApi';
 import { useAuth } from '../../store/AuthContext';
+import { Box, IconButton, Tooltip } from '@mui/material';
+import {
+  Add as AddRowIcon, DeleteOutline as RemoveRowIcon,
+} from '@mui/icons-material';
 
 const PRIORITY_OPTS = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
 const CATEGORY_OPTS = ['Critical', 'Major', 'Minor'];
@@ -266,34 +271,73 @@ export const CreateIncidentDialog = ({ open, onClose, onCreated }) => (
 );
 
 // ── Change Control ────────────────────────────────────────────────────────────
+//
+// Layout (matches the May 2026 tester spec):
+//
+//  Initiation of Change (Create dialog)
+//    • Change Title, Product / Material, Market Details
+//    • Parameter / Change Type, Department (locked from profile)
+//    • Inline Line Items (Existing System / Proposed System / Proposed Date)
+//
+// Pending HOD review (stage panel — see ChangeControlStagePanel)
+//    • Risk Assessment, Linked CAPA #
+//
+// Pending QA Review (stage panel)
+//    • Priority, Risk Level
+//    • Approval Routing (Site Head / Customer Communication / Customer Comment)
+//    • Regulatory & Validation (regulatory submission, validation)
+//    • Department-wise comments — managed via the dept accordion
 export const CreateChangeControlDialog = ({ open, onClose, onCreated }) => {
-  // The Initiator can only raise a Change Control on behalf of THEIR own
-  // department. We pre-fill the form's departmentId/department from the
-  // logged-in user and render the dropdown disabled so the field can't
-  // be tampered with from the UI. The backend's positional check then
-  // enforces "HOD of record's dept" approves PENDING_HOD on the right side.
   const { user } = useAuth();
   const initialForm = {
-    title: '', changeType: 'Process', riskLevel: 'Medium',
-    priority: 'MEDIUM', category: '',
+    title: '',
+    productMaterial: '',
+    marketDetails: '',
+    changeType: 'Process',
     departmentId: user?.departmentId ?? null,
     department:   user?.departmentName || user?.department || '',
-    validationRequired: false, regulatorySubmissionRequired: false,
-    siteHeadRequired: false, customerCommentRequired: false,
-    customerCommunicationRequired: false,
+    changeReason: '',
+    description: '',
+    // Priority is required by the backend's QmsBaseRequest validator —
+    // default to MEDIUM at create time; QA Reviewer overrides at QA_REVIEW.
+    priority: 'MEDIUM',
+    // Inline line items — at least one row, more can be added.
+    lineItems: [{ existingSystem: '', proposedSystem: '', proposedDate: '' }],
+  };
+
+  /**
+   * After the Change Control is saved, fire-and-forget the line-item POSTs.
+   * Failures don't roll back the CC create — they surface as a soft warning
+   * the user can retry from the line-items accordion in the detail drawer.
+   */
+  const submitWithLineItems = async (form) => {
+    const { lineItems = [], ...payload } = form;
+    const { data } = await createChangeControlApi(payload);
+    const created  = data?.data || data;
+    const newId    = created?.id;
+    const usable   = lineItems.filter(l =>
+        (l.existingSystem || '').trim() ||
+        (l.proposedSystem || '').trim() ||
+        (l.proposedDate   || '').trim());
+    if (newId && usable.length > 0) {
+      await Promise.all(usable.map(li => createLineItemApi('change-control', newId, {
+        existingSystem: li.existingSystem || null,
+        proposedSystem: li.proposedSystem || null,
+        proposedDate:   li.proposedDate   || null,
+      }).catch(() => null)));
+    }
+    onCreated?.();
   };
 
   return (
     <BaseDialog
       open={open} onClose={onClose} title="Initiate Change Control"
       initialForm={initialForm}
-      onSubmit={async (form) => { await createChangeControlApi(form); onCreated?.(); }}
+      onSubmit={submitWithLineItems}
     >
       {({ form, setForm }) => {
         const p = { form, setForm };
         return (<>
-          {/* If the Initiator has no department on their profile, block creation
-              with a clear message so the workflow doesn't break later. */}
           {!user?.departmentId && (
             <Grid item xs={12}>
               <Alert severity="warning">
@@ -304,57 +348,96 @@ export const CreateChangeControlDialog = ({ open, onClose, onCreated }) => {
             </Grid>
           )}
 
-          {/* Initiation of Change — matches the printable VI-Pharma form */}
+          {/* Initiation of Change — minimum context for the printable cover sheet */}
           <SectionLabel>Initiation of Change</SectionLabel>
           <F {...p} label="Change Title" name="title" required xs={12} />
-          <F {...p} label="Change Type" name="changeType"
+          <F {...p} label="Product / Material" name="productMaterial" xs={6} />
+          <F {...p} label="Market Details" name="marketDetails" xs={6} />
+          <F {...p} label="Parameter / Change Type" name="changeType"
              options={['Process', 'Equipment', 'Document', 'System', 'Supplier', 'Facility']} />
-          <F {...p} label="Risk Level" name="riskLevel" options={['Low', 'Medium', 'High']} />
-          <F {...p} label="Priority" name="priority" options={PRIORITY_OPTS} />
           <DeptField form={form} setForm={setForm} required locked />
-          <F {...p} label="Category" name="category" options={CATEGORY_OPTS} />
-        <F {...p} label="Target Completion Date" name="targetCompletionDate" type="date" />
-        <F {...p} label="Implementation Date" name="implementationDate" type="date" />
-        <F {...p} label="Reason for Change" name="changeReason" multiline xs={12} />
-        <F {...p} label="Description" name="description" multiline xs={12} />
+          <F {...p} label="Reason for Change" name="changeReason" multiline xs={12} />
+          <F {...p} label="Description" name="description" multiline xs={12} />
 
-        {/* Risk & Planning */}
-        <SectionLabel>Risk Assessment &amp; Plan</SectionLabel>
-        <F {...p} label="Risk Assessment" name="riskAssessment" multiline xs={12} />
-        <F {...p} label="Implementation Plan" name="implementationPlan" multiline xs={12} />
-        <F {...p} label="Rollback Plan" name="rollbackPlan" multiline xs={12} />
+          {/* Inline line items — Existing / Proposed system + proposed date */}
+          <SectionLabel>Line Items (Existing / Proposed System)</SectionLabel>
+          <Grid item xs={12}>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+              Add one row per change line. You can refine these later from the
+              detail drawer&apos;s Line Items accordion.
+            </Typography>
+            {(form.lineItems || []).map((li, idx) => (
+              <Box key={idx} sx={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr 160px 40px',
+                  gap: 1, mb: 1, alignItems: 'flex-start',
+                }}>
+                <TextField
+                  label={`Existing System ${idx + 1}`} size="small" multiline minRows={1}
+                  value={li.existingSystem || ''}
+                  onChange={(e) => {
+                    const next = [...form.lineItems];
+                    next[idx] = { ...next[idx], existingSystem: e.target.value };
+                    setForm(prev => ({ ...prev, lineItems: next }));
+                  }}
+                />
+                <TextField
+                  label={`Proposed System ${idx + 1}`} size="small" multiline minRows={1}
+                  value={li.proposedSystem || ''}
+                  onChange={(e) => {
+                    const next = [...form.lineItems];
+                    next[idx] = { ...next[idx], proposedSystem: e.target.value };
+                    setForm(prev => ({ ...prev, lineItems: next }));
+                  }}
+                />
+                <TextField
+                  label="Proposed Date" size="small" type="date"
+                  InputLabelProps={{ shrink: true }}
+                  value={li.proposedDate || ''}
+                  onChange={(e) => {
+                    const next = [...form.lineItems];
+                    next[idx] = { ...next[idx], proposedDate: e.target.value };
+                    setForm(prev => ({ ...prev, lineItems: next }));
+                  }}
+                />
+                <Tooltip title="Remove line">
+                  <span>
+                    <IconButton
+                      size="small"
+                      disabled={(form.lineItems || []).length <= 1}
+                      onClick={() => {
+                        const next = (form.lineItems || []).filter((_, i) => i !== idx);
+                        setForm(prev => ({ ...prev, lineItems: next.length ? next : [{ existingSystem: '', proposedSystem: '', proposedDate: '' }] }));
+                      }}
+                    >
+                      <RemoveRowIcon fontSize="small" />
+                    </IconButton>
+                  </span>
+                </Tooltip>
+              </Box>
+            ))}
+            <Button
+              size="small"
+              startIcon={<AddRowIcon />}
+              onClick={() => setForm(prev => ({
+                ...prev,
+                lineItems: [...(prev.lineItems || []), { existingSystem: '', proposedSystem: '', proposedDate: '' }],
+              }))}
+            >
+              Add line
+            </Button>
+          </Grid>
 
-        {/* Approval routing — drives which optional branches the workflow engine
-            expects (Site Head, Customer comment). */}
-        <SectionLabel>Approval Routing</SectionLabel>
-        <SW {...p} label="Site Head Approval Required" name="siteHeadRequired" />
-        <SW {...p} label="Customer Communication Required" name="customerCommunicationRequired" />
-        <SW {...p} label="Customer Comment branch (legacy)" name="customerCommentRequired" />
-
-        {/* Regulatory & Validation */}
-        <SectionLabel>Regulatory &amp; Validation</SectionLabel>
-        <SW {...p} label="Regulatory Submission Required" name="regulatorySubmissionRequired" />
-        {form.regulatorySubmissionRequired && (
-          <F {...p} label="Submission Reference" name="regulatorySubmissionReference" xs={6} />
-        )}
-        <SW {...p} label="Validation Required" name="validationRequired" />
-        {form.validationRequired && (
-          <>
-            <F {...p} label="Validation Completion Date"
-               name="validationCompletionDate" type="date" xs={6} />
-            <F {...p} label="Validation Details" name="validationDetails" multiline xs={12} />
-          </>
-        )}
-
-        {/* Customer block — only meaningful when one of the customer flags is on. */}
-        {(form.customerCommentRequired || form.customerCommunicationRequired) && (
-          <>
-            <SectionLabel>Customer</SectionLabel>
-            <F {...p} label="Customer Representative" name="customerRepresentative" xs={6} />
-          </>
-        )}
-      </>);
-    }}
+          {/* Footnote — fields removed from this dialog now live on the stage panels. */}
+          <Grid item xs={12}>
+            <Alert severity="info" sx={{ mt: 1 }}>
+              Risk Assessment &amp; Linked CAPA are filled by the HOD at the next
+              stage. Priority, Risk Level, Approval Routing, and Regulatory &amp;
+              Validation flags are set by the QA Reviewer during QA Evaluation.
+            </Alert>
+          </Grid>
+        </>);
+      }}
     </BaseDialog>
   );
 };

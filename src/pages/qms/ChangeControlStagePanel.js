@@ -43,8 +43,8 @@ const STAGE_DESCRIPTORS = {
   PENDING_HOD: {
     title: 'HOD Review',
     actor: 'Department Head of Department',
-    helper: 'Review the proposed change. Capture the risk assessment narrative, then approve or send back.',
-    fields: ['riskAssessment'],
+    helper: 'Review the proposed change. Capture the risk assessment narrative and link any related CAPA, then approve or send back.',
+    fields: ['riskAssessment', 'linkedCapaNumber'],
     primary: 'approve',
     primaryLabel: 'Approve & forward to QA Review',
   },
@@ -52,8 +52,14 @@ const STAGE_DESCRIPTORS = {
     title: 'QA Evaluation',
     actor: 'QA Reviewer',
     helper:
-      'Evaluate the change. Decide if customer communication is needed and route the record to the relevant departments for comment. Use the Department-Wise Comments accordion below to request from each dept.',
-    fields: ['riskAssessment', 'customerCommunicationRequired', 'customerRepresentative'],
+      'Set Priority + Risk Level, choose the approval routing branches and the regulatory / validation flags, then route the record to the relevant departments via the Department-Wise Comments accordion below.',
+    fields: [
+      'priority', 'riskLevel',
+      'siteHeadRequired', 'customerCommunicationRequired',
+      'customerCommentRequired', 'customerRepresentative',
+      'regulatorySubmissionRequired', 'regulatorySubmissionReference',
+      'validationRequired', 'validationCompletionDate', 'validationDetails',
+    ],
     primary: 'approve',
     primaryLabel: 'Approve & forward to Dept Comments',
   },
@@ -135,6 +141,82 @@ const FieldEditor = ({ name, form, setForm, xs = 12 }) => {
                      inputProps={{ autoComplete: 'off' }} />
         </Grid>
       );
+    case 'linkedCapaNumber':
+      return (
+        <Grid item xs={6}>
+          <TextField label="Linked CAPA #" fullWidth value={v}
+                     onChange={(e) => set(e.target.value)}
+                     placeholder="e.g. CAPA-202504-0007 (optional)"
+                     helperText="If a CAPA already addresses this change, link it here."
+                     inputProps={{ autoComplete: 'off' }} />
+        </Grid>
+      );
+    case 'priority':
+      return (
+        <Grid item xs={6}>
+          <TextField label="Priority" select required fullWidth value={v}
+                     onChange={(e) => set(e.target.value)}>
+            {['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'].map((c) => (
+              <MenuItem key={c} value={c}>{c}</MenuItem>
+            ))}
+          </TextField>
+        </Grid>
+      );
+    case 'riskLevel':
+      return (
+        <Grid item xs={6}>
+          <TextField label="Risk Level" select required fullWidth value={v}
+                     onChange={(e) => set(e.target.value)}>
+            {['Low', 'Medium', 'High'].map((c) => (
+              <MenuItem key={c} value={c}>{c}</MenuItem>
+            ))}
+          </TextField>
+        </Grid>
+      );
+    case 'siteHeadRequired':
+      return (
+        <Grid item xs={6}>
+          <FormControlLabel
+            control={<Switch checked={!!form[name]} onChange={(e) => set(e.target.checked)} />}
+            label="Site Head Approval Required"
+          />
+        </Grid>
+      );
+    case 'customerCommentRequired':
+      return (
+        <Grid item xs={6}>
+          <FormControlLabel
+            control={<Switch checked={!!form[name]} onChange={(e) => set(e.target.checked)} />}
+            label="Customer Comment Branch (legacy)"
+          />
+        </Grid>
+      );
+    case 'validationRequired':
+      return (
+        <Grid item xs={6}>
+          <FormControlLabel
+            control={<Switch checked={!!form[name]} onChange={(e) => set(e.target.checked)} />}
+            label="Validation Required"
+          />
+        </Grid>
+      );
+    case 'validationCompletionDate':
+      return form.validationRequired ? (
+        <Grid item xs={6}>
+          <TextField label="Validation Completion Date" type="date" fullWidth value={v}
+                     onChange={(e) => set(e.target.value)}
+                     InputLabelProps={{ shrink: true }}
+                     inputProps={{ autoComplete: 'off' }} />
+        </Grid>
+      ) : null;
+    case 'validationDetails':
+      return form.validationRequired ? (
+        <Grid item xs={12}>
+          <TextField label="Validation Details" multiline rows={2} fullWidth value={v}
+                     onChange={(e) => set(e.target.value)}
+                     inputProps={{ autoComplete: 'off' }} />
+        </Grid>
+      ) : null;
     case 'category':
       return (
         <Grid item xs={6}>
@@ -183,14 +265,14 @@ const FieldEditor = ({ name, form, setForm, xs = 12 }) => {
         </Grid>
       );
     case 'regulatorySubmissionReference':
-      return (
+      return form.regulatorySubmissionRequired ? (
         <Grid item xs={6}>
           <TextField label="Submission Reference / Dossier" fullWidth value={v}
                      onChange={(e) => set(e.target.value)}
                      placeholder="Dossier number, country, etc."
                      inputProps={{ autoComplete: 'off' }} />
         </Grid>
-      );
+      ) : null;
     case 'comments':
       return (
         <Grid item xs={12}>
@@ -276,12 +358,14 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
   // Reset the form whenever the record changes (or its status flips).
   useEffect(() => {
     if (!record || !desc) { setForm({}); setComment(''); return; }
+    const BOOL_FIELDS = new Set([
+      'verificationDocumentsReissue', 'customerCommunicationRequired',
+      'regulatorySubmissionRequired', 'siteHeadRequired',
+      'customerCommentRequired', 'validationRequired',
+    ]);
     const fresh = {};
     desc.fields.forEach((f) => {
-      fresh[f] = record[f] ?? (f === 'verificationDocumentsReissue'
-                                 || f === 'customerCommunicationRequired'
-                                 || f === 'regulatorySubmissionRequired'
-                               ? false : '');
+      fresh[f] = record[f] ?? (BOOL_FIELDS.has(f) ? false : '');
     });
     setForm(fresh);
     setComment('');

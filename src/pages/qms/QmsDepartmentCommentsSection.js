@@ -127,6 +127,19 @@ const QmsDepartmentCommentsSection = ({ commonSlug, recordId, currentUser }) => 
         </Button>
       </Box>
 
+      {/* Plain-English explainer — testers were confusing this section's
+          per-department feedback with the stage panel's audit-trail comment.
+          Keep the language explicit so the two are unmistakable. */}
+      <Alert severity="info" icon={false} sx={{ mb: 1, py: 0.5 }}>
+        <Typography variant="caption" sx={{ display: 'block' }}>
+          <strong>This section captures each department&apos;s feedback on the change.</strong>
+          {' '}Use <em>Request comment</em> to add a department, then that department&apos;s
+          HOD writes their response in the row below. The
+          <em> &ldquo;Comment for audit trail&rdquo;</em> field on the stage panel above
+          is separate — it&apos;s the audit reason for forwarding/rejecting the record itself.
+        </Typography>
+      </Alert>
+
       {error && <Alert severity="error" sx={{ mb: 1 }}>{error}</Alert>}
 
       {loading && rows.length === 0 ? (
@@ -200,13 +213,22 @@ const QmsDepartmentCommentsSection = ({ commonSlug, recordId, currentUser }) => 
       <Dialog open={!!fillRow} onClose={() => setFillRow(null)} maxWidth="sm" fullWidth
               PaperProps={{ component: 'form', autoComplete: 'off',
                             onSubmit: (e) => { e.preventDefault(); handleFill(); } }}>
-        <DialogTitle>{fillRow?.departmentName} comment</DialogTitle>
+        <DialogTitle>{fillRow?.departmentName} — department feedback</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
           {fillError && <Alert severity="error" sx={{ mb: 2 }}>{fillError}</Alert>}
-          <TextField label="Comment" required multiline rows={4} fullWidth
-                     value={fillText} onChange={(e) => setFillText(e.target.value)}
-                     placeholder="Department's response to the change request…"
-                     inputProps={{ autoComplete: 'off' }} />
+          <Alert severity="info" sx={{ mb: 2 }}>
+            Write your <strong>department&apos;s feedback</strong> on this change
+            below. This is captured against your department on the printed CC
+            cover sheet and the audit trail records it under your name + timestamp
+            automatically — you don&apos;t need a separate audit comment here.
+          </Alert>
+          <TextField
+            label="Department's feedback / response"
+            required multiline rows={5} fullWidth
+            value={fillText} onChange={(e) => setFillText(e.target.value)}
+            placeholder={`E.g. "Concur with the proposed change. Recommend updating SOP-123 before go-live."`}
+            helperText="Plain text — what your department thinks about the proposed change."
+            inputProps={{ autoComplete: 'off' }} />
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button onClick={() => setFillRow(null)} disabled={fillSaving}>Cancel</Button>
