@@ -32,6 +32,7 @@ import WorkflowStageStepper from './WorkflowStageStepper';
 import ChangeControlStagePanel from './ChangeControlStagePanel';
 import MarketComplaintStagePanel from './MarketComplaintStagePanel';
 import DeviationStagePanel from './DeviationStagePanel';
+import IncidentStagePanel from './IncidentStagePanel';
 import QmsLineItemsSection from './QmsLineItemsSection';
 import QmsDepartmentCommentsSection from './QmsDepartmentCommentsSection';
 import TargetDateExtensionPanel from './TargetDateExtensionPanel';
@@ -438,6 +439,13 @@ const RecordDetailDrawer = ({ open, onClose, recordId, moduleKey, onUpdated }) =
 
               {moduleKey === 'deviation' && (
                 <DeviationStagePanel record={record} onUpdated={async () => {
+                  await fetchRecord();
+                  onUpdated?.();
+                }} />
+              )}
+
+              {moduleKey === 'incident' && (
+                <IncidentStagePanel record={record} onUpdated={async () => {
                   await fetchRecord();
                   onUpdated?.();
                 }} />

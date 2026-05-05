@@ -94,6 +94,16 @@ export const transitionDeviationApi = (id, data) =>
 export const getIncidentsApi = (params) =>
   apiClient.get('/api/v1/qms/incidents', { params });
 
+/**
+ * Cross-module handoff: spawn a Deviation from this Incident.
+ * Only valid on General Incidents flagged deviationRequired = true and
+ * currently at PENDING_QA_REVIEW. Returns the updated Incident with
+ * spawnedDeviationId / spawnedDeviationNumber populated; the Incident's
+ * status flips to DEVIATION_SPAWNED.
+ */
+export const spawnDeviationFromIncidentApi = (id, comment) =>
+  apiClient.post(`/api/v1/qms/incidents/${id}/spawn-deviation`, null, { params: { comment } });
+
 export const getIncidentByIdApi = (id) =>
   apiClient.get(`/api/v1/qms/incidents/${id}`);
 

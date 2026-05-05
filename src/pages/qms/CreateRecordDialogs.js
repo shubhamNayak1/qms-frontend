@@ -343,36 +343,83 @@ export const CreateDeviationDialog = ({ open, onClose, onCreated }) => {
 };
 
 // ── Incident ──────────────────────────────────────────────────────────────────
-export const CreateIncidentDialog = ({ open, onClose, onCreated }) => (
-  <BaseDialog
-    open={open} onClose={onClose} title="Report Incident"
-    initialForm={{ title: '', incidentType: 'Quality', incidentSubType: 'GENERAL', severity: 'Minor', priority: 'MEDIUM', departmentId: null, department: '', injuryInvolved: false, retestingRequired: false, deviationRequired: false }}
-    onSubmit={async (form) => { await createIncidentApi(form); onCreated?.(); }}
-  >
-    {({ form, setForm }) => {
-      const p = { form, setForm };
-      return (<>
-        <SectionLabel>Basic Info</SectionLabel>
-        <F {...p} label="Title" name="title" required xs={12} />
-        <F {...p} label="Incident Type" name="incidentType" options={['Safety', 'Quality', 'Environmental', 'Equipment', 'Personnel']} />
-        <F {...p} label="Sub-Type" name="incidentSubType" options={['LABORATORY', 'GENERAL']} />
-        <F {...p} label="Severity" name="severity" options={['Minor', 'Major', 'Critical']} />
-        <F {...p} label="Priority" name="priority" options={PRIORITY_OPTS} />
-        <DeptField form={form} setForm={setForm} required />
-        <F {...p} label="Category" name="category" options={CATEGORY_OPTS} />
-        <F {...p} label="Location" name="location" required />
-        <F {...p} label="Occurrence Date" name="occurrenceDate" type="date" />
-        <F {...p} label="Reported By" name="reportedBy" />
-        <SectionLabel>Details</SectionLabel>
-        <F {...p} label="Immediate Action Taken" name="immediateAction" multiline xs={12} />
-        <SW {...p} label="Injury Involved" name="injuryInvolved" />
-        <SW {...p} label="Retesting Required (Lab)" name="retestingRequired" />
-        <SW {...p} label="Deviation Required" name="deviationRequired" />
-        <F {...p} label="Description" name="description" multiline xs={12} />
-      </>);
-    }}
-  </BaseDialog>
-);
+//
+// Per Kedar-sir spec, the sub-type chosen here drives one of FOUR end-to-end
+// paths through the workflow graph. We capture the bare minimum at create
+// time — the HOD's branching flags (Retesting Required / Deviation Required)
+// and the QA Reviewer's Site Head Required flag are set on the stage panels
+// where they're actually decided. A footnote explains the implications.
+export const CreateIncidentDialog = ({ open, onClose, onCreated }) => {
+  const { user } = useAuth();
+  const initialForm = {
+    title: '',
+    incidentType: 'Quality',
+    incidentSubType: 'GENERAL',
+    severity: 'Minor',
+    priority: 'MEDIUM',
+    departmentId: user?.departmentId ?? null,
+    department:   user?.departmentName || user?.department || '',
+    location: '',
+    occurrenceDate: '',
+    reportedBy: '',
+    immediateAction: '',
+    description: '',
+    injuryInvolved: false,
+  };
+
+  return (
+    <BaseDialog
+      open={open} onClose={onClose} title="Report Incident"
+      initialForm={initialForm}
+      onSubmit={async (form) => { await createIncidentApi(form); onCreated?.(); }}
+    >
+      {({ form, setForm }) => {
+        const p = { form, setForm };
+        return (<>
+          {!user?.departmentId && (
+            <Grid item xs={12}>
+              <Alert severity="warning">
+                Your profile has no department assigned. Ask an admin to set
+                your department on the Users page before raising an Incident.
+              </Alert>
+            </Grid>
+          )}
+
+          <SectionLabel>Basic Info</SectionLabel>
+          <F {...p} label="Title" name="title" required xs={12} />
+          <F {...p} label="Sub-Type" name="incidentSubType" options={['LABORATORY', 'GENERAL']} />
+          <F {...p} label="Incident Type" name="incidentType"
+             options={['Safety', 'Quality', 'Environmental', 'Equipment', 'Personnel']} />
+          <F {...p} label="Severity" name="severity" options={['Minor', 'Major', 'Critical']} />
+          <F {...p} label="Priority" name="priority" options={PRIORITY_OPTS} />
+          <DeptField form={form} setForm={setForm} required locked />
+          <F {...p} label="Location" name="location" required />
+          <F {...p} label="Occurrence Date" name="occurrenceDate" type="date" />
+          <F {...p} label="Reported By" name="reportedBy" />
+          <SW {...p} label="Injury Involved" name="injuryInvolved" />
+
+          <SectionLabel>Details</SectionLabel>
+          <F {...p} label="Immediate Action Taken" name="immediateAction" multiline xs={12} />
+          <F {...p} label="Description" name="description" multiline xs={12} />
+
+          <Grid item xs={12}>
+            <Alert severity="info" sx={{ mt: 1 }}>
+              <strong>Sub-Type drives the workflow:</strong>
+              {' '}<em>LABORATORY</em> routes through QA → (optional Site Head) → Head QA →
+              Attachments → Verification → Closed; the HOD picks Retesting Required
+              at HOD Assessment.{' '}<em>GENERAL</em> goes through QA → Dept Comments → QA →
+              (optional Site Head) → Head QA → Attachments → Verification → Closed,
+              unless the HOD ticks Deviation Required — in which case the Incident
+              terminates after QA confirmation and a fresh Deviation is spawned.
+              {' '}<strong>Risk Assessment, CAPA flag/#, and Abnormality narrative</strong>
+              {' '}are filled at HOD Assessment / Assessment by QA.
+            </Alert>
+          </Grid>
+        </>);
+      }}
+    </BaseDialog>
+  );
+};
 
 // ── Change Control ────────────────────────────────────────────────────────────
 //
