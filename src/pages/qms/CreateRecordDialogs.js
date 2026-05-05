@@ -11,7 +11,7 @@ import {
 } from '@mui/material';
 import {
   createCapaApi, createDeviationApi, createIncidentApi,
-  createComplaintApi, createChangeControlApi,
+  createComplaintApi, createChangeControlApi, getIncidentsApi,
 } from '../../api/qmsApi';
 import { createLineItemApi } from '../../api/qmsCommonApi';
 import { listDepartmentsApi } from '../../api/orgApi';
@@ -209,34 +209,138 @@ export const CreateCapaDialog = ({ open, onClose, onCreated }) => (
 );
 
 // ── Deviation ─────────────────────────────────────────────────────────────────
-export const CreateDeviationDialog = ({ open, onClose, onCreated }) => (
-  <BaseDialog
-    open={open} onClose={onClose} title="Report Deviation"
-    initialForm={{ title: '', deviationType: 'Unplanned', priority: 'MEDIUM', departmentId: null, department: '', capaRequired: false, regulatoryReportable: false }}
-    onSubmit={async (form) => { await createDeviationApi(form); onCreated?.(); }}
-  >
-    {({ form, setForm }) => {
-      const p = { form, setForm };
-      return (<>
-        <SectionLabel>Basic Info</SectionLabel>
-        <F {...p} label="Title" name="title" required xs={12} />
-        <F {...p} label="Deviation Type" name="deviationType" options={['Planned', 'Unplanned', 'Temporary']} />
-        <F {...p} label="Priority" name="priority" options={PRIORITY_OPTS} />
-        <DeptField form={form} setForm={setForm} required />
-        <F {...p} label="Category" name="category" options={CATEGORY_OPTS} />
-        <F {...p} label="Product / Batch" name="productBatch" />
-        <F {...p} label="Process Area" name="processArea" />
-        <F {...p} label="Due Date" name="dueDate" type="date" />
-        <SectionLabel>Assessment</SectionLabel>
-        <F {...p} label="Risk Assessment" name="riskAssessment" multiline xs={12} />
-        <F {...p} label="Impact Assessment" name="impactAssessment" multiline xs={12} />
-        <SW {...p} label="CAPA Required" name="capaRequired" />
-        <SW {...p} label="Regulatory Reportable" name="regulatoryReportable" />
-        <F {...p} label="Description" name="description" multiline xs={12} />
-      </>);
-    }}
-  </BaseDialog>
-);
+//
+// Per Kedar-sir spec, every Deviation must originate from an existing
+// Incident where the Incident HOD ticked "deviation_required = true" and
+// QA confirmed it during evaluation. We surface a "Parent Incident" picker
+// at the top of the dialog and pre-fill product/batch/process-area from
+// the chosen Incident so the Initiator doesn't retype context.
+//
+// Fields moved later in the lifecycle (filled via the stage panels):
+//   • Risk / Impact Assessment, CAPA Required, CAPA #     → PENDING_HOD
+//   • Site Head Required / Customer Comment Required      → 2nd PENDING_QA_REVIEW
+//   • Investigation Summary                                → PENDING_VERIFICATION
+const useDeviationEligibleIncidents = () => {
+  const [list, setList] = useState([]);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    setLoading(true);
+    // We pull all open Incidents and filter client-side by deviationRequired
+    // — the search endpoint doesn't expose a flag-only filter today.
+    getIncidentsApi({ size: 200, status: 'PENDING_QA_REVIEW' })
+      .then(({ data }) => {
+        const rows = (data?.data?.content || data?.data || []);
+        setList(rows.filter(r => r?.deviationRequired === true));
+      })
+      .catch(() => setList([]))
+      .finally(() => setLoading(false));
+  }, []);
+  return { list, loading };
+};
+
+const ParentIncidentPicker = ({ form, setForm }) => {
+  const { list, loading } = useDeviationEligibleIncidents();
+  return (
+    <Grid item xs={12}>
+      <TextField
+        label="Parent Incident" select required fullWidth size="small"
+        value={form.parentIncidentId || ''}
+        onChange={(e) => {
+          const id = e.target.value;
+          const matched = list.find(i => String(i.id) === String(id));
+          setForm(prev => ({
+            ...prev,
+            parentIncidentId: id || null,
+            // Pre-fill from the chosen incident so the Initiator doesn't retype.
+            productBatch: matched?.productBatch || matched?.batchNumber || prev.productBatch,
+            processArea: matched?.processArea || matched?.location       || prev.processArea,
+          }));
+        }}
+        helperText={loading
+          ? 'Loading eligible Incidents…'
+          : list.length === 0
+            ? 'No Incidents are flagged as Deviation Required + at PENDING_QA_REVIEW. Ask the Incident QA Reviewer to confirm one first.'
+            : 'Pick the Incident this Deviation is being raised against.'}
+      >
+        {loading && <MenuItem value=""><em>Loading…</em></MenuItem>}
+        {list.map(i => (
+          <MenuItem key={i.id} value={i.id}>
+            {i.recordNumber} — {i.title}
+          </MenuItem>
+        ))}
+      </TextField>
+    </Grid>
+  );
+};
+
+export const CreateDeviationDialog = ({ open, onClose, onCreated }) => {
+  const { user } = useAuth();
+  const initialForm = {
+    title: '',
+    parentIncidentId: null,
+    deviationType: 'Unplanned',
+    priority: 'MEDIUM',
+    departmentId: user?.departmentId ?? null,
+    department:   user?.departmentName || user?.department || '',
+    productBatch: '',
+    processArea: '',
+    description: '',
+    regulatoryReportable: false,
+  };
+
+  return (
+    <BaseDialog
+      open={open} onClose={onClose} title="Report Deviation"
+      initialForm={initialForm}
+      onSubmit={async (form) => {
+        if (!form.parentIncidentId) {
+          throw { response: { data: { message: 'Parent Incident is required — every Deviation must descend from an Incident.' } } };
+        }
+        await createDeviationApi(form);
+        onCreated?.();
+      }}
+    >
+      {({ form, setForm }) => {
+        const p = { form, setForm };
+        return (<>
+          {!user?.departmentId && (
+            <Grid item xs={12}>
+              <Alert severity="warning">
+                Your profile has no department assigned. Ask an admin to set
+                your department on the Users page before raising a Deviation.
+              </Alert>
+            </Grid>
+          )}
+
+          <SectionLabel>Origin</SectionLabel>
+          <ParentIncidentPicker form={form} setForm={setForm} />
+
+          <SectionLabel>Basic Info</SectionLabel>
+          <F {...p} label="Title" name="title" required xs={12} />
+          <F {...p} label="Deviation Type" name="deviationType"
+             options={['Planned', 'Unplanned', 'Temporary']} />
+          <DeptField form={form} setForm={setForm} required locked />
+          <F {...p} label="Product / Batch" name="productBatch" />
+          <F {...p} label="Process Area" name="processArea" />
+          <F {...p} label="Due Date" name="dueDate" type="date" />
+          <SW {...p} label="Regulatory Reportable" name="regulatoryReportable" />
+          <F {...p} label="Description" name="description" multiline xs={12} />
+
+          <Grid item xs={12}>
+            <Alert severity="info" sx={{ mt: 1 }}>
+              <strong>Risk / Impact Assessment</strong> and <strong>CAPA Required + #</strong>
+              {' '}are filled by the HOD at <em>HOD Assessment</em>. Priority,
+              Site Head Required and Customer Comment Required are set by
+              the QA Reviewer during the 2nd QA Evaluation.
+              Closure must happen within <strong>30 days</strong> — beyond that, an
+              approved target-date extension is required.
+            </Alert>
+          </Grid>
+        </>);
+      }}
+    </BaseDialog>
+  );
+};
 
 // ── Incident ──────────────────────────────────────────────────────────────────
 export const CreateIncidentDialog = ({ open, onClose, onCreated }) => (
