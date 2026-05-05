@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Paper, Typography, Grid, TextField, MenuItem, Stack, Button,
-  Alert, FormControlLabel, Switch, Tooltip, Chip,
+  Alert, FormControlLabel, Switch, Tooltip, Chip, Box,
 } from '@mui/material';
 import {
   Save as SaveIcon, ArrowForward as ForwardIcon, Cancel as RejectIcon,
@@ -13,6 +13,8 @@ import {
   spawnDeviationFromIncidentApi,
 } from '../../api/qmsApi';
 import { listDeptCommentsApi } from '../../api/qmsCommonApi';
+import { useAuth } from '../../store/AuthContext';
+import QmsDepartmentAttachmentsSection from './QmsDepartmentAttachmentsSection';
 
 /**
  * IncidentStagePanel — stage-aware editable form for Incident.
@@ -255,6 +257,7 @@ const FieldEditor = ({ name, form, setForm, record }) => {
 };
 
 const IncidentStagePanel = ({ record, onUpdated }) => {
+  const { user: currentUser } = useAuth();
   const status = record?.status;
   const desc   = STAGE_DESCRIPTORS[status];
 
@@ -449,6 +452,17 @@ const IncidentStagePanel = ({ record, onUpdated }) => {
             )}
           </Stack>
         </Alert>
+      )}
+
+      {/* PENDING_ATTACHMENTS — dept upload + Head QA approval inline. */}
+      {status === 'PENDING_ATTACHMENTS' && (
+        <Box sx={{ mb: 2 }}>
+          <QmsDepartmentAttachmentsSection
+            commonSlug="incident"
+            recordId={record.id}
+            currentUser={currentUser}
+          />
+        </Box>
       )}
 
       {desc.fields.length > 0 && (

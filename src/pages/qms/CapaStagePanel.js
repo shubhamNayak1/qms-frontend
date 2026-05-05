@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Paper, Typography, Grid, TextField, MenuItem, Stack, Button,
-  Alert, FormControlLabel, Switch, Tooltip, Chip,
+  Alert, FormControlLabel, Switch, Tooltip, Chip, Box,
 } from '@mui/material';
 import {
   Save as SaveIcon, ArrowForward as ForwardIcon, Cancel as RejectIcon,
@@ -11,7 +11,9 @@ import {
   closeCapaApi, transitionCapaApi,
 } from '../../api/qmsApi';
 import { listDeptCommentsApi } from '../../api/qmsCommonApi';
+import { useAuth } from '../../store/AuthContext';
 import QmsCapaAssessmentsSection from './QmsCapaAssessmentsSection';
+import QmsDepartmentAttachmentsSection from './QmsDepartmentAttachmentsSection';
 
 /**
  * CapaStagePanel — stage-aware editable form for CAPA.
@@ -224,6 +226,7 @@ const FieldEditor = ({ name, form, setForm }) => {
 };
 
 const CapaStagePanel = ({ record, onUpdated }) => {
+  const { user: currentUser } = useAuth();
   const status = record?.status;
   const desc   = STAGE_DESCRIPTORS[status];
 
@@ -422,6 +425,19 @@ const CapaStagePanel = ({ record, onUpdated }) => {
             )}
           </Stack>
         </Alert>
+      )}
+
+      {/* PENDING_ATTACHMENTS stage — render the dept-attachment accordion
+          inline so QA can invite, dept can upload, and Head QA can decide
+          all in one place. */}
+      {status === 'PENDING_ATTACHMENTS' && (
+        <Box sx={{ mb: 2 }}>
+          <QmsDepartmentAttachmentsSection
+            commonSlug="capa"
+            recordId={record.id}
+            currentUser={currentUser}
+          />
+        </Box>
       )}
 
       {desc.fields.length > 0 && (

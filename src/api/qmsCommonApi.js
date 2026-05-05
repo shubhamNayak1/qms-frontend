@@ -38,6 +38,38 @@ export const requestDeptCommentApi = (recordType, recordId, departmentId) =>
 export const fillDeptCommentApi = (recordType, recordId, commentRowId, payload) =>
   apiClient.put(`${root(recordType, recordId)}/department-comments/${commentRowId}`, payload);
 
+// ── Department attachments (per-dept file upload + Head QA approval) ──
+//
+// Mirrors department-comments but for binary files. Backs the
+// PENDING_ATTACHMENTS gate on Deviation / Incident / CAPA / Change Control.
+//
+// Lifecycle of a row:
+//   PENDING  — Head QA / QA invited dept; no upload yet
+//   PENDING  — dept uploaded an attachment_ref (still awaiting Head QA decision)
+//   APPROVED — Head QA accepted (final)
+//   REJECTED — Head QA rejected; dept must re-upload
+export const listDeptAttachmentsApi = (recordType, recordId) =>
+  apiClient.get(`${root(recordType, recordId)}/department-attachments`);
+
+// Invite a dept (only departmentId is read on POST):
+export const requestDeptAttachmentApi = (recordType, recordId, departmentId) =>
+  apiClient.post(`${root(recordType, recordId)}/department-attachments`, { departmentId });
+
+// Department uploads / updates its attachment row.
+// payload: { attachmentRef, attachmentNote? } — attachmentRef is the DMS
+// document id (preferred) or any free-text reference.
+export const uploadDeptAttachmentApi = (recordType, recordId, rowId, payload) =>
+  apiClient.put(`${root(recordType, recordId)}/department-attachments/${rowId}`, payload);
+
+// Head QA decides on a row.
+// payload: { approve: boolean, comment }
+export const decideDeptAttachmentApi = (recordType, recordId, rowId, payload) =>
+  apiClient.post(`${root(recordType, recordId)}/department-attachments/${rowId}/decide`, payload);
+
+// Soft-delete a non-APPROVED row (e.g. invited the wrong dept).
+export const deleteDeptAttachmentApi = (recordType, recordId, rowId) =>
+  apiClient.delete(`${root(recordType, recordId)}/department-attachments/${rowId}`);
+
 // ── Target-date extension ──
 export const getExtensionApi = (recordType, recordId) =>
   apiClient.get(`${root(recordType, recordId)}/target-date-extension`);
