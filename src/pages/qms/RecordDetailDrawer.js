@@ -30,6 +30,7 @@ import {
 import WorkflowActionDialog from './WorkflowActionDialog';
 import WorkflowStageStepper from './WorkflowStageStepper';
 import ChangeControlStagePanel from './ChangeControlStagePanel';
+import MarketComplaintStagePanel from './MarketComplaintStagePanel';
 import QmsLineItemsSection from './QmsLineItemsSection';
 import QmsDepartmentCommentsSection from './QmsDepartmentCommentsSection';
 import TargetDateExtensionPanel from './TargetDateExtensionPanel';
@@ -422,6 +423,13 @@ const RecordDetailDrawer = ({ open, onClose, recordId, moduleKey, onUpdated }) =
                   bundles "save fields" and "transition" into one click. */}
               {moduleKey === 'changeControl' && (
                 <ChangeControlStagePanel record={record} onUpdated={async () => {
+                  await fetchRecord();
+                  onUpdated?.();
+                }} />
+              )}
+
+              {moduleKey === 'marketComplaint' && (
+                <MarketComplaintStagePanel record={record} onUpdated={async () => {
                   await fetchRecord();
                   onUpdated?.();
                 }} />

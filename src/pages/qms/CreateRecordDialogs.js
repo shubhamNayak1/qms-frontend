@@ -443,33 +443,110 @@ export const CreateChangeControlDialog = ({ open, onClose, onCreated }) => {
 };
 
 // ── Market Complaint ──────────────────────────────────────────────────────────
-export const CreateComplaintDialog = ({ open, onClose, onCreated }) => (
-  <BaseDialog
-    open={open} onClose={onClose} title="Log Market Complaint"
-    initialForm={{ title: '', priority: 'MEDIUM', complaintCategory: 'Quality', complaintSource: 'Email', departmentId: null, department: '', reportableToAuthority: false, sampleReturned: false }}
-    onSubmit={async (form) => { await createComplaintApi(form); onCreated?.(); }}
-  >
-    {({ form, setForm }) => {
-      const p = { form, setForm };
-      return (<>
-        <SectionLabel>Complaint Details</SectionLabel>
-        <F {...p} label="Complaint Title" name="title" required xs={12} />
-        <F {...p} label="Priority" name="priority" options={PRIORITY_OPTS} />
-        <F {...p} label="Category" name="complaintCategory" options={['Quality', 'Safety', 'Regulatory', 'Labeling']} />
-        <F {...p} label="Source" name="complaintSource" options={['Email', 'Phone', 'Portal', 'Regulatory']} />
-        <DeptField form={form} setForm={setForm} required />
-        <F {...p} label="Impact Category" name="category" options={CATEGORY_OPTS} />
-        <F {...p} label="Received Date" name="receivedDate" type="date" />
-        <SectionLabel>Customer & Product</SectionLabel>
-        <F {...p} label="Customer Name" name="customerName" required />
-        <F {...p} label="Customer Representative" name="customerRepresentative" />
-        <F {...p} label="Country" name="customerCountry" />
-        <F {...p} label="Product Name" name="productName" required />
-        <F {...p} label="Batch Number" name="batchNumber" />
-        <SW {...p} label="Reportable to Authority" name="reportableToAuthority" />
-        <SW {...p} label="Sample Returned" name="sampleReturned" />
-        <F {...p} label="Description" name="description" multiline xs={12} />
-      </>);
-    }}
-  </BaseDialog>
-);
+//
+// Per Kedar-sir spec (May 2026):
+//
+//  Initiation (Create dialog — this file)
+//    • Existing vs New Market Complaint mode (links to a parent MC if Existing)
+//    • Subject (Product / Packing / Transportation / Labels / Drum / Shipper /
+//      Carton / Bag), Source, Customer, Product, Reason / Description, etc.
+//
+//  Pending HOD review (stage panel)
+//    • HOD adds a review comment only — no department routing here.
+//
+//  PENDING_INVESTIGATION (QA hub — stage panel)
+//    • Impact Assessment + Investigation Findings
+//    • CAPA Required (+ CAPA #)
+//    • Optionally invites departments via the dept-comments accordion below
+//
+//  PENDING_DEPT_COMMENT (loop)
+//    • Each invited dept HOD fills their feedback. Loops back to QA.
+//
+//  PENDING_HEAD_QA + CLOSED
+//    • Head QA verifies + closes. Close is gated by the 45-day SLA on the
+//      backend; an approved target-date extension is required to close late.
+const COMPLAINT_SUBJECTS = [
+  'Product', 'Packing', 'Transportation', 'Labels',
+  'Drum', 'Shipper', 'Carton', 'Bag',
+];
+const COMPLAINT_SOURCES = [
+  'Customer', 'Vendor', 'Client', 'Retailer', 'Distributor',
+  'Email', 'Phone', 'Portal', 'Field Visit', 'Letter',
+];
+
+export const CreateComplaintDialog = ({ open, onClose, onCreated }) => {
+  const { user } = useAuth();
+  const initialForm = {
+    title: '',
+    complaintOrigin: 'NEW',
+    parentComplaintId: null,
+    complaintSubject: 'Product',
+    complaintCategory: 'Quality',
+    complaintSource: 'Customer',
+    priority: 'MEDIUM',
+    departmentId: user?.departmentId ?? null,
+    department:   user?.departmentName || user?.department || '',
+    customerName: '',
+    customerCountry: '',
+    productName: '',
+    batchNumber: '',
+    receivedDate: '',
+    reportableToAuthority: false,
+    sampleReturned: false,
+    description: '',
+  };
+
+  return (
+    <BaseDialog
+      open={open} onClose={onClose} title="Log Market Complaint"
+      initialForm={initialForm}
+      onSubmit={async (form) => { await createComplaintApi(form); onCreated?.(); }}
+    >
+      {({ form, setForm }) => {
+        const p = { form, setForm };
+        const isExisting = form.complaintOrigin === 'EXISTING';
+        return (<>
+          <SectionLabel>Complaint Type</SectionLabel>
+          <F {...p} label="Complaint Origin" name="complaintOrigin"
+             options={['NEW', 'EXISTING']} xs={6} />
+          {isExisting && (
+            <F {...p} label="Parent MC Number" name="parentComplaintId"
+               xs={6} shrinkLabel />
+          )}
+
+          <SectionLabel>Complaint Details</SectionLabel>
+          <F {...p} label="Complaint Title" name="title" required xs={12} />
+          <F {...p} label="Subject" name="complaintSubject" options={COMPLAINT_SUBJECTS} />
+          <F {...p} label="Source" name="complaintSource" options={COMPLAINT_SOURCES} />
+          <F {...p} label="Category" name="complaintCategory"
+             options={['Quality', 'Safety', 'Packaging', 'Labeling', 'Delivery', 'Service']} />
+          <DeptField form={form} setForm={setForm} required locked />
+          <F {...p} label="Received Date" name="receivedDate" type="date" />
+
+          <SectionLabel>Customer &amp; Product</SectionLabel>
+          <F {...p} label="Customer / Vendor / Client Name" name="customerName" required />
+          <F {...p} label="Country" name="customerCountry" />
+          <F {...p} label="Product Name" name="productName" />
+          <F {...p} label="Batch Number" name="batchNumber" />
+          <SW {...p} label="Reportable to Authority" name="reportableToAuthority" />
+          <SW {...p} label="Sample Returned" name="sampleReturned" />
+
+          <SectionLabel>Reason / Description</SectionLabel>
+          <F {...p} label="Detailed reason for the complaint"
+             name="description" multiline xs={12} />
+
+          <Grid item xs={12}>
+            <Alert severity="info" sx={{ mt: 1 }}>
+              Attach photos and supporting documents from the detail drawer
+              after creating. <strong>Priority is set by Head QA</strong>;
+              <strong> Investigation findings, Impact Assessment and CAPA flag</strong>
+              {' '}are filled by QA Reviewer at QA Investigation.
+              Closure must happen within <strong>45 days</strong> — beyond that,
+              an approved target-date extension is required.
+            </Alert>
+          </Grid>
+        </>);
+      }}
+    </BaseDialog>
+  );
+};
