@@ -23,7 +23,20 @@ import {
 } from '@mui/icons-material';
 
 const PRIORITY_OPTS = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
-const CATEGORY_OPTS = ['Critical', 'Major', 'Minor'];
+
+/**
+ * Tiny Error subclass that mirrors the axios error shape the BaseDialog's
+ * onSubmit handler reads ({@code err.response?.data?.message}). Lets a
+ * dialog reject submission with a friendly message without bypassing
+ * eslint's no-throw-literal rule.
+ */
+class FormValidationError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'FormValidationError';
+    this.response = { data: { message } };
+  }
+}
 
 // Fetch real departments once and cache. Keeps the form snappy across dialog opens.
 let _deptCache = null;
@@ -270,7 +283,8 @@ export const CreateCapaDialog = ({ open, onClose, onCreated }) => {
       initialForm={initialForm}
       onSubmit={async (form) => {
         if (form.capaOrigin === 'EXISTING' && !form.parentRecordId) {
-          throw { response: { data: { message: 'Pick a parent record (Incident / Deviation / CC / Market Complaint) for an Existing CAPA.' } } };
+          throw new FormValidationError(
+              'Pick a parent record (Incident / Deviation / CC / Market Complaint) for an Existing CAPA.');
         }
         await createCapaApi(form);
         onCreated?.();
@@ -450,7 +464,8 @@ export const CreateDeviationDialog = ({ open, onClose, onCreated }) => {
       initialForm={initialForm}
       onSubmit={async (form) => {
         if (!form.parentIncidentId) {
-          throw { response: { data: { message: 'Parent Incident is required — every Deviation must descend from an Incident.' } } };
+          throw new FormValidationError(
+              'Parent Incident is required — every Deviation must descend from an Incident.');
         }
         await createDeviationApi(form);
         onCreated?.();
