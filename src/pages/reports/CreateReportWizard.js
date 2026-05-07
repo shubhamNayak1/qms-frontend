@@ -19,9 +19,10 @@ const MODULES = [
   { value: 'DEVIATION',      label: 'Deviation' },
   { value: 'INCIDENT',       label: 'Incident' },
   { value: 'CHANGE_CONTROL', label: 'Change Control' },
-  { value: 'COMPLAINT',      label: 'Complaint' },
+  { value: 'COMPLAINT',      label: 'Market Complaint' },
   { value: 'LMS_ENROLLMENT', label: 'LMS Enrollment' },
   { value: 'USER',           label: 'Users' },
+  { value: 'DEPARTMENT',     label: 'Departments' },
 ];
 
 const STEPS = ['Basic Info', 'Date & Fields', 'Review & Create'];
