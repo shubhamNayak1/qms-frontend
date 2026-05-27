@@ -586,6 +586,7 @@ const RecordDetailDrawer = ({ open, onClose, recordId, moduleKey, onUpdated }) =
                         commonSlug={commonSlug}
                         recordId={recordId}
                         currentUser={currentUser}
+                        recordTargetDate={record?.targetCompletionDate}
                       />
                     </AccordionDetails>
                   </Accordion>

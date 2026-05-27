@@ -34,7 +34,7 @@ import { listDeptCommentsApi } from '../../api/qmsCommonApi';
 
 const STAGE_DESCRIPTORS = {
   PENDING_HOD: {
-    title: 'HOD Review',
+    title: 'HOD Assessment',
     actor: 'Head of Department (complainant\'s dept)',
     helper: 'Review the complaint details and attachments. Add a review comment, then approve to forward to QA Investigation.',
     fields: [],
@@ -242,6 +242,13 @@ const MarketComplaintStagePanel = ({ record, onUpdated }) => {
         case 'reject':
           await rejectComplaintApi(record.id, comment.trim());
           break;
+        case 'resend':
+          // PENDING_HOD → DRAFT (Resend to Initiator). Distinct from REJECTED.
+          await transitionComplaintApi(record.id, {
+            targetStatus: 'DRAFT',
+            comment: comment.trim(),
+          });
+          break;
         case 'transition':
           await transitionComplaintApi(record.id, {
             targetStatus: desc.secondary.target,
@@ -307,9 +314,9 @@ const MarketComplaintStagePanel = ({ record, onUpdated }) => {
       )}
 
       <TextField
-        label="Comment for audit trail" required multiline rows={2} fullWidth
+        label="Remark / Justification" required multiline rows={2} fullWidth
         value={comment} onChange={(e) => setComment(e.target.value)}
-        placeholder="Why are you forwarding / rejecting at this stage?"
+        placeholder="Recorded on the audit trail as the actor's remark for this transition."
         sx={{ mb: 1.5 }}
         inputProps={{ autoComplete: 'off' }}
       />
@@ -338,6 +345,20 @@ const MarketComplaintStagePanel = ({ record, onUpdated }) => {
           </Button>
         )}
 
+        {/* HOD-only Resend button — distinct from Reject. Record returns
+            to DRAFT so the Initiator can edit + re-submit. */}
+        {status === 'PENDING_HOD' && (
+          <Tooltip title="Send back to Initiator — record returns to DRAFT (not REJECTED)">
+            <span>
+              <Button variant="outlined" color="warning"
+                      onClick={() => submit('resend')}
+                      disabled={saving || rejecting || !comment.trim()}>
+                Resend to Initiator
+              </Button>
+            </span>
+          </Tooltip>
+        )}
+
         <Tooltip title="POST .../reject?comment=…">
           <span>
             <Button
@@ -347,7 +368,7 @@ const MarketComplaintStagePanel = ({ record, onUpdated }) => {
               onClick={() => submit('reject')}
               disabled={saving || rejecting || !comment.trim()}
             >
-              {rejecting ? 'Rejecting…' : 'Reject / Send Back'}
+              {rejecting ? 'Rejecting…' : 'Reject'}
             </Button>
           </span>
         </Tooltip>

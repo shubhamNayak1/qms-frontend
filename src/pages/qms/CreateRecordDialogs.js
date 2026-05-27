@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Dialog, DialogTitle, DialogContent, DialogActions,
   Button, Grid, TextField, MenuItem, Divider, Typography,
-  FormControlLabel, Switch, Alert,
+  FormControlLabel, Switch, Alert, Autocomplete,
 } from '@mui/material';
 import {
   createCapaApi, createDeviationApi, createIncidentApi,
@@ -16,6 +16,7 @@ import {
 } from '../../api/qmsApi';
 import { createLineItemApi } from '../../api/qmsCommonApi';
 import { listDepartmentsApi } from '../../api/orgApi';
+import { getDocumentsApi } from '../../api/dmsApi';
 import { useAuth } from '../../store/AuthContext';
 import { Box, IconButton, Tooltip } from '@mui/material';
 import {
@@ -594,173 +595,331 @@ export const CreateIncidentDialog = ({ open, onClose, onCreated }) => {
 
 // ── Change Control ────────────────────────────────────────────────────────────
 //
-// Layout (matches the May 2026 tester spec):
+// Layout per May 2026 tester feedback. Strict field order, every field
+// mandatory, save-confirm pop-up, no Description, no Proposed Date
+// (auto-stamped to today), Reason renamed to Remark/Justification at the
+// END of each line item.
 //
-//  Initiation of Change (Create dialog)
-//    • Change Title, Product / Material, Market Details
-//    • Parameter / Change Type, Department (locked from profile)
-//    • Inline Line Items (Existing System / Proposed System / Proposed Date)
+//   1. Change Control Title
+//   2. Department (locked from profile)
+//   3. Date — today's date, read-only
+//   4. Product / Material Name
+//   5. Product / Material Code
+//   6. Change Type
+//   7. Line items: Existing System | Proposed System | Remark / Justification
+//   8. Attachment (DMS document picker, optional)
 //
-// Pending HOD review (stage panel — see ChangeControlStagePanel)
-//    • Risk Assessment, Linked CAPA #
-//
-// Pending QA Review (stage panel)
-//    • Priority, Risk Level
-//    • Approval Routing (Site Head / Customer Communication / Customer Comment)
-//    • Regulatory & Validation (regulatory submission, validation)
-//    • Department-wise comments — managed via the dept accordion
+// Everything beyond Create lives on the stage panels:
+//   - HOD Assessment    → Initial Assessment (renamed from Risk Assessment)
+//   - QA Evaluation Phase 1 → Change Control Type (= Risk Level), Pre-Remark,
+//                              invite Departments
+//   - QA Evaluation Phase 2 → QA Eval Remark, Risk Assessment Req/Not, Site
+//                              Head Req, Customer Communication Req,
+//                              Regulatory Assessment Req
+const todayIso = () => new Date().toISOString().slice(0, 10);
+
 export const CreateChangeControlDialog = ({ open, onClose, onCreated }) => {
   const { user } = useAuth();
+
+  // DMS attachment picker state (lives outside the form so we can search-as-you-type)
+  const [dmsQuery, setDmsQuery]     = useState('');
+  const [dmsOptions, setDmsOptions] = useState([]);
+  const [dmsLoading, setDmsLoading] = useState(false);
+
+  // Save-confirmation dialog state
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingForm, setPendingForm] = useState(null);
+
+  // Search DMS docs only while the dialog is open + the user is typing.
+  useEffect(() => {
+    if (!open) return;
+    setDmsLoading(true);
+    const handle = setTimeout(() => {
+      getDocumentsApi({ search: dmsQuery, size: 25, status: 'EFFECTIVE' })
+        .then(({ data }) => setDmsOptions(data?.data?.content || data?.data || []))
+        .catch(() => setDmsOptions([]))
+        .finally(() => setDmsLoading(false));
+    }, 250);
+    return () => clearTimeout(handle);
+  }, [dmsQuery, open]);
+
   const initialForm = {
     title: '',
     productMaterial: '',
-    marketDetails: '',
-    changeType: 'Process',
+    productMaterialCode: '',
+    changeType: '',
     departmentId: user?.departmentId ?? null,
     department:   user?.departmentName || user?.department || '',
-    changeReason: '',
-    description: '',
     // Priority is required by the backend's QmsBaseRequest validator —
     // default to MEDIUM at create time; QA Reviewer overrides at QA_REVIEW.
     priority: 'MEDIUM',
-    // Inline line items — at least one row, more can be added.
-    lineItems: [{ existingSystem: '', proposedSystem: '', proposedDate: '' }],
+    initialAttachmentRef: '',                  // raw DMS id or free text
+    _attachmentDoc: null,                      // selected DMS document object (UI-only)
+    lineItems: [{ existingSystem: '', proposedSystem: '', justification: '' }],
+  };
+
+  /**
+   * Validate every Create-time field and every line-item field. Returns a
+   * human-readable error message on the first miss, or null when the form
+   * is complete enough to save. Per tester feedback every field is
+   * mandatory; blank line items are rejected.
+   */
+  const validateForm = (form) => {
+    if (!form.title?.trim())               return 'Change Control Title is required.';
+    if (!form.departmentId)                return 'Department is required.';
+    if (!form.productMaterial?.trim())     return 'Product / Material Name is required.';
+    if (!form.productMaterialCode?.trim()) return 'Product / Material Code is required.';
+    if (!form.changeType?.trim())          return 'Change Type is required.';
+    const rows = form.lineItems || [];
+    if (rows.length === 0) return 'At least one line item is required.';
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      if (!row.existingSystem?.trim()) return `Line item #${i + 1}: Existing System is required.`;
+      if (!row.proposedSystem?.trim()) return `Line item #${i + 1}: Proposed System is required.`;
+      if (!row.justification?.trim())  return `Line item #${i + 1}: Remark / Justification is required.`;
+    }
+    return null;
   };
 
   /**
    * After the Change Control is saved, fire-and-forget the line-item POSTs.
-   * Failures don't roll back the CC create — they surface as a soft warning
-   * the user can retry from the line-items accordion in the detail drawer.
+   * Proposed Date is stamped to today's date for every row.
    */
-  const submitWithLineItems = async (form) => {
-    const { lineItems = [], ...payload } = form;
+  const persist = async (form) => {
+    const today = todayIso();
+    const {
+      lineItems = [], _attachmentDoc, ...payload
+    } = form;
+    // Resolve DMS attachment to its id when a doc was picked.
+    if (_attachmentDoc?.id) {
+      payload.initialAttachmentRef = String(_attachmentDoc.id);
+    }
     const { data } = await createChangeControlApi(payload);
     const created  = data?.data || data;
     const newId    = created?.id;
-    const usable   = lineItems.filter(l =>
-        (l.existingSystem || '').trim() ||
-        (l.proposedSystem || '').trim() ||
-        (l.proposedDate   || '').trim());
-    if (newId && usable.length > 0) {
-      await Promise.all(usable.map(li => createLineItemApi('change-control', newId, {
-        existingSystem: li.existingSystem || null,
-        proposedSystem: li.proposedSystem || null,
-        proposedDate:   li.proposedDate   || null,
+    if (newId && lineItems.length > 0) {
+      await Promise.all(lineItems.map(li => createLineItemApi('change-control', newId, {
+        existingSystem: li.existingSystem.trim(),
+        proposedSystem: li.proposedSystem.trim(),
+        justification:  li.justification.trim(),
+        proposedDate:   today,
       }).catch(() => null)));
     }
     onCreated?.();
   };
 
+  // Two-step submit: validate → confirm pop-up → persist
+  const handleSubmitRequest = async (form) => {
+    const err = validateForm(form);
+    if (err) throw new FormValidationError(err);
+    // Stash the form; open the confirm dialog. The actual persist runs in
+    // handleConfirmYes below — at which point we close BOTH dialogs.
+    setPendingForm(form);
+    setConfirmOpen(true);
+    // Keep BaseDialog open — the confirm-pop-up sits on top of it.
+    // Throw a no-op to prevent BaseDialog from closing itself prematurely.
+    throw new FormValidationError('__pending_confirm__');
+  };
+
+  const handleConfirmYes = async () => {
+    if (!pendingForm) return;
+    try {
+      await persist(pendingForm);
+      setConfirmOpen(false);
+      setPendingForm(null);
+      onClose();
+    } catch (err) {
+      setConfirmOpen(false);
+      // surface the error in the underlying BaseDialog
+      throw err;
+    }
+  };
+
   return (
-    <BaseDialog
-      open={open} onClose={onClose} title="Initiate Change Control"
-      initialForm={initialForm}
-      onSubmit={submitWithLineItems}
-    >
-      {({ form, setForm }) => {
-        const p = { form, setForm };
-        return (<>
-          {!user?.departmentId && (
+    <>
+      <BaseDialog
+        open={open} onClose={onClose} title="Initiate Change Control"
+        initialForm={initialForm}
+        onSubmit={async (form) => {
+          try {
+            await handleSubmitRequest(form);
+          } catch (err) {
+            // Suppress the internal "__pending_confirm__" sentinel; let real
+            // validation errors bubble so BaseDialog renders them in its
+            // Alert banner.
+            if (err?.response?.data?.message === '__pending_confirm__') return;
+            throw err;
+          }
+        }}
+      >
+        {({ form, setForm }) => {
+          const p = { form, setForm };
+          return (<>
+            {!user?.departmentId && (
+              <Grid item xs={12}>
+                <Alert severity="warning">
+                  Your profile has no department assigned. Ask an admin to set
+                  your department on the Users page before raising a Change
+                  Control.
+                </Alert>
+              </Grid>
+            )}
+
+            <SectionLabel>Initiation of Change</SectionLabel>
+
+            {/* 1. Change Control Title */}
+            <F {...p} label="Change Control Title" name="title" required xs={12} />
+
+            {/* 2. Department (locked) */}
+            <DeptField form={form} setForm={setForm} required locked />
+
+            {/* 3. Date (today, locked) */}
+            <Grid item xs={6}>
+              <TextField
+                label="Date" type="date" fullWidth size="small"
+                value={todayIso()} disabled
+                InputLabelProps={{ shrink: true }}
+                helperText="Today's date — locked."
+              />
+            </Grid>
+
+            {/* 4 + 5. Product / Material Name + Code */}
+            <F {...p} label="Product / Material Name" name="productMaterial" required xs={6} />
+            <F {...p} label="Product / Material Code" name="productMaterialCode" required xs={6} />
+
+            {/* 6. Change Type */}
+            <F {...p} label="Change Type" name="changeType" required xs={6}
+               options={['', 'Process', 'Equipment', 'Document', 'System', 'Supplier', 'Facility']} />
+
+            {/* 7. Line items: Existing | Proposed | Remark/Justification */}
+            <SectionLabel>Line Items</SectionLabel>
             <Grid item xs={12}>
-              <Alert severity="warning">
-                Your profile has no department assigned. Ask an admin to set
-                your department on the Users page before raising a Change
-                Control.
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                Add one row per change line. Every field is mandatory — blank rows are rejected.
+                Proposed Date is auto-stamped to today on save.
+              </Typography>
+              {(form.lineItems || []).map((li, idx) => (
+                <Box key={idx} sx={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr 1.2fr 40px',
+                    gap: 1, mb: 1, alignItems: 'flex-start',
+                  }}>
+                  <TextField
+                    label={`Existing System ${idx + 1}`} size="small" multiline minRows={1} required
+                    value={li.existingSystem || ''}
+                    onChange={(e) => {
+                      const next = [...form.lineItems];
+                      next[idx] = { ...next[idx], existingSystem: e.target.value };
+                      setForm(prev => ({ ...prev, lineItems: next }));
+                    }}
+                  />
+                  <TextField
+                    label={`Proposed System ${idx + 1}`} size="small" multiline minRows={1} required
+                    value={li.proposedSystem || ''}
+                    onChange={(e) => {
+                      const next = [...form.lineItems];
+                      next[idx] = { ...next[idx], proposedSystem: e.target.value };
+                      setForm(prev => ({ ...prev, lineItems: next }));
+                    }}
+                  />
+                  <TextField
+                    label={`Remark / Justification ${idx + 1}`} size="small" multiline minRows={1} required
+                    value={li.justification || ''}
+                    onChange={(e) => {
+                      const next = [...form.lineItems];
+                      next[idx] = { ...next[idx], justification: e.target.value };
+                      setForm(prev => ({ ...prev, lineItems: next }));
+                    }}
+                    placeholder="Why is this line being changed?"
+                  />
+                  <Tooltip title="Remove line">
+                    <span>
+                      <IconButton
+                        size="small"
+                        disabled={(form.lineItems || []).length <= 1}
+                        onClick={() => {
+                          const next = (form.lineItems || []).filter((_, i) => i !== idx);
+                          setForm(prev => ({
+                            ...prev,
+                            lineItems: next.length ? next
+                              : [{ existingSystem: '', proposedSystem: '', justification: '' }],
+                          }));
+                        }}
+                      >
+                        <RemoveRowIcon fontSize="small" />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                </Box>
+              ))}
+              <Button
+                size="small"
+                startIcon={<AddRowIcon />}
+                onClick={() => {
+                  // Reject "Add line" while the current last row is blank
+                  // — prevents the user from piling up empty rows.
+                  const rows = form.lineItems || [];
+                  const last = rows[rows.length - 1];
+                  if (last && (!last.existingSystem?.trim() || !last.proposedSystem?.trim()
+                               || !last.justification?.trim())) {
+                    return;
+                  }
+                  setForm(prev => ({
+                    ...prev,
+                    lineItems: [...rows, { existingSystem: '', proposedSystem: '', justification: '' }],
+                  }));
+                }}
+              >
+                Add line
+              </Button>
+            </Grid>
+
+            {/* 8. Attachment (optional DMS doc picker) */}
+            <SectionLabel>Attachment (optional)</SectionLabel>
+            <Grid item xs={12}>
+              <Autocomplete
+                size="small" fullWidth
+                options={dmsOptions}
+                loading={dmsLoading}
+                value={form._attachmentDoc || null}
+                getOptionLabel={(o) => o ? `${o.docNumber} v${o.version || '?'} — ${o.title}` : ''}
+                isOptionEqualToValue={(a, b) => a?.id === b?.id}
+                onInputChange={(_, val) => setDmsQuery(val)}
+                onChange={(_, val) => setForm(prev => ({ ...prev, _attachmentDoc: val }))}
+                renderInput={(params) => (
+                  <TextField {...params} label="DMS Document" placeholder="Search by number or title…"
+                             helperText="Pick from DMS — title and version resolve automatically. Leave blank if no attachment." />
+                )}
+              />
+            </Grid>
+
+            <Grid item xs={12}>
+              <Alert severity="info" sx={{ mt: 1 }}>
+                After save you&apos;ll receive a CC number. <strong>Initial Assessment</strong> is
+                filled by the HOD at <em>HOD Assessment</em>. <strong>Change Control Type</strong> +
+                <strong> Pre-Remark</strong> and the department fan-out are set by the QA Reviewer
+                during QA Evaluation Phase 1.
               </Alert>
             </Grid>
-          )}
+          </>);
+        }}
+      </BaseDialog>
 
-          {/* Initiation of Change — minimum context for the printable cover sheet */}
-          <SectionLabel>Initiation of Change</SectionLabel>
-          <F {...p} label="Change Title" name="title" required xs={12} />
-          <F {...p} label="Product / Material" name="productMaterial" xs={6} />
-          <F {...p} label="Market Details" name="marketDetails" xs={6} />
-          <F {...p} label="Parameter / Change Type" name="changeType"
-             options={['Process', 'Equipment', 'Document', 'System', 'Supplier', 'Facility']} />
-          <DeptField form={form} setForm={setForm} required locked />
-          <F {...p} label="Reason for Change" name="changeReason" multiline xs={12} />
-          <F {...p} label="Description" name="description" multiline xs={12} />
-
-          {/* Inline line items — Existing / Proposed system + proposed date */}
-          <SectionLabel>Line Items (Existing / Proposed System)</SectionLabel>
-          <Grid item xs={12}>
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-              Add one row per change line. You can refine these later from the
-              detail drawer&apos;s Line Items accordion.
-            </Typography>
-            {(form.lineItems || []).map((li, idx) => (
-              <Box key={idx} sx={{
-                  display: 'grid',
-                  gridTemplateColumns: '1fr 1fr 160px 40px',
-                  gap: 1, mb: 1, alignItems: 'flex-start',
-                }}>
-                <TextField
-                  label={`Existing System ${idx + 1}`} size="small" multiline minRows={1}
-                  value={li.existingSystem || ''}
-                  onChange={(e) => {
-                    const next = [...form.lineItems];
-                    next[idx] = { ...next[idx], existingSystem: e.target.value };
-                    setForm(prev => ({ ...prev, lineItems: next }));
-                  }}
-                />
-                <TextField
-                  label={`Proposed System ${idx + 1}`} size="small" multiline minRows={1}
-                  value={li.proposedSystem || ''}
-                  onChange={(e) => {
-                    const next = [...form.lineItems];
-                    next[idx] = { ...next[idx], proposedSystem: e.target.value };
-                    setForm(prev => ({ ...prev, lineItems: next }));
-                  }}
-                />
-                <TextField
-                  label="Proposed Date" size="small" type="date"
-                  InputLabelProps={{ shrink: true }}
-                  value={li.proposedDate || ''}
-                  onChange={(e) => {
-                    const next = [...form.lineItems];
-                    next[idx] = { ...next[idx], proposedDate: e.target.value };
-                    setForm(prev => ({ ...prev, lineItems: next }));
-                  }}
-                />
-                <Tooltip title="Remove line">
-                  <span>
-                    <IconButton
-                      size="small"
-                      disabled={(form.lineItems || []).length <= 1}
-                      onClick={() => {
-                        const next = (form.lineItems || []).filter((_, i) => i !== idx);
-                        setForm(prev => ({ ...prev, lineItems: next.length ? next : [{ existingSystem: '', proposedSystem: '', proposedDate: '' }] }));
-                      }}
-                    >
-                      <RemoveRowIcon fontSize="small" />
-                    </IconButton>
-                  </span>
-                </Tooltip>
-              </Box>
-            ))}
-            <Button
-              size="small"
-              startIcon={<AddRowIcon />}
-              onClick={() => setForm(prev => ({
-                ...prev,
-                lineItems: [...(prev.lineItems || []), { existingSystem: '', proposedSystem: '', proposedDate: '' }],
-              }))}
-            >
-              Add line
-            </Button>
-          </Grid>
-
-          {/* Footnote — fields removed from this dialog now live on the stage panels. */}
-          <Grid item xs={12}>
-            <Alert severity="info" sx={{ mt: 1 }}>
-              Risk Assessment &amp; Linked CAPA are filled by the HOD at the next
-              stage. Priority, Risk Level, Approval Routing, and Regulatory &amp;
-              Validation flags are set by the QA Reviewer during QA Evaluation.
-            </Alert>
-          </Grid>
-        </>);
-      }}
-    </BaseDialog>
+      {/* Save confirmation pop-up — appears on top of the Create dialog */}
+      <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Save Change Control?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            Do you want to save this Change Control as a Draft? A CC number will be
+            generated. You can still edit the draft from the detail drawer before submitting.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setConfirmOpen(false)}>No</Button>
+          <Button variant="contained" onClick={handleConfirmYes}>Yes, Save</Button>
+        </DialogActions>
+      </Dialog>
+    </>
   );
 };
 

@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import {
   Box, Typography, Button, IconButton, Tooltip, Alert, Chip, Stack,
   Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem,
+  FormControlLabel, Switch,
 } from '@mui/material';
 import {
   Add as AddIcon, Edit as EditIcon, Refresh as RefreshIcon,
@@ -21,12 +22,17 @@ import { formatDateTime } from '../../utils/helpers';
  * Backend rejects unauthorised actors; we just hide the buttons opportunistically.
  *
  * Props:
- *   commonSlug   : kebab-case backend recordType
- *   recordId     : numeric id of the QMS record
- *   currentUser  : optional — if provided we hide actions when clearly not
- *                  applicable (purely UX, server still enforces)
+ *   commonSlug          : kebab-case backend recordType
+ *   recordId            : numeric id of the QMS record
+ *   currentUser         : optional — if provided we hide actions when clearly not
+ *                          applicable (purely UX, server still enforces)
+ *   recordTargetDate    : optional — parent record's target_completion_date.
+ *                          When supplied, the Fill dialog's Target Date picker
+ *                          uses this as the max= upper bound (item 23 of the
+ *                          May 2026 tester feedback). The server is still
+ *                          authoritative.
  */
-const QmsDepartmentCommentsSection = ({ commonSlug, recordId, currentUser }) => {
+const QmsDepartmentCommentsSection = ({ commonSlug, recordId, currentUser, recordTargetDate }) => {
   const [rows, setRows]               = useState([]);
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading]         = useState(false);
@@ -39,10 +45,12 @@ const QmsDepartmentCommentsSection = ({ commonSlug, recordId, currentUser }) => 
   const [reqError, setReqError] = useState(null);
 
   // Fill-comment dialog
-  const [fillRow, setFillRow]   = useState(null);
-  const [fillText, setFillText] = useState('');
-  const [fillSaving, setFillSaving] = useState(false);
-  const [fillError, setFillError]   = useState(null);
+  const [fillRow, setFillRow]           = useState(null);
+  const [fillText, setFillText]         = useState('');
+  const [fillActionReq, setFillActionReq] = useState(false);
+  const [fillTargetDate, setFillTargetDate] = useState('');
+  const [fillSaving, setFillSaving]     = useState(false);
+  const [fillError, setFillError]       = useState(null);
 
   const fetch = useCallback(async () => {
     if (!commonSlug || !recordId) return;
@@ -84,15 +92,33 @@ const QmsDepartmentCommentsSection = ({ commonSlug, recordId, currentUser }) => 
   const openFill = (row) => {
     setFillRow(row);
     setFillText(row.comment || '');
+    setFillActionReq(!!row.actionRequired);
+    setFillTargetDate(row.targetDate || '');
     setFillError(null);
   };
   const handleFill = async () => {
     if (!fillRow || !fillText.trim()) return;
+    // Client-side check: when action_required = YES, target_date is mandatory
+    // AND it must be ≤ the parent record's target_completion_date when that's
+    // supplied. The backend re-validates both.
+    if (fillActionReq) {
+      if (!fillTargetDate) {
+        setFillError('Target Date is required when Action / Activity Required is YES.');
+        return;
+      }
+      if (recordTargetDate && fillTargetDate > recordTargetDate) {
+        setFillError(
+          `Target Date ${fillTargetDate} must be on or before the parent record's target completion date ${recordTargetDate}.`);
+        return;
+      }
+    }
     setFillSaving(true); setFillError(null);
     try {
       await fillDeptCommentApi(commonSlug, recordId, fillRow.id, {
-        departmentId: fillRow.departmentId,
-        comment: fillText.trim(),
+        departmentId:   fillRow.departmentId,
+        comment:        fillText.trim(),
+        actionRequired: fillActionReq,
+        targetDate:     fillActionReq ? fillTargetDate : null,
       });
       setFillRow(null);
       fetch();
@@ -179,6 +205,15 @@ const QmsDepartmentCommentsSection = ({ commonSlug, recordId, currentUser }) => 
                   {r.comment}
                 </Typography>
               )}
+              {/* Action Required + Target Date — surfaced when set */}
+              {r.actionRequired && (
+                <Stack direction="row" spacing={1} sx={{ mt: 0.6 }} flexWrap="wrap">
+                  <Chip size="small" color="warning" label="Action Required" />
+                  {r.targetDate && (
+                    <Chip size="small" variant="outlined" label={`Target ${r.targetDate}`} />
+                  )}
+                </Stack>
+              )}
             </Box>
           ))}
         </Stack>
@@ -209,7 +244,7 @@ const QmsDepartmentCommentsSection = ({ commonSlug, recordId, currentUser }) => 
         </DialogActions>
       </Dialog>
 
-      {/* Fill-comment dialog */}
+      {/* Fill-comment dialog — Remark + Action Required + (conditional) Target Date */}
       <Dialog open={!!fillRow} onClose={() => setFillRow(null)} maxWidth="sm" fullWidth
               PaperProps={{ component: 'form', autoComplete: 'off',
                             onSubmit: (e) => { e.preventDefault(); handleFill(); } }}>
@@ -217,23 +252,66 @@ const QmsDepartmentCommentsSection = ({ commonSlug, recordId, currentUser }) => 
         <DialogContent sx={{ pt: 2 }}>
           {fillError && <Alert severity="error" sx={{ mb: 2 }}>{fillError}</Alert>}
           <Alert severity="info" sx={{ mb: 2 }}>
-            Write your <strong>department&apos;s feedback</strong> on this change
-            below. This is captured against your department on the printed CC
-            cover sheet and the audit trail records it under your name + timestamp
-            automatically — you don&apos;t need a separate audit comment here.
+            Write your <strong>department&apos;s remark</strong> on this change
+            below. If your department needs to perform a follow-up action, toggle
+            <em> Action / Activity Required</em> and supply a Target Date — it
+            must be on or before the parent record&apos;s target completion date.
           </Alert>
+          {/* 1. Remark */}
           <TextField
-            label="Department's feedback / response"
+            label="Remark"
             required multiline rows={5} fullWidth
             value={fillText} onChange={(e) => setFillText(e.target.value)}
             placeholder={`E.g. "Concur with the proposed change. Recommend updating SOP-123 before go-live."`}
-            helperText="Plain text — what your department thinks about the proposed change."
+            sx={{ mb: 2 }}
             inputProps={{ autoComplete: 'off' }} />
+
+          {/* 2. Action / Activity Required toggle */}
+          <FormControlLabel
+            control={
+              <Switch checked={fillActionReq}
+                      onChange={(e) => {
+                        setFillActionReq(e.target.checked);
+                        if (!e.target.checked) setFillTargetDate('');
+                      }} />
+            }
+            label={
+              <span>
+                <strong>Action / Activity Required</strong>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                  Tick if your department must perform a follow-up action against this change.
+                </Typography>
+              </span>
+            }
+            sx={{ alignItems: 'flex-start', mb: 1 }}
+          />
+
+          {/* 3. Conditional Target Date — only when Action Required = YES */}
+          {fillActionReq && (
+            <TextField
+              label="Target Date" type="date" required fullWidth
+              value={fillTargetDate}
+              onChange={(e) => setFillTargetDate(e.target.value)}
+              InputLabelProps={{ shrink: true }}
+              inputProps={{
+                autoComplete: 'off',
+                // Software-controlled upper bound — picker won't allow past the
+                // CC target completion date (server re-checks).
+                ...(recordTargetDate ? { max: recordTargetDate } : {}),
+              }}
+              helperText={
+                recordTargetDate
+                  ? `Must be on or before the parent record's target completion date (${recordTargetDate}).`
+                  : 'Set the date by which your department will complete the action.'
+              }
+              sx={{ mt: 1 }}
+            />
+          )}
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button onClick={() => setFillRow(null)} disabled={fillSaving}>Cancel</Button>
           <Button type="submit" variant="contained"
-                  disabled={fillSaving || !fillText.trim()}>
+                  disabled={fillSaving || !fillText.trim() || (fillActionReq && !fillTargetDate)}>
             {fillSaving ? 'Saving…' : 'Submit comment'}
           </Button>
         </DialogActions>

@@ -379,6 +379,12 @@ const IncidentStagePanel = ({ record, onUpdated }) => {
         case 'reject':
           await rejectIncidentApi(record.id, comment.trim());
           break;
+        case 'resend':
+          await transitionIncidentApi(record.id, {
+            targetStatus: 'DRAFT',
+            comment: comment.trim(),
+          });
+          break;
         case 'spawn':
           await spawnDeviationFromIncidentApi(record.id, comment.trim());
           break;
@@ -474,9 +480,9 @@ const IncidentStagePanel = ({ record, onUpdated }) => {
       )}
 
       <TextField
-        label="Comment for audit trail" required multiline rows={2} fullWidth
+        label="Remark / Justification" required multiline rows={2} fullWidth
         value={comment} onChange={(e) => setComment(e.target.value)}
-        placeholder="Why are you forwarding / rejecting at this stage?"
+        placeholder="Recorded on the audit trail as the actor's remark for this transition."
         sx={{ mb: 1.5 }}
         inputProps={{ autoComplete: 'off' }}
       />
@@ -532,6 +538,18 @@ const IncidentStagePanel = ({ record, onUpdated }) => {
           </Button>
         )}
 
+        {status === 'PENDING_HOD' && (
+          <Tooltip title="Send back to Initiator — record returns to DRAFT (not REJECTED)">
+            <span>
+              <Button variant="outlined" color="warning"
+                      onClick={() => submit('resend')}
+                      disabled={saving || rejecting || spawning || !comment.trim()}>
+                Resend to Initiator
+              </Button>
+            </span>
+          </Tooltip>
+        )}
+
         <Tooltip title="POST .../reject?comment=…">
           <span>
             <Button
@@ -541,7 +559,7 @@ const IncidentStagePanel = ({ record, onUpdated }) => {
               onClick={() => submit('reject')}
               disabled={saving || rejecting || spawning || !comment.trim()}
             >
-              {rejecting ? 'Rejecting…' : 'Reject / Send Back'}
+              {rejecting ? 'Rejecting…' : 'Reject'}
             </Button>
           </span>
         </Tooltip>
