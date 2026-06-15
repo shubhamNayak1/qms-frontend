@@ -19,7 +19,7 @@ export const STATUS_COLORS = {
 
 export const STATUS_LABELS = {
   DRAFT:                    'Draft',
-  PENDING_HOD:              'Pending HOD',
+  PENDING_HOD:              'HOD Assessment Pending',
   PENDING_QA_REVIEW:        'QA Review',
   PENDING_DEPT_COMMENT:     'Pending Dept Comment',
   PENDING_RA_REVIEW:        'RA Review',
@@ -108,7 +108,7 @@ export const DANGER_TRANSITIONS   = new Set(['REJECTED', 'CANCELLED']);
 export const WORKFLOW_STAGES = {
   capa: [
     { key: 'DRAFT',                    label: 'Draft',                 actor: 'Initiator' },
-    { key: 'PENDING_HOD',              label: 'HOD Review',            actor: 'Dept HOD' },
+    { key: 'PENDING_HOD',              label: 'HOD Assessment',            actor: 'Dept HOD' },
     { key: 'PENDING_QA_REVIEW',        label: 'QA Review',             actor: 'QA Reviewer' },
     { key: 'PENDING_DEPT_COMMENT',     label: 'Dept Comment',          actor: 'Targeted HOD',  optional: true },
     { key: 'PENDING_HEAD_QA',          label: 'Head QA',               actor: 'QA Head' },
@@ -116,7 +116,7 @@ export const WORKFLOW_STAGES = {
   ],
   deviation: [
     { key: 'DRAFT',                    label: 'Draft',                 actor: 'Initiator' },
-    { key: 'PENDING_HOD',              label: 'HOD Review',            actor: 'Dept HOD' },
+    { key: 'PENDING_HOD',              label: 'HOD Assessment',            actor: 'Dept HOD' },
     { key: 'PENDING_QA_REVIEW',        label: 'QA Review',             actor: 'QA Reviewer' },
     { key: 'PENDING_RA_REVIEW',        label: 'RA Review',             actor: 'RA Head' },
     { key: 'PENDING_SITE_HEAD',        label: 'Site Head',             actor: 'Site Head',     optional: true },
@@ -126,7 +126,7 @@ export const WORKFLOW_STAGES = {
   ],
   incident: [
     { key: 'DRAFT',                    label: 'Draft',                 actor: 'Initiator' },
-    { key: 'PENDING_HOD',              label: 'HOD Review',            actor: 'Dept HOD' },
+    { key: 'PENDING_HOD',              label: 'HOD Assessment',            actor: 'Dept HOD' },
     { key: 'PENDING_INVESTIGATION',    label: 'Investigation',         actor: 'Assignee' },
     { key: 'PENDING_ATTACHMENTS',      label: 'Attachments',           actor: 'Initiator',     optional: true },
     { key: 'PENDING_VERIFICATION',     label: 'Verification',          actor: 'QA Reviewer' },
@@ -135,7 +135,7 @@ export const WORKFLOW_STAGES = {
   ],
   marketComplaint: [
     { key: 'DRAFT',                    label: 'Draft',                 actor: 'Initiator' },
-    { key: 'PENDING_HOD',              label: 'HOD Review',            actor: 'Dept HOD' },
+    { key: 'PENDING_HOD',              label: 'HOD Assessment',            actor: 'Dept HOD' },
     { key: 'PENDING_INVESTIGATION',    label: 'Investigation',         actor: 'Assignee' },
     { key: 'PENDING_ATTACHMENTS',      label: 'Attachments',           actor: 'Initiator' },
     { key: 'PENDING_VERIFICATION',     label: 'Verification',          actor: 'QA Reviewer' },
@@ -146,7 +146,7 @@ export const WORKFLOW_STAGES = {
   // optional branches taken only when siteHeadRequired / customerCommunicationRequired.
   changeControl: [
     { key: 'DRAFT',                    label: 'Initiation',            actor: 'Initiator' },
-    { key: 'PENDING_HOD',              label: 'HOD Review',            actor: 'Dept HOD' },
+    { key: 'PENDING_HOD',              label: 'HOD Assessment',            actor: 'Dept HOD' },
     { key: 'PENDING_QA_REVIEW',        label: 'QA Evaluation',         actor: 'QA Reviewer' },
     { key: 'PENDING_DEPT_COMMENT',     label: 'Dept Comments',         actor: 'Targeted HODs' },
     { key: 'PENDING_RA_REVIEW',        label: 'RA Evaluation',         actor: 'RA Head' },

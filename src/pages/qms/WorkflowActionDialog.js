@@ -9,6 +9,7 @@ import {
   Send as SubmitIcon,
   Lock as CloseIcon,
 } from '@mui/icons-material';
+import ESignDialog from '../../components/ESignDialog';
 
 // Per 21 CFR Part 11 / GxP — every workflow action MUST carry a non-blank
 // comment so the audit trail records an intelligible reason for the change.
@@ -35,26 +36,40 @@ const WorkflowActionDialog = ({ open, onClose, onConfirm, action, actionLabel, r
   const [comment, setComment]   = useState('');
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState(null);
+  // Round-2 E3: every workflow transition is e-signed. We open the e-sign
+  // modal after the user has typed their comment and hit the action button.
+  // The actual onConfirm() call happens only after the server verifies the
+  // signature.
+  const [eSignOpen, setESignOpen] = useState(false);
 
   useEffect(() => {
-    if (open) { setComment(''); setError(null); }
+    if (open) { setComment(''); setError(null); setESignOpen(false); }
   }, [open]);
 
   const meta          = ACTION_META[action] || ACTION_META.approve;
   const label         = actionLabel || meta.label;
   const needsComment  = meta.requireComment;
 
-  const handleConfirm = async () => {
+  // Stage 1 — user clicked the action button: validate comment, then open e-sign
+  const handleConfirm = () => {
     if (needsComment && !comment.trim()) {
       setError('A comment is required for this action.');
       return;
     }
+    setError(null);
+    setESignOpen(true);
+  };
+
+  // Stage 2 — e-sign succeeded: fire the actual workflow API
+  const handleSigned = async () => {
     setLoading(true);
     setError(null);
     try {
       await onConfirm(comment.trim() || undefined);
+      setESignOpen(false);
       onClose();
     } catch (err) {
+      setESignOpen(false);
       setError(err.response?.data?.message || 'Action failed. Please try again.');
     } finally {
       setLoading(false);
@@ -99,9 +114,19 @@ const WorkflowActionDialog = ({ open, onClose, onConfirm, action, actionLabel, r
           onClick={handleConfirm}
           disabled={loading || (needsComment && !comment.trim())}
         >
-          {loading ? 'Processing…' : label}
+          {loading ? 'Processing…' : `${label} (e-sign required)`}
         </Button>
       </DialogActions>
+
+      {/* Round-2 E3 — 21 CFR Part 11 e-signature gate */}
+      <ESignDialog
+        open={eSignOpen}
+        onClose={() => !loading && setESignOpen(false)}
+        onSigned={handleSigned}
+        meaning={`${label}${recordTitle ? ' — ' + recordTitle : ''}`}
+        recordRef={recordTitle}
+        actionLabel={loading ? 'Processing…' : label}
+      />
     </Dialog>
   );
 };

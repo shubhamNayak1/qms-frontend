@@ -106,6 +106,15 @@ const QmsDepartmentCommentsSection = ({ commonSlug, recordId, currentUser, recor
         setFillError('Target Date is required when Action / Activity Required is YES.');
         return;
       }
+      // Round-2 E1: target date must be strictly greater than today.
+      // Software-side guard so the picker can't save a past or today date —
+      // the server re-validates the same rule.
+      const today = new Date(); today.setHours(0,0,0,0);
+      const picked = new Date(fillTargetDate + 'T00:00:00');
+      if (picked <= today) {
+        setFillError('Target Date must be a future date (later than today).');
+        return;
+      }
       if (recordTargetDate && fillTargetDate > recordTargetDate) {
         setFillError(
           `Target Date ${fillTargetDate} must be on or before the parent record's target completion date ${recordTargetDate}.`);
@@ -132,6 +141,15 @@ const QmsDepartmentCommentsSection = ({ commonSlug, recordId, currentUser, recor
   // Filter dropdown: don't show departments that already have a PENDING row.
   const pendingDeptIds = new Set(rows.filter(r => r.status === 'PENDING')
                                      .map(r => r.departmentId));
+
+  // Round-2 G1 — progress indicator. Tester was confused why the parent
+  // record status stayed at "Pending Department Comment" after they
+  // submitted their own row. The status correctly stays until ALL depts
+  // have responded AND the QA Reviewer forwards — surface the count here
+  // so it's not a mystery.
+  const completedCount = rows.filter(r => r.status === 'COMPLETED').length;
+  const pendingCount   = rows.filter(r => r.status === 'PENDING').length;
+  const allDone        = rows.length > 0 && pendingCount === 0;
 
   // Heuristic: this user can probably FILL a row when the row's department
   // matches their own. Backend still authorises.
@@ -165,6 +183,26 @@ const QmsDepartmentCommentsSection = ({ commonSlug, recordId, currentUser, recor
           is separate — it&apos;s the audit reason for forwarding/rejecting the record itself.
         </Typography>
       </Alert>
+
+      {/* Round-2 G1 — progress + ready-for-QA banner. */}
+      {rows.length > 0 && (
+        <Stack direction="row" spacing={1} sx={{ mb: 1 }} flexWrap="wrap">
+          <Chip size="small" color="success" label={`${completedCount} responded`} />
+          {pendingCount > 0 && (
+            <Chip size="small" color="warning" label={`${pendingCount} pending`} />
+          )}
+        </Stack>
+      )}
+      {allDone && (
+        <Alert severity="success" sx={{ mb: 1, py: 0.5 }}>
+          <Typography variant="caption" sx={{ display: 'block' }}>
+            <strong>All requested departments have responded.</strong>{' '}
+            The record is now ready for the QA Reviewer to forward — the
+            workflow remains at <em>Pending Department Comment</em> until QA
+            clicks <em>Approve / Forward</em> on the stage panel above.
+          </Typography>
+        </Alert>
+      )}
 
       {error && <Alert severity="error" sx={{ mb: 1 }}>{error}</Alert>}
 
@@ -257,12 +295,15 @@ const QmsDepartmentCommentsSection = ({ commonSlug, recordId, currentUser, recor
             <em> Action / Activity Required</em> and supply a Target Date — it
             must be on or before the parent record&apos;s target completion date.
           </Alert>
-          {/* 1. Remark */}
+          {/* 1. Department remark — Round-2 G1: was simply "Remark" before,
+              which testers missed. Made the label explicit so it can't be
+              confused with the audit-trail remark on the parent stage panel. */}
           <TextField
-            label="Remark"
+            label="Department Remark / Feedback"
             required multiline rows={5} fullWidth
             value={fillText} onChange={(e) => setFillText(e.target.value)}
             placeholder={`E.g. "Concur with the proposed change. Recommend updating SOP-123 before go-live."`}
+            helperText="This is your department&apos;s response to the change. It appears in the row below once submitted."
             sx={{ mb: 2 }}
             inputProps={{ autoComplete: 'off' }} />
 
@@ -295,14 +336,19 @@ const QmsDepartmentCommentsSection = ({ commonSlug, recordId, currentUser, recor
               InputLabelProps={{ shrink: true }}
               inputProps={{
                 autoComplete: 'off',
-                // Software-controlled upper bound — picker won't allow past the
-                // CC target completion date (server re-checks).
+                // Software-controlled bounds — min is tomorrow (Round-2 E1
+                // forbids picking past or today), max is the CC target
+                // completion date when supplied. The server re-validates.
+                min: (() => {
+                  const d = new Date(); d.setDate(d.getDate() + 1);
+                  return d.toISOString().slice(0, 10);
+                })(),
                 ...(recordTargetDate ? { max: recordTargetDate } : {}),
               }}
               helperText={
                 recordTargetDate
-                  ? `Must be on or before the parent record's target completion date (${recordTargetDate}).`
-                  : 'Set the date by which your department will complete the action.'
+                  ? `Must be a future date and on or before the parent record's target completion date (${recordTargetDate}).`
+                  : 'Set a future date by which your department will complete the action.'
               }
               sx={{ mt: 1 }}
             />

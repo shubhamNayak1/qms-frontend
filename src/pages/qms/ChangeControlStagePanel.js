@@ -4,6 +4,8 @@ import {
   Alert, FormControlLabel, Switch, Tooltip, Chip, Box, Divider,
   Dialog, DialogTitle, DialogContent, DialogActions,
 } from '@mui/material';
+import ESignDialog from '../../components/ESignDialog';
+import StageAttachments from './StageAttachments';
 import {
   Save as SaveIcon, ArrowForward as ForwardIcon, Cancel as RejectIcon,
   Undo as ResendIcon, History as HistoryIcon,
@@ -77,9 +79,13 @@ const STAGE_DESCRIPTORS = {
   PENDING_RA_REVIEW: {
     title: 'RA Evaluation',
     actor: 'RA Head',
-    helper: 'Categorise the change and capture the regulatory submission decision.',
-    fields: ['category', 'regulatorySubmissionRequired', 'regulatorySubmissionReference'],
-    requiredFields: ['category'],
+    // Round-2 H1: CC Type (category) is already set by QA at Phase 1 —
+    // RA sees it read-only, doesn't re-enter it.
+    // Round-2 H2: Regulatory Assessment Required + Submission Reference
+    // are RA's exclusive turf — moved out of QA Phase 2.
+    helper: 'Capture the regulatory submission decision and supporting reference.',
+    fields: ['regulatorySubmissionRequired', 'regulatorySubmissionReference'],
+    requiredFields: [],
     primary: 'approve',
     primaryLabel: 'Approve & forward',
   },
@@ -148,7 +154,7 @@ const InitiatorContext = ({ record, lineItems }) => (
     <Grid container spacing={1} sx={{ mt: 0.5 }}>
       {record.recordNumber && (
         <Grid item xs={6}>
-          <Typography variant="body2"><strong>Record #:</strong> {record.recordNumber}</Typography>
+          <Typography variant="body2"><strong>Change Control Number:</strong> {record.recordNumber}</Typography>
         </Grid>
       )}
       {record.createdAt && (
@@ -232,7 +238,16 @@ const InitiatorContext = ({ record, lineItems }) => (
 // ── Activity history timeline — for QA Evaluation ─────────────────
 const ActivityHistory = ({ history, resendCount }) => {
   const [open, setOpen] = useState(false);
-  const rows = Array.isArray(history) ? history : [];
+  // Round-2 C6: sort by event time ASC. Without the sort the HOD's Initial
+  // Assessment remark sometimes rendered after later events because the
+  // backend join order didn't guarantee chronological output.
+  const rows = Array.isArray(history)
+    ? [...history].sort((a, b) => {
+        const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+        const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+        return ta - tb;
+      })
+    : [];
   if (rows.length === 0) return null;
   return (
     <Alert severity="info" icon={false} sx={{ mb: 2 }}>
@@ -423,6 +438,15 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
   const [resending, setResending] = useState(false);
   const [error, setError]         = useState(null);
   const [resendDialog, setResendDialog] = useState(false);
+  // Dedicated Resend reason — kept separate from the main Remark / Justification
+  // so the user can resend without first scrolling up to fill the panel field.
+  // (Round-2 C5: the resend silently no-op'd when the panel field was empty.)
+  const [resendReason, setResendReason] = useState('');
+  // Round-2 E3: e-sign gate before executing a workflow transition.
+  // pendingAction holds the action key while the e-sign dialog is open;
+  // on success doSubmit() runs the original network calls.
+  const [pendingAction, setPendingAction] = useState(null);
+  const [eSignOpen, setESignOpen] = useState(false);
 
   const [deptComments, setDeptComments] = useState([]);
   const [lineItems, setLineItems]       = useState([]);
@@ -435,13 +459,17 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
   useEffect(() => {
     if (!record) { setForm({}); setComment(''); return; }
     // We carry every conceivable field — render filter happens in JSX
-    // based on stage. Note that the "Initial Assessment" UI label maps to
-    // the existing riskAssessment column on QmsRecord.
+    // based on stage. Round-2 F1: initialAssessment (HOD's) and riskAssessment
+    // (QA's) are now stored in separate columns so QA's Phase-2 textarea
+    // doesn't pre-populate with the HOD's text.
     const fresh = {
-      initialAssessment:            record.riskAssessment ?? '',
+      initialAssessment:            record.initialAssessment ?? '',
       category:                     record.category ?? '',
       preRemark:                    record.preRemark ?? '',
       qaEvalRemark:                 record.comments ?? '',
+      // Risk Assessment "Required?" toggle starts based on whether QA has
+      // already filled the narrative. Starts as FALSE (i.e. "Not Required")
+      // on fresh Phase-2 entry — QA explicitly opts in.
       riskAssessmentRequired:       !!record.riskAssessment,
       riskAssessment:               record.riskAssessment ?? '',
       siteHeadRequired:             !!record.siteHeadRequired,
@@ -493,12 +521,13 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
   // ── QA Evaluation phase-specific descriptors ──────────────────
   const qaPhase1Fields = ['category', 'preRemark'];
   const qaPhase1Required = ['category', 'preRemark'];
+  // Round-2 H2: regulatorySubmissionRequired + regulatorySubmissionReference
+  // moved out — they live exclusively on the RA Evaluation stage now.
   const qaPhase2Fields = [
     'qaEvalRemark',
     'riskAssessmentRequired', 'riskAssessment',
     'siteHeadRequired', 'customerCommunicationRequired',
     'customerRepresentative',
-    'regulatorySubmissionRequired', 'regulatorySubmissionReference',
   ];
   const qaPhase2Required = ['qaEvalRemark'];
 
@@ -520,14 +549,41 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
   }
 
   // ── Submit ────────────────────────────────────────────────────
-  const submit = async (action) => {
+  //
+  // Round-2 E3: Workflow transitions are gated behind a 21 CFR Part 11
+  // e-signature. submit(action) validates inputs, then opens the e-sign
+  // modal. The actual network calls run inside doSubmit(action) once the
+  // server has verified the password.
+  const submit = (action) => {
     if (!record) return;
     setError(null);
 
-    if (!comment.trim()) {
-      setError('A Remark / Justification is required for this action — it is recorded on the audit trail.');
+    // Resend uses its own dedicated reason (gathered in the Resend dialog),
+    // so the main panel's "Remark / Justification" can stay empty when the
+    // reviewer is sending back without first filling other fields. Other
+    // actions still require the main remark for audit-trail purposes.
+    const effectiveComment = action === 'resend'
+      ? resendReason.trim()
+      : comment.trim();
+
+    if (!effectiveComment) {
+      setError(action === 'resend'
+        ? 'A reason is required for Resend — please enter it in the dialog.'
+        : 'A Remark / Justification is required for this action — it is recorded on the audit trail.');
       return;
     }
+
+    // Stash the action and open the e-sign dialog.
+    setPendingAction(action);
+    setESignOpen(true);
+  };
+
+  // doSubmit — the original network-call body. Runs only after e-sign succeeds.
+  const doSubmit = async (action) => {
+    if (!record) return;
+    const effectiveComment = action === 'resend'
+      ? resendReason.trim()
+      : comment.trim();
 
     if (action !== 'reject' && action !== 'resend') {
       // Required-field validation
@@ -568,7 +624,9 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
           priority: record.priority,
         };
         if (status === 'PENDING_HOD') {
-          payload.riskAssessment = form.initialAssessment;
+          // Round-2 F1: HOD writes to initial_assessment (separate column).
+          // riskAssessment is reserved for QA's Phase-2 narrative.
+          payload.initialAssessment = form.initialAssessment;
         }
         if (status === 'PENDING_QA_REVIEW' && qaPhase === 1) {
           payload.category   = form.category;
@@ -576,19 +634,26 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
           payload.riskLevel  = form.category; // mirror — same values
         }
         if (status === 'PENDING_QA_REVIEW' && qaPhase === 2) {
+          // Round-2 H2: regulatorySubmissionRequired / Reference removed —
+          // they live on the RA stage now.
+          // Round-2 F2: customerRepresentative only persisted when
+          // customerCommunicationRequired = TRUE; otherwise NULL.
           payload.comments                     = form.qaEvalRemark;
           payload.riskAssessment               = form.riskAssessmentRequired ? form.riskAssessment : null;
           payload.siteHeadRequired             = !!form.siteHeadRequired;
           payload.customerCommunicationRequired= !!form.customerCommunicationRequired;
-          payload.customerRepresentative       = form.customerRepresentative || null;
-          payload.regulatorySubmissionRequired = !!form.regulatorySubmissionRequired;
-          payload.regulatorySubmissionReference= form.regulatorySubmissionRequired
-                                                  ? (form.regulatorySubmissionReference || null) : null;
+          payload.customerRepresentative       = form.customerCommunicationRequired
+                                                  ? (form.customerRepresentative || null)
+                                                  : null;
         }
         if (status === 'PENDING_RA_REVIEW') {
-          payload.category = form.category;
+          // Round-2 H1: category is read-only at RA (set by QA at Phase 1) —
+          // we don't send it back. Only the regulatory submission fields are
+          // written here.
           payload.regulatorySubmissionRequired = !!form.regulatorySubmissionRequired;
-          payload.regulatorySubmissionReference = form.regulatorySubmissionReference || null;
+          payload.regulatorySubmissionReference = form.regulatorySubmissionRequired
+                                                    ? (form.regulatorySubmissionReference || null)
+                                                    : null;
         }
         if (status === 'PENDING_SITE_HEAD' || status === 'PENDING_CUSTOMER_COMMENT'
             || status === 'PENDING_HEAD_QA' || status === 'PENDING_VERIFICATION') {
@@ -600,25 +665,29 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
 
       switch (action) {
         case 'approve':
-          await approveChangeControlApi(record.id, comment.trim());
+          await approveChangeControlApi(record.id, effectiveComment);
           break;
         case 'close':
-          await closeChangeControlApi(record.id, comment.trim());
+          await closeChangeControlApi(record.id, effectiveComment);
           break;
         case 'reject':
-          await rejectChangeControlApi(record.id, comment.trim());
+          await rejectChangeControlApi(record.id, effectiveComment);
           break;
         case 'resend':
-          // Resend = PENDING_HOD → DRAFT via the generic transition endpoint.
+          // Resend = ANY reviewer state → DRAFT via the generic transition
+          // endpoint. Backend WorkflowPosition gates who can do it from each
+          // source state. Round-2 widened this from HOD-only to all reviewer
+          // stages (D1 / F3 / H3).
           await transitionChangeControlApi(record.id, {
             targetStatus: 'DRAFT',
-            comment: comment.trim(),
+            comment: effectiveComment,
           });
+          setResendReason(''); // clear so a stale value doesn't leak into next round
           break;
         case 'transition':
           await transitionChangeControlApi(record.id, {
             targetStatus: desc.secondary.target,
-            comment: comment.trim(),
+            comment: effectiveComment,
           });
           break;
         default:
@@ -666,14 +735,16 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
       )}
       {status === 'PENDING_HOD' && <InitiatorContext record={record} lineItems={lineItems} />}
 
-      {/* HOD's Initial Assessment — surfaced read-only to downstream stages */}
-      {status !== 'PENDING_HOD' && record?.riskAssessment && (
+      {/* HOD's Initial Assessment — surfaced read-only to downstream stages.
+          Round-2 F1: now reads from the dedicated initial_assessment column
+          instead of the shared risk_assessment column. */}
+      {status !== 'PENDING_HOD' && record?.initialAssessment && (
         <Alert severity="info" icon={false} sx={{ mb: 2 }}>
           <Typography variant="caption" sx={{ display: 'block', fontWeight: 700, letterSpacing: 0.4 }}>
             HOD&apos;S INITIAL ASSESSMENT
           </Typography>
           <Typography variant="body2" sx={{ mt: 0.4, whiteSpace: 'pre-wrap' }}>
-            {record.riskAssessment}
+            {record.initialAssessment}
           </Typography>
         </Alert>
       )}
@@ -691,12 +762,69 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
         </Alert>
       )}
 
+      {/* QA Decision Summary — visible read-only on every stage downstream
+          of QA (RA, Site Head, Customer, Head QA, Verification). Shows the
+          Change Control Type + flags the QA Reviewer captured, so the next
+          actor doesn't have to scroll back. Round-2 H1: was previously
+          re-asked at RA stage which was wrong. */}
+      {['PENDING_RA_REVIEW','PENDING_SITE_HEAD','PENDING_CUSTOMER_COMMENT',
+        'PENDING_HEAD_QA','PENDING_VERIFICATION','CLOSED'].includes(status)
+        && (record?.category || record?.comments) && (
+        <Alert severity="info" icon={false} sx={{ mb: 2 }}>
+          <Typography variant="caption" sx={{ display: 'block', fontWeight: 700, letterSpacing: 0.4 }}>
+            QA EVALUATION SUMMARY
+          </Typography>
+          <Grid container spacing={1} sx={{ mt: 0.4 }}>
+            {record.category && (
+              <Grid item xs={6}>
+                <Typography variant="body2"><strong>Change Control Type:</strong> {record.category}</Typography>
+              </Grid>
+            )}
+            {record.siteHeadRequired != null && (
+              <Grid item xs={6}>
+                <Typography variant="body2"><strong>Site Head:</strong> {record.siteHeadRequired ? 'Required' : 'Not required'}</Typography>
+              </Grid>
+            )}
+            {record.customerCommunicationRequired != null && (
+              <Grid item xs={6}>
+                <Typography variant="body2"><strong>Customer Comm.:</strong> {record.customerCommunicationRequired ? 'Required' : 'Not required'}</Typography>
+              </Grid>
+            )}
+            {record.customerCommunicationRequired && record.customerRepresentative && (
+              <Grid item xs={6}>
+                <Typography variant="body2"><strong>Customer Rep:</strong> {record.customerRepresentative}</Typography>
+              </Grid>
+            )}
+            {record.comments && (
+              <Grid item xs={12}>
+                <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+                  <strong>QA Remark:</strong> {record.comments}
+                </Typography>
+              </Grid>
+            )}
+          </Grid>
+        </Alert>
+      )}
+
       {/* Activity history timeline for QA Evaluation */}
       {status === 'PENDING_QA_REVIEW' && (
         <ActivityHistory history={record?.statusHistory} resendCount={record?.resendCount || 0} />
       )}
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+
+      {/* Round-2 H4 — Stage attachments. Available on every non-terminal
+          stage so the actor can attach evidence (Word, PDF, JPG) to the
+          record at their stage. Hidden at DRAFT — the Initiator's attachment
+          is captured on the Create dialog instead. */}
+      {!['DRAFT','CLOSED','CANCELLED','REJECTED','REOPENED'].includes(status) && record?.id && (
+        <StageAttachments
+          moduleKey="changeControl"
+          recordId={record.id}
+          readOnly={false}
+          heading={`${desc.title} — attachments`}
+        />
+      )}
 
       {/* Dept-comment progress + forward gate (PENDING_DEPT_COMMENT only) */}
       {isDeptCommentStage && (
@@ -788,11 +916,28 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
                 <Grid key={f} item xs={6}>
                   <FormControlLabel
                     control={<Switch checked={!!form.customerCommunicationRequired}
-                                     onChange={(e) => setForm(prev => ({ ...prev, customerCommunicationRequired: e.target.checked }))} />}
+                                     onChange={(e) => {
+                                       const next = e.target.checked;
+                                       // Round-2 F2: turning Customer Communication
+                                       // off also clears the Customer Representative
+                                       // field so we don't carry a stale value.
+                                       setForm(prev => ({
+                                         ...prev,
+                                         customerCommunicationRequired: next,
+                                         ...(next ? {} : { customerRepresentative: '' }),
+                                       }));
+                                     }} />}
                     label="Customer Communication Required"
                   />
                 </Grid>
               );
+            }
+            // Round-2 F2: Customer Representative is conditional. Hide entirely
+            // when Customer Communication is not flagged — the field has no
+            // meaning without the comm leg, and showing it always was confusing
+            // the testers.
+            if (f === 'customerRepresentative' && !form.customerCommunicationRequired) {
+              return null;
             }
             return <FieldEditor key={f} name={f} form={form} setForm={setForm} />;
           })}
@@ -824,8 +969,12 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
           </span>
         </Tooltip>
 
-        {/* HOD-only Resend button — distinct from Reject */}
-        {status === 'PENDING_HOD' && (
+        {/* Resend to Initiator — shown on EVERY reviewer stage (not just HOD).
+            Round-2 tester feedback (D1, F3, H3): QA / RA / Site Head / Customer
+            / Head-QA reviewers should send back to Initiator for revision
+            rather than reject outright. */}
+        {['PENDING_HOD','PENDING_QA_REVIEW','PENDING_RA_REVIEW','PENDING_SITE_HEAD',
+          'PENDING_CUSTOMER_COMMENT','PENDING_HEAD_QA','PENDING_VERIFICATION'].includes(status) && (
           <Tooltip title="Send back to Initiator for revision — record returns to DRAFT, not REJECTED">
             <span>
               <Button
@@ -847,43 +996,94 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
           </Button>
         )}
 
-        <Tooltip title="POST .../reject?comment=…  (terminal — Initiator must re-raise)">
-          <span>
-            <Button
-              variant="outlined"
-              color="error"
-              startIcon={<RejectIcon />}
-              onClick={() => submit('reject')}
-              disabled={saving || rejecting || resending || !comment.trim()}
-            >
-              {rejecting ? 'Rejecting…' : 'Reject'}
-            </Button>
-          </span>
-        </Tooltip>
+        {/* Reject — Round-2 tester feedback (C4, D1, F3, H3): only HOD
+            Assessment shows Reject. Every other reviewer stage uses Resend. */}
+        {status === 'PENDING_HOD' && (
+          <Tooltip title="POST .../reject?comment=…  (terminal — Initiator must re-raise)">
+            <span>
+              <Button
+                variant="outlined"
+                color="error"
+                startIcon={<RejectIcon />}
+                onClick={() => submit('reject')}
+                disabled={saving || rejecting || resending || !comment.trim()}
+              >
+                {rejecting ? 'Rejecting…' : 'Reject'}
+              </Button>
+            </span>
+          </Tooltip>
+        )}
       </Stack>
 
-      {/* Resend confirmation */}
+      {/* Resend confirmation — has its own Reason field so the reviewer
+          doesn't need to first fill the panel-level Remark to use it.
+          Round-2 fix for C5: the silent fail when the panel remark was empty. */}
       <Dialog open={resendDialog} onClose={() => setResendDialog(false)} maxWidth="xs" fullWidth>
         <DialogTitle>Resend to Initiator?</DialogTitle>
         <DialogContent>
-          <Typography variant="body2" sx={{ mb: 1 }}>
+          <Typography variant="body2" sx={{ mb: 1.5 }}>
             This will send the record back to the Initiator (status returns to <code>DRAFT</code>)
             so they can edit. <strong>The resend count will be incremented and the Initiator will receive a notification.</strong>
           </Typography>
-          <Typography variant="body2">
+          <Typography variant="body2" sx={{ mb: 2 }}>
             This is different from <em>Reject</em> — Reject terminates the record;
             Resend keeps it alive for revision.
           </Typography>
+          <TextField
+            label="Reason for resend" required multiline rows={3} fullWidth autoFocus
+            value={resendReason}
+            onChange={(e) => setResendReason(e.target.value)}
+            placeholder="Tell the Initiator what to fix. This appears in their inbox notification and is logged on the audit trail."
+            error={resendDialog && resendReason.trim().length === 0 && resending === false && Boolean(error)}
+            helperText="Required — minimum 5 characters."
+            inputProps={{ autoComplete: 'off' }}
+          />
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setResendDialog(false)} disabled={resending}>Cancel</Button>
+          <Button onClick={() => { setResendDialog(false); setResendReason(''); }} disabled={resending}>
+            Cancel
+          </Button>
           <Button variant="contained" color="warning"
-                  onClick={async () => { setResendDialog(false); await submit('resend'); }}
-                  disabled={resending}>
+                  onClick={async () => {
+                    if (resendReason.trim().length < 5) {
+                      setError('Please enter at least 5 characters of reason for resend.');
+                      return;
+                    }
+                    setResendDialog(false);
+                    await submit('resend');
+                  }}
+                  disabled={resending || resendReason.trim().length < 5}>
             {resending ? 'Sending…' : 'Yes, Resend'}
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Round-2 E3 — 21 CFR Part 11 e-signature gate. Opened by submit()
+          and closed by doSubmit() once the workflow API resolves. */}
+      <ESignDialog
+        open={eSignOpen}
+        onClose={() => !saving && !rejecting && !resending && setESignOpen(false)}
+        onSigned={async () => {
+          try {
+            await doSubmit(pendingAction);
+          } finally {
+            setESignOpen(false);
+            setPendingAction(null);
+          }
+        }}
+        meaning={pendingAction
+          ? `${pendingAction === 'approve' ? 'Approve / Forward'
+              : pendingAction === 'reject'  ? 'Reject record'
+              : pendingAction === 'resend'  ? 'Resend to Initiator'
+              : pendingAction === 'close'   ? 'Close record'
+              : 'Workflow transition'} — ${record?.recordNumber || record?.title || ''}`
+          : ''}
+        recordRef={record?.recordNumber}
+        actionLabel={pendingAction === 'reject' ? 'Sign & reject'
+                    : pendingAction === 'resend' ? 'Sign & resend'
+                    : pendingAction === 'close'  ? 'Sign & close'
+                    : 'Sign & forward'}
+      />
     </Paper>
   );
 };

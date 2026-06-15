@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
-  Box, Typography, Button, IconButton, Tooltip, Alert, Chip,
-  Dialog, DialogTitle, DialogContent, DialogActions, TextField, MenuItem, Grid,
+  Box, Typography, Button, IconButton, Tooltip, Alert,
+  Dialog, DialogTitle, DialogContent, DialogActions, TextField, Grid,
 } from '@mui/material';
 import {
   Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Refresh as RefreshIcon,
@@ -10,8 +10,6 @@ import {
   listLineItemsApi, createLineItemApi, updateLineItemApi, deleteLineItemApi,
 } from '../../api/qmsCommonApi';
 import { formatDate } from '../../utils/helpers';
-
-const STATUS_OPTS = ['', 'PENDING', 'IN_PROGRESS', 'COMPLETED'];
 
 /**
  * QmsLineItemsSection — repeating "Existing System / Proposed System /
@@ -137,6 +135,12 @@ const QmsLineItemsSection = ({ commonSlug, recordId, readOnly = false }) => {
                         bgcolor: 'action.hover', fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4 },
             }}>
             <thead>
+              {/* Round-2 B2: Status column removed — testers found the
+                  PENDING/IN_PROGRESS/COMPLETED chip on every row noisy and
+                  potentially misleading (the line-item status is independent
+                  of the record-level workflow status). Each edit is still
+                  written to the audit_log via the @Audited annotation on
+                  updateLineItem so the change history is preserved. */}
               <tr>
                 <th style={{ width: 36 }}>#</th>
                 <th>Existing System</th>
@@ -144,7 +148,6 @@ const QmsLineItemsSection = ({ commonSlug, recordId, readOnly = false }) => {
                 <th>Justification</th>
                 <th style={{ width: 100 }}>Proposed By</th>
                 <th style={{ width: 100 }}>Date</th>
-                <th style={{ width: 100 }}>Status</th>
                 {!readOnly && <th style={{ width: 70 }}></th>}
               </tr>
             </thead>
@@ -157,11 +160,6 @@ const QmsLineItemsSection = ({ commonSlug, recordId, readOnly = false }) => {
                   <td>{r.justification  || <em style={{ opacity: 0.5 }}>—</em>}</td>
                   <td>{r.proposedByName || <em style={{ opacity: 0.5 }}>—</em>}</td>
                   <td>{formatDate(r.proposedDate)}</td>
-                  <td>{r.status
-                        ? <Chip size="small" label={r.status}
-                                color={r.status === 'COMPLETED' ? 'success'
-                                     : r.status === 'IN_PROGRESS' ? 'info' : 'default'} />
-                        : <em style={{ opacity: 0.5 }}>—</em>}</td>
                   {!readOnly && (
                     <td style={{ whiteSpace: 'nowrap' }}>
                       <Tooltip title="Edit"><IconButton size="small" onClick={() => openEdit(r)}>
@@ -212,21 +210,15 @@ const QmsLineItemsSection = ({ commonSlug, recordId, readOnly = false }) => {
                          onChange={(e) => setForm({ ...form, proposedDate: e.target.value })}
                          inputProps={{ autoComplete: 'off' }} />
             </Grid>
-            <Grid item xs={6}>
-              <TextField label="Status (verification phase)" select fullWidth
-                         value={form.status}
-                         onChange={(e) => setForm({ ...form, status: e.target.value })}>
-                {STATUS_OPTS.map((s) => (
-                  <MenuItem key={s || '__'} value={s}>
-                    {s || <em>— none —</em>}
-                  </MenuItem>
-                ))}
-              </TextField>
-            </Grid>
+            {/* Round-2 B2: Status removed from the edit form. The
+                verification-phase status lives on the parent record's
+                workflow now (PENDING_VERIFICATION + line-item-specific
+                verification fields), not on the line items themselves. */}
             <Grid item xs={12}>
               <TextField label="Remark" multiline rows={2} fullWidth
                          value={form.remark}
                          onChange={(e) => setForm({ ...form, remark: e.target.value })}
+                         helperText="Captured to the audit_log on save."
                          inputProps={{ autoComplete: 'off' }} />
             </Grid>
           </Grid>

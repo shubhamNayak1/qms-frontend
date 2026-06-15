@@ -9,6 +9,7 @@ import {
   Refresh as RefreshIcon,
   Warning as WarnIcon,
   ExpandMore as ExpandMoreIcon,
+  Print as PrintIcon,
 } from '@mui/icons-material';
 import {
   getCapaByIdApi, submitCapaApi, approveCapaApi, rejectCapaApi,
@@ -35,6 +36,7 @@ import DeviationStagePanel from './DeviationStagePanel';
 import IncidentStagePanel from './IncidentStagePanel';
 import CapaStagePanel from './CapaStagePanel';
 import QmsLineItemsSection from './QmsLineItemsSection';
+import StageAttachments from './StageAttachments';
 import QmsDepartmentCommentsSection from './QmsDepartmentCommentsSection';
 import TargetDateExtensionPanel from './TargetDateExtensionPanel';
 import { useAuth } from '../../store/AuthContext';
@@ -76,8 +78,16 @@ const Field = ({ label, value, children }) => (
 );
 
 // ── Module-specific extra fields ──────────────────────────────────────────────
+// Round-2 tester feedback (B1, C3): some fields are populated only at later
+// stages (Risk Level, Implementation Date, Target Completion, Site-Head-Required,
+// Customer-Comment-Required, etc.). At DRAFT / PENDING_HOD we don't show their
+// empty slots — only sections genuinely populated by the actor get rendered.
+const isDraft = (s) => s === 'DRAFT';
+const isPreQA = (s) => s === 'DRAFT' || s === 'PENDING_HOD';
+
 const ModuleExtraFields = ({ moduleKey, record }) => {
   if (!record) return null;
+  const status = record.status;
   switch (moduleKey) {
     case 'capa':
       return (
@@ -124,28 +134,42 @@ const ModuleExtraFields = ({ moduleKey, record }) => {
       // don't duplicate them here.
       return (
         <Box>
-          {/* Initiation of Change */}
+          {/* Initiation of Change — always shown.
+              Round-2 B1 + C3: Risk Level + Implementation/Target dates aren't
+              captured by the Initiator, so suppress them until QA writes them
+              (status >= PENDING_QA_REVIEW). */}
           <Typography variant="caption" fontWeight={700} color="primary.main"
                       textTransform="uppercase" letterSpacing={0.4} display="block" sx={{ mb: 0.5 }}>
             Initiation of Change
           </Typography>
           <Grid container spacing={1} sx={{ mb: 1.5 }}>
             <Grid item xs={6}><Field label="Change Type" value={record.changeType} /></Grid>
-            <Grid item xs={6}><Field label="Risk Level" value={record.riskLevel} /></Grid>
-            <Grid item xs={6}><Field label="Implementation Date" value={formatDate(record.implementationDate)} /></Grid>
-            <Grid item xs={6}><Field label="Target Completion" value={formatDate(record.targetCompletionDate)} /></Grid>
+            {!isPreQA(status) && record.riskLevel && (
+              <Grid item xs={6}><Field label="Risk Level" value={record.riskLevel} /></Grid>
+            )}
+            {!isPreQA(status) && record.implementationDate && (
+              <Grid item xs={6}><Field label="Implementation Date" value={formatDate(record.implementationDate)} /></Grid>
+            )}
+            {!isPreQA(status) && record.targetCompletionDate && (
+              <Grid item xs={6}><Field label="Target Completion" value={formatDate(record.targetCompletionDate)} /></Grid>
+            )}
             <Grid item xs={12}><Field label="Reason for Change" value={record.changeReason} /></Grid>
           </Grid>
 
-          {/* Approval routing */}
-          <Typography variant="caption" fontWeight={700} color="primary.main"
-                      textTransform="uppercase" letterSpacing={0.4} display="block" sx={{ mb: 0.5 }}>
-            Approval Routing
-          </Typography>
-          <Grid container spacing={1} sx={{ mb: 1.5 }}>
-            <Grid item xs={6}><Field label="Site Head Required" value={record.siteHeadRequired ? 'Yes' : 'No'} /></Grid>
-            <Grid item xs={6}><Field label="Customer Comment Req." value={record.customerCommentRequired ? 'Yes' : 'No'} /></Grid>
-          </Grid>
+          {/* Approval routing — populated by QA at PENDING_QA_REVIEW.
+              Hidden until then (Round-2 B1). */}
+          {!isPreQA(status) && (
+            <>
+              <Typography variant="caption" fontWeight={700} color="primary.main"
+                          textTransform="uppercase" letterSpacing={0.4} display="block" sx={{ mb: 0.5 }}>
+                Approval Routing
+              </Typography>
+              <Grid container spacing={1} sx={{ mb: 1.5 }}>
+                <Grid item xs={6}><Field label="Site Head Required" value={record.siteHeadRequired ? 'Yes' : 'No'} /></Grid>
+                <Grid item xs={6}><Field label="Customer Comment Req." value={record.customerCommentRequired ? 'Yes' : 'No'} /></Grid>
+              </Grid>
+            </>
+          )}
 
           {/* Regulatory + Validation */}
           {(record.regulatorySubmissionRequired || record.regulatorySubmissionReference
@@ -221,14 +245,21 @@ const StatusHistoryTimeline = ({ history }) => {
   if (!history?.length) return (
     <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>No history yet.</Typography>
   );
+  // Round-2 C6: sort by event time ASC so the timeline reads in the order
+  // events actually happened (HOD → QA → Dept Comments → …).
+  const sorted = [...history].sort((a, b) => {
+    const ta = a.changedAt ? new Date(a.changedAt).getTime() : 0;
+    const tb = b.changedAt ? new Date(b.changedAt).getTime() : 0;
+    return ta - tb;
+  });
   return (
     <Box>
-      {history.map((h, i) => (
+      {sorted.map((h, i) => (
         <Box key={i} sx={{ display: 'flex', gap: 1.5, mb: 1.5 }}>
           {/* dot + connector */}
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', pt: 0.4 }}>
             <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: `${STATUS_COLORS[h.toStatus] || 'grey'}.main`, flexShrink: 0 }} />
-            {i < history.length - 1 && <Box sx={{ width: 2, flex: 1, bgcolor: 'divider', mt: 0.5 }} />}
+            {i < sorted.length - 1 && <Box sx={{ width: 2, flex: 1, bgcolor: 'divider', mt: 0.5 }} />}
           </Box>
           {/* content */}
           <Box sx={{ pb: 1 }}>
@@ -258,11 +289,12 @@ const WorkflowButtons = ({ record, moduleKey, onAction }) => {
 
   return (
     <Stack direction="row" flexWrap="wrap" spacing={1} useFlexGap>
-      {/* Submit — from DRAFT */}
+      {/* Submit — from DRAFT. Label changes to "Resend the Record" if HOD has
+          previously sent it back (resendCount > 0). Per tester Round-2 B3. */}
       {status === 'DRAFT' && (
         <Button variant="contained" size="small" color="primary"
-          onClick={() => onAction('submit', 'Submit for Review')}>
-          Submit for Review
+          onClick={() => onAction('submit', record.resendCount > 0 ? 'Resend the Record' : 'Submit for Review')}>
+          {record.resendCount > 0 ? 'Resend the Record' : 'Submit for Review'}
         </Button>
       )}
 
@@ -290,21 +322,19 @@ const WorkflowButtons = ({ record, moduleKey, onAction }) => {
         </Button>
       ))}
 
-      {/* Reject */}
-      {allowedTransitions.includes('REJECTED') && (
+      {/* Reject — Round-2 tester feedback: Reject is only acceptable at HOD
+          Assessment stage. QA / RA / Site Head / Customer / Head-QA all use
+          Resend (send back to Initiator) instead. */}
+      {allowedTransitions.includes('REJECTED') && status === 'PENDING_HOD' && (
         <Button variant="outlined" size="small" color="error"
           onClick={() => onAction('reject', 'Reject / Send Back')}>
           Reject
         </Button>
       )}
 
-      {/* Cancel */}
-      {allowedTransitions.includes('CANCELLED') && (
-        <Button variant="outlined" size="small" color="error"
-          onClick={() => onAction('cancel', 'Cancel Record')}>
-          Cancel
-        </Button>
-      )}
+      {/* Cancel — Round-2 tester feedback: Cancel is not a valid workflow
+          action; an Initiator cancelling mid-flight muddies the audit story.
+          Hidden universally — use Reject (HOD) or Resend instead. */}
 
       {/* Reopen — from CLOSED */}
       {status === 'CLOSED' && (
@@ -407,6 +437,14 @@ const RecordDetailDrawer = ({ open, onClose, recordId, moduleKey, onUpdated }) =
           </Box>
           <Box sx={{ display: 'flex', gap: 0.5 }}>
             <Tooltip title="Refresh"><IconButton size="small" onClick={fetchRecord} disabled={loading}><RefreshIcon fontSize="small" /></IconButton></Tooltip>
+            {/* Round-2 E2 — Print / Save as PDF. Uses the browser's native
+                print dialog so the user can pick "Save as PDF" without us
+                shipping a server-side PDF generator for every module. */}
+            <Tooltip title="Print / Save as PDF">
+              <IconButton size="small" onClick={() => window.print()} disabled={!record}>
+                <PrintIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
             <Tooltip title="Close"><IconButton size="small" onClick={onClose}><CloseIcon fontSize="small" /></IconButton></Tooltip>
           </Box>
         </Box>
@@ -466,12 +504,18 @@ const RecordDetailDrawer = ({ open, onClose, recordId, moduleKey, onUpdated }) =
                 </Alert>
               )}
 
-              {/* Common fields */}
+              {/* Common fields — Round-2 B1: Assigned To + Due Date aren't
+                  populated until HOD picks the record up, so hide them in
+                  DRAFT to match "only show what the Initiator captured". */}
               <Grid container spacing={2}>
                 <Grid item xs={6}><Field label="Raised By" value={record.raisedByName || record.createdBy} /></Grid>
-                <Grid item xs={6}><Field label="Assigned To" value={record.assignedToName} /></Grid>
+                {!isDraft(record.status) && (
+                  <Grid item xs={6}><Field label="Assigned To" value={record.assignedToName} /></Grid>
+                )}
                 <Grid item xs={6}><Field label="Department" value={record.department} /></Grid>
-                <Grid item xs={6}><Field label="Due Date" value={formatDate(record.dueDate)} /></Grid>
+                {!isDraft(record.status) && (
+                  <Grid item xs={6}><Field label="Due Date" value={formatDate(record.dueDate)} /></Grid>
+                )}
                 {record.closedDate && <Grid item xs={6}><Field label="Closed Date" value={formatDate(record.closedDate)} /></Grid>}
                 {record.approvedByName && <Grid item xs={6}><Field label="Approved By" value={record.approvedByName} /></Grid>}
                 {record.approvalComments && <Grid item xs={12}><Field label="Approval Comments" value={record.approvalComments} /></Grid>}
@@ -493,10 +537,12 @@ const RecordDetailDrawer = ({ open, onClose, recordId, moduleKey, onUpdated }) =
                 <>
                   <Divider sx={{ my: 2 }} />
 
-                  {/* Risk + categorisation + customer block (only show fields that exist) */}
-                  {(record.riskAssessment || record.category
-                    || record.customerCommunicationRequired || record.customerComment
-                    || record.customerRepresentative) && (
+                  {/* Risk + categorisation + customer block (only show fields that exist).
+                      Round-2 F1: initial_assessment + risk_assessment are now separate.
+                      Round-2 F2: Customer Representative only meaningful when
+                      customerCommunicationRequired is TRUE. */}
+                  {(record.initialAssessment || record.riskAssessment || record.category
+                    || record.customerCommunicationRequired || record.customerComment) && (
                     <>
                       <Typography variant="caption" fontWeight={700} textTransform="uppercase"
                                   letterSpacing={0.5} color="text.secondary">
@@ -510,11 +556,15 @@ const RecordDetailDrawer = ({ open, onClose, recordId, moduleKey, onUpdated }) =
                                    value={record.customerCommunicationRequired ? 'Yes' : 'No'} />
                           </Grid>
                         )}
-                        {record.customerRepresentative && (
+                        {/* Round-2 F2: Customer Rep only meaningful when comm required */}
+                        {record.customerCommunicationRequired && record.customerRepresentative && (
                           <Grid item xs={6}><Field label="Customer Rep" value={record.customerRepresentative} /></Grid>
                         )}
+                        {record.initialAssessment && (
+                          <Grid item xs={12}><Field label="HOD Initial Assessment" value={record.initialAssessment} /></Grid>
+                        )}
                         {record.riskAssessment && (
-                          <Grid item xs={12}><Field label="Risk Assessment" value={record.riskAssessment} /></Grid>
+                          <Grid item xs={12}><Field label="QA Risk Assessment" value={record.riskAssessment} /></Grid>
                         )}
                         {record.customerComment && (
                           <Grid item xs={12}><Field label="Customer Comment" value={record.customerComment} /></Grid>
@@ -574,50 +624,74 @@ const RecordDetailDrawer = ({ open, onClose, recordId, moduleKey, onUpdated }) =
                     </AccordionDetails>
                   </Accordion>
 
-                  {/* Department comments */}
-                  <Accordion defaultExpanded disableGutters elevation={0}
-                             sx={{ '&:before': { display: 'none' }, border: '1px solid',
-                                    borderColor: 'divider', borderRadius: 1.5, mb: 1.5 }}>
-                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                      <Typography variant="body2" fontWeight={700}>Department-Wise Comments</Typography>
-                    </AccordionSummary>
-                    <AccordionDetails>
-                      <QmsDepartmentCommentsSection
-                        commonSlug={commonSlug}
-                        recordId={recordId}
-                        currentUser={currentUser}
-                        recordTargetDate={record?.targetCompletionDate}
-                      />
-                    </AccordionDetails>
-                  </Accordion>
+                  {/* Stage attachments — Round-2 H4. Visible on every
+                      non-terminal stage. Read-only at terminal states so
+                      the audit trail remains intact. */}
+                  {recordId && (
+                    <StageAttachments
+                      moduleKey={moduleKey}
+                      recordId={recordId}
+                      readOnly={isTerminal}
+                      heading="Record attachments"
+                    />
+                  )}
 
-                  {/* Target date extension */}
-                  <Accordion disableGutters elevation={0}
-                             sx={{ '&:before': { display: 'none' }, border: '1px solid',
-                                    borderColor: 'divider', borderRadius: 1.5, mb: 1.5 }}>
-                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                      <Typography variant="body2" fontWeight={700}>Target Date Extension</Typography>
-                    </AccordionSummary>
-                    <AccordionDetails>
-                      <TargetDateExtensionPanel
-                        commonSlug={commonSlug}
-                        recordId={recordId}
-                        currentTargetDate={record.targetCompletionDate}
-                      />
-                    </AccordionDetails>
-                  </Accordion>
+                  {/* Department comments — Round-2 B1: hidden in DRAFT and
+                      PENDING_HOD because depts haven't been invited yet. At
+                      PENDING_QA_REVIEW we DO show it (QA invites depts here)
+                      and on every downstream stage as read-only history. */}
+                  {!isPreQA(record.status) && (
+                    <Accordion defaultExpanded disableGutters elevation={0}
+                               sx={{ '&:before': { display: 'none' }, border: '1px solid',
+                                      borderColor: 'divider', borderRadius: 1.5, mb: 1.5 }}>
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Typography variant="body2" fontWeight={700}>Department-Wise Comments</Typography>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <QmsDepartmentCommentsSection
+                          commonSlug={commonSlug}
+                          recordId={recordId}
+                          currentUser={currentUser}
+                          recordTargetDate={record?.targetCompletionDate}
+                        />
+                      </AccordionDetails>
+                    </Accordion>
+                  )}
+
+                  {/* Target date extension — only meaningful once the target
+                      completion date exists (set by QA). Hidden until then. */}
+                  {!isPreQA(record.status) && record.targetCompletionDate && (
+                    <Accordion disableGutters elevation={0}
+                               sx={{ '&:before': { display: 'none' }, border: '1px solid',
+                                      borderColor: 'divider', borderRadius: 1.5, mb: 1.5 }}>
+                      <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                        <Typography variant="body2" fontWeight={700}>Target Date Extension</Typography>
+                      </AccordionSummary>
+                      <AccordionDetails>
+                        <TargetDateExtensionPanel
+                          commonSlug={commonSlug}
+                          recordId={recordId}
+                          currentTargetDate={record.targetCompletionDate}
+                        />
+                      </AccordionDetails>
+                    </Accordion>
+                  )}
                 </>
               )}
 
-              <Divider sx={{ my: 2 }} />
-
-              {/* Status History */}
-              <Typography variant="caption" fontWeight={700} textTransform="uppercase" letterSpacing={0.5} color="text.secondary">
-                Status History
-              </Typography>
-              <Box sx={{ mt: 1 }}>
-                <StatusHistoryTimeline history={record.statusHistory} />
-              </Box>
+              {/* Status History — Round-2 B1: at DRAFT the only entry is
+                  DRAFT itself, which adds no info, so suppress. */}
+              {!isDraft(record.status) && (
+                <>
+                  <Divider sx={{ my: 2 }} />
+                  <Typography variant="caption" fontWeight={700} textTransform="uppercase" letterSpacing={0.5} color="text.secondary">
+                    Status History
+                  </Typography>
+                  <Box sx={{ mt: 1 }}>
+                    <StatusHistoryTimeline history={record.statusHistory} />
+                  </Box>
+                </>
+              )}
             </>
           )}
         </Box>

@@ -14,13 +14,15 @@ import {
   createComplaintApi, createChangeControlApi,
   getIncidentsApi, getDeviationsApi, getComplaintsApi, getChangeControlsApi,
 } from '../../api/qmsApi';
-import { createLineItemApi } from '../../api/qmsCommonApi';
+import { createLineItemApi, uploadRecordAttachmentApi } from '../../api/qmsCommonApi';
 import { listDepartmentsApi } from '../../api/orgApi';
 import { getDocumentsApi } from '../../api/dmsApi';
 import { useAuth } from '../../store/AuthContext';
-import { Box, IconButton, Tooltip } from '@mui/material';
+import { Box, IconButton, Tooltip, Chip, Stack } from '@mui/material';
 import {
   Add as AddRowIcon, DeleteOutline as RemoveRowIcon,
+  CloudUpload as UploadIcon, AttachFile as AttachFileIcon,
+  Close as ClearIcon,
 } from '@mui/icons-material';
 
 const PRIORITY_OPTS = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
@@ -157,10 +159,22 @@ const BaseDialog = ({ open, onClose, title, initialForm, onSubmit, children }) =
   const [form, setForm]     = useState(initialForm);
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState(null);
+  // Round-2 A2: a synchronous ref-based guard that survives the gap between
+  // click and React's re-render. Without it, a rapid double-click on a slow
+  // network can fire onSubmit twice and the backend creates two records.
+  const inFlight = React.useRef(false);
 
-  useEffect(() => { if (open) { setForm(initialForm); setError(null); } }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (open) {
+      setForm(initialForm);
+      setError(null);
+      inFlight.current = false;
+    }
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSave = async () => {
+    if (inFlight.current) return; // synchronous guard
+    inFlight.current = true;
     setSaving(true);
     setError(null);
     try {
@@ -170,6 +184,9 @@ const BaseDialog = ({ open, onClose, title, initialForm, onSubmit, children }) =
       setError(err.response?.data?.message || 'Failed to create record.');
     } finally {
       setSaving(false);
+      // small delay before re-arming so an instant 2nd click after the
+      // error message still hits the guard
+      setTimeout(() => { inFlight.current = false; }, 300);
     }
   };
 
@@ -628,6 +645,10 @@ export const CreateChangeControlDialog = ({ open, onClose, onCreated }) => {
 
   // Save-confirmation dialog state
   const [confirmOpen, setConfirmOpen] = useState(false);
+  // Round-2 A2: guard the confirm-Yes button against rapid double-click
+  // (same pattern as BaseDialog handleSave).
+  const [confirmSaving, setConfirmSaving] = useState(false);
+  const confirmInFlight = React.useRef(false);
   const [pendingForm, setPendingForm] = useState(null);
 
   // Search DMS docs only while the dialog is open + the user is typing.
@@ -655,6 +676,8 @@ export const CreateChangeControlDialog = ({ open, onClose, onCreated }) => {
     priority: 'MEDIUM',
     initialAttachmentRef: '',                  // raw DMS id or free text
     _attachmentDoc: null,                      // selected DMS document object (UI-only)
+    _localFile: null,                          // Round-2 A1 selected local file (UI-only)
+    _localAttachmentRef: '',                   // Round-2 A1 server-assigned "QMS-ATT-{id}" after upload
     lineItems: [{ existingSystem: '', proposedSystem: '', justification: '' }],
   };
 
@@ -688,10 +711,13 @@ export const CreateChangeControlDialog = ({ open, onClose, onCreated }) => {
   const persist = async (form) => {
     const today = todayIso();
     const {
-      lineItems = [], _attachmentDoc, ...payload
+      lineItems = [], _attachmentDoc, _localFile, _localAttachmentRef, ...payload
     } = form;
-    // Resolve DMS attachment to its id when a doc was picked.
-    if (_attachmentDoc?.id) {
+    // Round-2 A1: a local file takes precedence when supplied; otherwise we
+    // fall back to the DMS picker. Both store on the same column slot.
+    if (_localAttachmentRef) {
+      payload.initialAttachmentRef = _localAttachmentRef;
+    } else if (_attachmentDoc?.id) {
       payload.initialAttachmentRef = String(_attachmentDoc.id);
     }
     const { data } = await createChangeControlApi(payload);
@@ -723,6 +749,9 @@ export const CreateChangeControlDialog = ({ open, onClose, onCreated }) => {
 
   const handleConfirmYes = async () => {
     if (!pendingForm) return;
+    if (confirmInFlight.current) return; // Round-2 A2: synchronous double-click guard
+    confirmInFlight.current = true;
+    setConfirmSaving(true);
     try {
       await persist(pendingForm);
       setConfirmOpen(false);
@@ -732,6 +761,9 @@ export const CreateChangeControlDialog = ({ open, onClose, onCreated }) => {
       setConfirmOpen(false);
       // surface the error in the underlying BaseDialog
       throw err;
+    } finally {
+      setConfirmSaving(false);
+      setTimeout(() => { confirmInFlight.current = false; }, 300);
     }
   };
 
@@ -874,24 +906,96 @@ export const CreateChangeControlDialog = ({ open, onClose, onCreated }) => {
               </Button>
             </Grid>
 
-            {/* 8. Attachment (optional DMS doc picker) */}
+            {/* 8. Attachment (optional) — two paths:
+                  ① DMS picker for controlled documents already in DMS
+                  ② Browse for a local file (Word, PDF, JPG) for ad-hoc evidence.
+                Round-2 A1: Browse upload added. The two paths are
+                mutually exclusive — picking one clears the other. */}
             <SectionLabel>Attachment (optional)</SectionLabel>
-            <Grid item xs={12}>
+            <Grid item xs={12} md={8}>
               <Autocomplete
                 size="small" fullWidth
                 options={dmsOptions}
                 loading={dmsLoading}
                 value={form._attachmentDoc || null}
+                disabled={!!form._localFile}
                 getOptionLabel={(o) => o ? `${o.docNumber} v${o.version || '?'} — ${o.title}` : ''}
                 isOptionEqualToValue={(a, b) => a?.id === b?.id}
                 onInputChange={(_, val) => setDmsQuery(val)}
                 onChange={(_, val) => setForm(prev => ({ ...prev, _attachmentDoc: val }))}
                 renderInput={(params) => (
                   <TextField {...params} label="DMS Document" placeholder="Search by number or title…"
-                             helperText="Pick from DMS — title and version resolve automatically. Leave blank if no attachment." />
+                             helperText={form._localFile
+                                ? 'A local file is selected — remove it to pick a DMS document.'
+                                : 'Pick from DMS — title and version resolve automatically.'} />
                 )}
               />
             </Grid>
+            {/* Round-2 A1 — Local file uploader */}
+            <Grid item xs={12} md={4}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.8 }}>
+                <Button
+                  variant="outlined"
+                  startIcon={<UploadIcon />}
+                  component="label"
+                  disabled={!!form._attachmentDoc || form._uploadingFile}
+                  fullWidth
+                >
+                  {form._uploadingFile ? 'Uploading…' : 'Browse local file'}
+                  <input
+                    type="file"
+                    hidden
+                    accept=".doc,.docx,.pdf,.jpg,.jpeg,.png,.gif,.bmp"
+                    onChange={async (e) => {
+                      const f = e.target.files?.[0];
+                      e.target.value = ''; // allow re-pick of same file
+                      if (!f) return;
+                      if (f.size > 10 * 1024 * 1024) {
+                        alert('File is larger than 10 MB. Check it into DMS first and reference the document id instead.');
+                        return;
+                      }
+                      setForm(prev => ({ ...prev, _localFile: f, _uploadingFile: true }));
+                      try {
+                        const { data } = await uploadRecordAttachmentApi(f);
+                        const ref = data?.data?.attachmentRef || data?.attachmentRef;
+                        setForm(prev => ({
+                          ...prev,
+                          _localAttachmentRef: ref || '',
+                          _uploadingFile: false,
+                          _attachmentDoc: null,
+                        }));
+                      } catch (err) {
+                        const msg = err?.response?.data?.message || 'Upload failed.';
+                        alert(msg);
+                        setForm(prev => ({
+                          ...prev, _localFile: null, _localAttachmentRef: '',
+                          _uploadingFile: false,
+                        }));
+                      }
+                    }}
+                  />
+                </Button>
+                <Typography variant="caption" color="text.secondary">
+                  Word, PDF, or JPG up to 10 MB.
+                </Typography>
+              </Box>
+            </Grid>
+            {form._localFile && (
+              <Grid item xs={12}>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Chip icon={<AttachFileIcon />} size="small" color="primary"
+                        label={`${form._localFile.name} · ${(form._localFile.size / 1024).toFixed(0)} KB`} />
+                  <Tooltip title="Remove this file">
+                    <IconButton size="small"
+                                onClick={() => setForm(prev => ({
+                                  ...prev, _localFile: null, _localAttachmentRef: '',
+                                }))}>
+                      <ClearIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </Stack>
+              </Grid>
+            )}
 
             <Grid item xs={12}>
               <Alert severity="info" sx={{ mt: 1 }}>
@@ -915,8 +1019,10 @@ export const CreateChangeControlDialog = ({ open, onClose, onCreated }) => {
           </Typography>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setConfirmOpen(false)}>No</Button>
-          <Button variant="contained" onClick={handleConfirmYes}>Yes, Save</Button>
+          <Button onClick={() => setConfirmOpen(false)} disabled={confirmSaving}>No</Button>
+          <Button variant="contained" onClick={handleConfirmYes} disabled={confirmSaving}>
+            {confirmSaving ? 'Saving…' : 'Yes, Save'}
+          </Button>
         </DialogActions>
       </Dialog>
     </>

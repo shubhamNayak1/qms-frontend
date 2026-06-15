@@ -81,3 +81,27 @@ export const requestExtensionApi = (recordType, recordId, payload) =>
 // TargetDateExtensionDecision: { approve: boolean, remark }
 export const decideExtensionApi = (recordType, recordId, payload) =>
   apiClient.post(`${root(recordType, recordId)}/target-date-extension/decide`, payload);
+
+// ── Generic record-attachment upload (Round-2 A1) ──
+// Uploads a local file directly (not a DMS doc) and returns metadata
+// including `attachmentRef` ("QMS-ATT-{id}") that callers store on the
+// parent record's initial_attachment_ref slot.
+//   payload: FormData with `file`, optional `recordType`, optional `recordId`
+export const uploadRecordAttachmentApi = (file, recordType, recordId) => {
+  const fd = new FormData();
+  fd.append('file', file);
+  if (recordType) fd.append('recordType', recordType);
+  if (recordId != null) fd.append('recordId', String(recordId));
+  return apiClient.post('/api/v1/qms/attachments/upload', fd, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+};
+
+export const downloadRecordAttachmentApi = (id) =>
+  apiClient.get(`/api/v1/qms/attachments/${id}/download`, { responseType: 'blob' });
+
+// List every local-file attachment for the given record. recordType uses
+// the QmsRecordType enum (CHANGE_CONTROL, CAPA, DEVIATION, INCIDENT,
+// MARKET_COMPLAINT).
+export const listRecordAttachmentsApi = (recordType, recordId) =>
+  apiClient.get('/api/v1/qms/attachments', { params: { recordType, recordId } });

@@ -16,3 +16,33 @@ body {
 ::-webkit-scrollbar-track { background: #f1f1f1; }
 ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #a1a1a1; }
+
+/* Round-2 E2 — Print / Save-as-PDF support for the QMS detail drawer.
+   When the user clicks the printer icon on the drawer header, only the
+   drawer content is printed (header bars, sidebars, the rest of the SPA
+   are hidden). The drawer expands to full width with white background.   */
+@media print {
+  /* Hide the entire app shell while printing */
+  body * { visibility: hidden; }
+  /* Reveal only the open MUI Drawer + its descendants */
+  .MuiDrawer-paper,
+  .MuiDrawer-paper * { visibility: visible; }
+  /* Promote the drawer to fill the page */
+  .MuiDrawer-paper {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+  }
+  /* Hide non-content UI inside the drawer: buttons, action bars */
+  .MuiDrawer-paper .MuiButton-root,
+  .MuiDrawer-paper button[aria-label="Print"],
+  .MuiDrawer-paper button[aria-label="Print / Save as PDF"],
+  .MuiDrawer-paper .no-print { display: none !important; }
+  /* Always-expanded accordions for print */
+  .MuiDrawer-paper .MuiAccordion-root { break-inside: avoid; }
+  .MuiDrawer-paper .MuiAccordionDetails-root { display: block !important; }
+}
