@@ -565,9 +565,19 @@ const RecordDetailDrawer = ({ open, onClose, recordId, moduleKey, onUpdated }) =
                 </Grid>
               )}
 
-              {/* Module-specific fields — Round-3 R5: hidden in DRAFT entirely.
-                  At DRAFT these are all empty placeholders and add noise. */}
-              {!isDraft(record.status) && (
+              {/* Round-4 F4: for modules whose stage panel renders the
+                  linear flow (CC / CAPA / Dev / Inc / MC), the drawer hides
+                  every section that the linear flow already covers:
+                    • Module Details (Initiation, Approval Routing, etc.)
+                    • Risk & Customer
+                    • Verification of Implementation
+                    • Line Items accordion (lives inside Draft StageSection)
+                    • Record Attachments (lives inside current StageSection)
+                  Dept Comments accordion + Target Date Extension stay
+                  because they're functional UIs (invite depts / request
+                  extension), not just read-only summaries. */}
+              {!['changeControl','capa','deviation','incident','marketComplaint'].includes(moduleKey)
+                && !isDraft(record.status) && (
                 <>
                   <Divider sx={{ my: 2 }} />
                   <Typography variant="caption" fontWeight={700} textTransform="uppercase" letterSpacing={0.5} color="text.secondary">
@@ -582,15 +592,14 @@ const RecordDetailDrawer = ({ open, onClose, recordId, moduleKey, onUpdated }) =
               {/* ── Common QMS sections — work uniformly for every module ──────── */}
               {commonSlug && recordId && (
                 <>
-                  <Divider sx={{ my: 2 }} />
-
-                  {/* Risk + categorisation + customer block (only show fields that exist).
-                      Round-2 F1: initial_assessment + risk_assessment are now separate.
-                      Round-2 F2: Customer Representative only meaningful when
-                      customerCommunicationRequired is TRUE. */}
-                  {(record.initialAssessment || record.riskAssessment || record.category
+                  {/* Risk + categorisation + customer block — Round-4 F4
+                      hidden for linear-flow modules (RoQaPhase2View / QA
+                      Decision Summary cover it). */}
+                  {!['changeControl','capa','deviation','incident','marketComplaint'].includes(moduleKey) &&
+                   (record.initialAssessment || record.riskAssessment || record.category
                     || record.customerCommunicationRequired || record.customerComment) && (
                     <>
+                      <Divider sx={{ my: 2 }} />
                       <Typography variant="caption" fontWeight={700} textTransform="uppercase"
                                   letterSpacing={0.5} color="text.secondary">
                         Risk &amp; Customer
@@ -603,7 +612,6 @@ const RecordDetailDrawer = ({ open, onClose, recordId, moduleKey, onUpdated }) =
                                    value={record.customerCommunicationRequired ? 'Yes' : 'No'} />
                           </Grid>
                         )}
-                        {/* Round-2 F2: Customer Rep only meaningful when comm required */}
                         {record.customerCommunicationRequired && record.customerRepresentative && (
                           <Grid item xs={6}><Field label="Customer Rep" value={record.customerRepresentative} /></Grid>
                         )}
@@ -620,8 +628,10 @@ const RecordDetailDrawer = ({ open, onClose, recordId, moduleKey, onUpdated }) =
                     </>
                   )}
 
-                  {/* Verification phase */}
-                  {(record.verificationActionTaken || record.verificationEffectiveOn
+                  {/* Verification phase — Round-4 F4 hidden for linear-flow
+                      modules (RoVerificationView covers it). */}
+                  {!['changeControl','capa','deviation','incident','marketComplaint'].includes(moduleKey) &&
+                   (record.verificationActionTaken || record.verificationEffectiveOn
                     || record.verificationDocumentsReissue != null
                     || record.verificationOtherComments
                     || record.verificationRegCommunication) && (
@@ -653,28 +663,32 @@ const RecordDetailDrawer = ({ open, onClose, recordId, moduleKey, onUpdated }) =
                     </>
                   )}
 
-                  <Divider sx={{ my: 2 }} />
+                  {/* Line Items accordion — Round-4 F4 hidden for linear-flow
+                      modules (RoDraftView mounts QmsLineItemsSection inline). */}
+                  {!['changeControl','capa','deviation','incident','marketComplaint'].includes(moduleKey) && (
+                    <>
+                      <Divider sx={{ my: 2 }} />
+                      <Accordion defaultExpanded disableGutters elevation={0}
+                                 sx={{ '&:before': { display: 'none' }, border: '1px solid',
+                                        borderColor: 'divider', borderRadius: 1.5, mb: 1.5 }}>
+                        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                          <Typography variant="body2" fontWeight={700}>Line Items</Typography>
+                        </AccordionSummary>
+                        <AccordionDetails>
+                          <QmsLineItemsSection
+                            commonSlug={commonSlug}
+                            recordId={recordId}
+                            readOnly={isTerminal}
+                          />
+                        </AccordionDetails>
+                      </Accordion>
+                    </>
+                  )}
 
-                  {/* Line items — collapsible (default expanded) */}
-                  <Accordion defaultExpanded disableGutters elevation={0}
-                             sx={{ '&:before': { display: 'none' }, border: '1px solid',
-                                    borderColor: 'divider', borderRadius: 1.5, mb: 1.5 }}>
-                    <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                      <Typography variant="body2" fontWeight={700}>Line Items</Typography>
-                    </AccordionSummary>
-                    <AccordionDetails>
-                      <QmsLineItemsSection
-                        commonSlug={commonSlug}
-                        recordId={recordId}
-                        readOnly={isTerminal}
-                      />
-                    </AccordionDetails>
-                  </Accordion>
-
-                  {/* Stage attachments — Round-2 H4. Visible on every
-                      non-terminal stage. Read-only at terminal states so
-                      the audit trail remains intact. */}
-                  {recordId && (
+                  {/* Stage attachments / Record Attachments — Round-4 F4
+                      hidden for linear-flow modules (StageAttachments lives
+                      inside the current StageSection's editable body). */}
+                  {!['changeControl','capa','deviation','incident','marketComplaint'].includes(moduleKey) && recordId && (
                     <StageAttachments
                       moduleKey={moduleKey}
                       recordId={recordId}
