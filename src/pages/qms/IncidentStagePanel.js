@@ -54,7 +54,7 @@ const STAGE_DESCRIPTORS = {
       'capaRequired', 'linkedCapaNumber',
     ],
     primary: 'approve',
-    primaryLabel: 'Approve & forward to QA Evaluation',
+    primaryLabel: 'Review & forward to QA Evaluation',
   },
   PENDING_QA_REVIEW: {
     title: 'Assessment by QA',

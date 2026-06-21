@@ -153,6 +153,9 @@ export const WORKFLOW_STAGES = {
     { key: 'PENDING_SITE_HEAD',        label: 'Site Head',             actor: 'Site Head',     optional: true },
     { key: 'PENDING_CUSTOMER_COMMENT', label: 'Customer Comment',      actor: 'Customer Rep',  optional: true },
     { key: 'PENDING_HEAD_QA',          label: 'Head QA Approval',      actor: 'QA Head' },
+    // Round-3 R28: dept attachment upload step inserted between Head QA and
+    // Verification (auto-created for depts that flagged Action Required).
+    { key: 'PENDING_ATTACHMENTS',      label: 'Dept Attachments',      actor: 'Action-Req Dept HODs', optional: true },
     { key: 'PENDING_VERIFICATION',     label: 'Verification',          actor: 'QA Reviewer' },
     { key: 'CLOSED',                   label: 'Closed',                actor: 'QA Head' },
   ],

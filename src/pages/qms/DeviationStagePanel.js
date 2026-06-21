@@ -40,7 +40,7 @@ const STAGE_DESCRIPTORS = {
       'Carry out the initial + detailed investigation with root cause and attachments. Decide whether a CAPA is required and link the CAPA #.',
     fields: ['riskAssessment', 'impactAssessment', 'capaRequired', 'linkedCapaNumber'],
     primary: 'approve',
-    primaryLabel: 'Approve & forward to QA Evaluation',
+    primaryLabel: 'Review & forward to QA Evaluation',
   },
   PENDING_QA_REVIEW: {
     title: 'Evaluation by QA',

@@ -101,14 +101,9 @@ const QmsDepartmentCommentsSection = ({ commonSlug, recordId, currentUser, recor
     // Client-side check: when action_required = YES, target_date is mandatory
     // AND it must be ≤ the parent record's target_completion_date when that's
     // supplied. The backend re-validates both.
-    if (fillActionReq) {
-      if (!fillTargetDate) {
-        setFillError('Target Date is required when Action / Activity Required is YES.');
-        return;
-      }
-      // Round-2 E1: target date must be strictly greater than today.
-      // Software-side guard so the picker can't save a past or today date —
-      // the server re-validates the same rule.
+    // Round-3 R23: Target date is OPTIONAL even when Action Required = YES.
+    // We only validate it when the user actually supplied a value.
+    if (fillActionReq && fillTargetDate) {
       const today = new Date(); today.setHours(0,0,0,0);
       const picked = new Date(fillTargetDate + 'T00:00:00');
       if (picked <= today) {
@@ -327,18 +322,18 @@ const QmsDepartmentCommentsSection = ({ commonSlug, recordId, currentUser, recor
             sx={{ alignItems: 'flex-start', mb: 1 }}
           />
 
-          {/* 3. Conditional Target Date — only when Action Required = YES */}
+          {/* 3. Conditional Target Date — only when Action Required = YES.
+              Round-3 R23: now OPTIONAL (was required in Round-2). The
+              picker still enforces strict-future + ≤ parent when supplied. */}
           {fillActionReq && (
             <TextField
-              label="Target Date" type="date" required fullWidth
+              label="Target Date (optional)" type="date" fullWidth
               value={fillTargetDate}
               onChange={(e) => setFillTargetDate(e.target.value)}
               InputLabelProps={{ shrink: true }}
+              placeholder="DD/MM/YYYY"
               inputProps={{
                 autoComplete: 'off',
-                // Software-controlled bounds — min is tomorrow (Round-2 E1
-                // forbids picking past or today), max is the CC target
-                // completion date when supplied. The server re-validates.
                 min: (() => {
                   const d = new Date(); d.setDate(d.getDate() + 1);
                   return d.toISOString().slice(0, 10);
@@ -347,8 +342,8 @@ const QmsDepartmentCommentsSection = ({ commonSlug, recordId, currentUser, recor
               }}
               helperText={
                 recordTargetDate
-                  ? `Must be a future date and on or before the parent record's target completion date (${recordTargetDate}).`
-                  : 'Set a future date by which your department will complete the action.'
+                  ? `Optional. If set, must be future and on or before the parent record's target completion date (${recordTargetDate}).`
+                  : 'Optional. Set a future date if your department needs a deadline.'
               }
               sx={{ mt: 1 }}
             />
@@ -357,7 +352,7 @@ const QmsDepartmentCommentsSection = ({ commonSlug, recordId, currentUser, recor
         <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button onClick={() => setFillRow(null)} disabled={fillSaving}>Cancel</Button>
           <Button type="submit" variant="contained"
-                  disabled={fillSaving || !fillText.trim() || (fillActionReq && !fillTargetDate)}>
+                  disabled={fillSaving || !fillText.trim()}>
             {fillSaving ? 'Saving…' : 'Submit comment'}
           </Button>
         </DialogActions>

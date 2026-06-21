@@ -28,14 +28,25 @@ export const isAuthenticated = () => !!getToken();
 // site — critical for GxP audit trails.
 const INDIA_TZ = 'Asia/Kolkata';
 
+// Round-3 R11: every date is rendered as DD/MM/YYYY across the app (was
+// "DD Mon YYYY"). Date input fields should also carry placeholder="DD/MM/YYYY".
 export const formatDate = (dateStr) => {
   if (!dateStr) return '—';
-  return new Date(dateStr).toLocaleDateString('en-GB', {
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '—';
+  // Use Intl in Asia/Kolkata to align with IST audit trails, then re-pack
+  // the parts as DD/MM/YYYY. toLocaleDateString('en-GB') gives DD/MM/YYYY
+  // natively but we keep the explicit re-pack so the format is locale-safe.
+  const parts = new Intl.DateTimeFormat('en-GB', {
     year: 'numeric',
-    month: 'short',
+    month: '2-digit',
     day: '2-digit',
     timeZone: INDIA_TZ,
-  });
+  }).formatToParts(d);
+  const dd = parts.find(p => p.type === 'day')?.value || '';
+  const mm = parts.find(p => p.type === 'month')?.value || '';
+  const yyyy = parts.find(p => p.type === 'year')?.value || '';
+  return `${dd}/${mm}/${yyyy}`;
 };
 
 /**

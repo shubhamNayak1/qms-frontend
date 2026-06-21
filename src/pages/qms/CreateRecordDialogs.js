@@ -16,6 +16,7 @@ import {
 } from '../../api/qmsApi';
 import { createLineItemApi, uploadRecordAttachmentApi } from '../../api/qmsCommonApi';
 import { listDepartmentsApi } from '../../api/orgApi';
+import ESignDialog from '../../components/ESignDialog';
 import { getDocumentsApi } from '../../api/dmsApi';
 import { useAuth } from '../../store/AuthContext';
 import { Box, IconButton, Tooltip, Chip, Stack } from '@mui/material';
@@ -155,10 +156,14 @@ const SectionLabel = ({ children }) => (
   </Grid>
 );
 
-const BaseDialog = ({ open, onClose, title, initialForm, onSubmit, children }) => {
+const BaseDialog = ({ open, onClose, title, initialForm, onSubmit, children, skipESign = false }) => {
   const [form, setForm]     = useState(initialForm);
   const [saving, setSaving] = useState(false);
   const [error, setError]   = useState(null);
+  // Round-3 R3 / R30: e-sign gate before creating any QMS draft record.
+  // The CC dialog wraps its own confirm + e-sign flow, so it passes
+  // skipESign={true} to suppress this. Every other module uses this gate.
+  const [eSignOpen, setESignOpen] = useState(false);
   // Round-2 A2: a synchronous ref-based guard that survives the gap between
   // click and React's re-render. Without it, a rapid double-click on a slow
   // network can fire onSubmit twice and the backend creates two records.
@@ -168,19 +173,30 @@ const BaseDialog = ({ open, onClose, title, initialForm, onSubmit, children }) =
     if (open) {
       setForm(initialForm);
       setError(null);
+      setESignOpen(false);
       inFlight.current = false;
     }
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const handleSave = async () => {
+  // Stage 1: user clicked Create — open e-sign (or skip straight to persist).
+  const handleSave = () => {
+    if (skipESign) { handlePersist(); return; }
+    setError(null);
+    setESignOpen(true);
+  };
+
+  // Stage 2: e-sign succeeded (or skipESign was set) — actually persist.
+  const handlePersist = async () => {
     if (inFlight.current) return; // synchronous guard
     inFlight.current = true;
     setSaving(true);
     setError(null);
     try {
       await onSubmit(form);
+      setESignOpen(false);
       onClose();
     } catch (err) {
+      setESignOpen(false);
       setError(err.response?.data?.message || 'Failed to create record.');
     } finally {
       setSaving(false);
@@ -202,9 +218,18 @@ const BaseDialog = ({ open, onClose, title, initialForm, onSubmit, children }) =
       <DialogActions sx={{ px: 3, pb: 2 }}>
         <Button onClick={onClose} disabled={saving}>Cancel</Button>
         <Button variant="contained" onClick={handleSave} disabled={saving || !form.title?.trim()}>
-          {saving ? 'Creating…' : 'Create (Draft)'}
+          {saving ? 'Creating…' : skipESign ? 'Create (Draft)' : 'Sign & Create (Draft)'}
         </Button>
       </DialogActions>
+
+      {/* Round-3 R30 — e-sign gate for every module's Create dialog. */}
+      <ESignDialog
+        open={eSignOpen}
+        onClose={() => !saving && setESignOpen(false)}
+        onSigned={handlePersist}
+        meaning={`Create draft — ${title}`}
+        actionLabel={saving ? 'Saving…' : 'Sign & create draft'}
+      />
     </Dialog>
   );
 };
@@ -649,6 +674,9 @@ export const CreateChangeControlDialog = ({ open, onClose, onCreated }) => {
   // (same pattern as BaseDialog handleSave).
   const [confirmSaving, setConfirmSaving] = useState(false);
   const confirmInFlight = React.useRef(false);
+  // Round-3 R3: e-sign before the record is created. The flow is:
+  //   confirm "Yes, Save" → open e-sign → server verifies password → persist
+  const [eSignOpen, setESignOpen] = useState(false);
   const [pendingForm, setPendingForm] = useState(null);
 
   // Search DMS docs only while the dialog is open + the user is typing.
@@ -747,19 +775,27 @@ export const CreateChangeControlDialog = ({ open, onClose, onCreated }) => {
     throw new FormValidationError('__pending_confirm__');
   };
 
-  const handleConfirmYes = async () => {
+  const handleConfirmYes = () => {
     if (!pendingForm) return;
-    if (confirmInFlight.current) return; // Round-2 A2: synchronous double-click guard
+    // Round-3 R3: instead of persisting immediately, open the e-sign dialog.
+    // The actual persist runs inside handleESignedSave once the server
+    // verifies the user's password.
+    setConfirmOpen(false);
+    setESignOpen(true);
+  };
+
+  const handleESignedSave = async () => {
+    if (!pendingForm) return;
+    if (confirmInFlight.current) return; // double-click guard
     confirmInFlight.current = true;
     setConfirmSaving(true);
     try {
       await persist(pendingForm);
-      setConfirmOpen(false);
+      setESignOpen(false);
       setPendingForm(null);
       onClose();
     } catch (err) {
-      setConfirmOpen(false);
-      // surface the error in the underlying BaseDialog
+      setESignOpen(false);
       throw err;
     } finally {
       setConfirmSaving(false);
@@ -771,6 +807,7 @@ export const CreateChangeControlDialog = ({ open, onClose, onCreated }) => {
     <>
       <BaseDialog
         open={open} onClose={onClose} title="Initiate Change Control"
+        skipESign={/* CC has its own confirm + e-sign sequence below */ true}
         initialForm={initialForm}
         onSubmit={async (form) => {
           try {
@@ -1021,10 +1058,19 @@ export const CreateChangeControlDialog = ({ open, onClose, onCreated }) => {
         <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button onClick={() => setConfirmOpen(false)} disabled={confirmSaving}>No</Button>
           <Button variant="contained" onClick={handleConfirmYes} disabled={confirmSaving}>
-            {confirmSaving ? 'Saving…' : 'Yes, Save'}
+            Yes, Sign &amp; Save
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Round-3 R3 — e-sign before the CC draft is persisted. */}
+      <ESignDialog
+        open={eSignOpen}
+        onClose={() => !confirmSaving && setESignOpen(false)}
+        onSigned={handleESignedSave}
+        meaning="Create Change Control draft"
+        actionLabel={confirmSaving ? 'Saving…' : 'Sign & create draft'}
+      />
     </>
   );
 };

@@ -94,7 +94,7 @@ const WorkflowActionDialog = ({ open, onClose, onConfirm, action, actionLabel, r
           <Chip label={error} color="error" size="small" sx={{ mb: 1.5, maxWidth: '100%', height: 'auto', '& .MuiChip-label': { whiteSpace: 'normal' } }} />
         )}
         <TextField
-          label="Comment"
+          label="Remark / Justification"
           required
           multiline
           rows={3}

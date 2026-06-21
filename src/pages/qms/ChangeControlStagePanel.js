@@ -8,14 +8,16 @@ import ESignDialog from '../../components/ESignDialog';
 import StageAttachments from './StageAttachments';
 import {
   Save as SaveIcon, ArrowForward as ForwardIcon, Cancel as RejectIcon,
-  Undo as ResendIcon, History as HistoryIcon,
+  Undo as ResendIcon,
 } from '@mui/icons-material';
 import {
   updateChangeControlApi, approveChangeControlApi, rejectChangeControlApi,
   closeChangeControlApi, transitionChangeControlApi,
 } from '../../api/qmsApi';
 import { listDeptCommentsApi, listLineItemsApi } from '../../api/qmsCommonApi';
-import { formatDateTime } from '../../utils/helpers';
+import QmsDepartmentAttachmentsSection from './QmsDepartmentAttachmentsSection';
+import { useAuth } from '../../store/AuthContext';
+// formatDateTime previously used by Activity History (removed in Round-3 R18).
 
 /**
  * ChangeControlStagePanel — May 2026 tester rebuild.
@@ -52,12 +54,14 @@ import { formatDateTime } from '../../utils/helpers';
 const STAGE_DESCRIPTORS = {
   PENDING_HOD: {
     title: 'HOD Assessment',
-    actor: 'Department Head of Department',
+    actor: 'Head of Department',
     helper: 'Review every field the Initiator captured below, then write your Initial Assessment. Three outcomes: forward to QA, send back to Initiator for revision, or reject.',
     fields: ['initialAssessment'],
     requiredFields: ['initialAssessment'],
     primary: 'approve',
-    primaryLabel: 'Approve & forward to QA Evaluation',
+    // Round-3 R10: HOD button reads "Review & forward to QA" — HOD is
+    // performing the review, not approving the change itself.
+    primaryLabel: 'Review & forward to QA Evaluation',
   },
   PENDING_QA_REVIEW: {
     title: 'QA Evaluation',
@@ -110,20 +114,36 @@ const STAGE_DESCRIPTORS = {
   PENDING_HEAD_QA: {
     title: 'Approval by Head QA',
     actor: 'Head of QA',
-    helper: 'Record the final approval narrative and decide.',
-    fields: ['approvalComments'],
-    requiredFields: ['approvalComments'],
+    // Round-3 R26: the workflow Remark / Justification IS the Approval
+    // Comment at this stage — no separate field. The TextField label flips
+    // to "Approval Comment" via a per-stage rule in the JSX below.
+    // Round-3 R28: Head QA forwards to Department Attachments (where each
+    // dept that flagged action_required uploads supporting documents) and
+    // from there to Verification.
+    helper: 'Record the final approval narrative as the Approval Comment, then approve. Departments that flagged Action Required will upload supporting attachments before Verification.',
+    fields: [],
+    requiredFields: [],
     primary: 'approve',
-    primaryLabel: 'Approve & forward to Verification',
+    primaryLabel: 'Approve & forward',
+  },
+  PENDING_ATTACHMENTS: {
+    title: 'Department Attachments',
+    actor: 'Action-Required Department HODs → Head of QA',
+    helper: 'Each department that flagged Action Required during Department-Wise Comments uploads a supporting document with a remark. Head QA approves each row. Once every row is APPROVED the record advances to Verification.',
+    fields: [],
+    requiredFields: [],
+    primary: 'approve',
+    primaryLabel: 'Advance to Verification',
   },
   PENDING_VERIFICATION: {
     title: 'Verification of Change Implementation',
     actor: 'Initiator → Manager QA → Head QA',
-    helper: 'Initiator fills Action Taken / Effective On for each line item. Manager QA reviews — Head QA closes the record.',
+    // Round-3 R29: Documents Reissue toggle removed (it confused testers
+    // and the implementation team can already capture it in the narrative).
+    helper: 'Initiator fills Action Taken / Effective On. Manager QA reviews — Head QA closes the record.',
     fields: [
       'verificationActionTaken', 'verificationEffectiveOn',
-      'verificationDocumentsReissue', 'verificationOtherComments',
-      'verificationRegCommunication',
+      'verificationOtherComments', 'verificationRegCommunication',
     ],
     requiredFields: ['verificationActionTaken', 'verificationEffectiveOn'],
     primary: 'close',
@@ -148,9 +168,14 @@ const FIELD_LABELS = {
 // ── Read-only Initiator context — shown on EVERY downstream stage ──
 const InitiatorContext = ({ record, lineItems }) => (
   <Alert severity="info" icon={false} sx={{ mb: 2 }}>
-    <Typography variant="caption" sx={{ display: 'block', fontWeight: 700, letterSpacing: 0.4 }}>
-      CAPTURED BY INITIATOR
-    </Typography>
+    <Stack direction="row" alignItems="baseline" spacing={1} flexWrap="wrap">
+      <Typography variant="caption" sx={{ fontWeight: 700, letterSpacing: 0.4 }}>
+        CAPTURED BY INITIATOR
+      </Typography>
+      {/* Round-3 R16 / R19: every section stamps the actor + date. */}
+      <SectionStamp actor={record?.raisedByName || record?.createdBy}
+                    when={record?.createdAt} />
+    </Stack>
     <Grid container spacing={1} sx={{ mt: 0.5 }}>
       {record.recordNumber && (
         <Grid item xs={6}>
@@ -235,63 +260,37 @@ const InitiatorContext = ({ record, lineItems }) => (
   </Alert>
 );
 
-// ── Activity history timeline — for QA Evaluation ─────────────────
-const ActivityHistory = ({ history, resendCount }) => {
-  const [open, setOpen] = useState(false);
-  // Round-2 C6: sort by event time ASC. Without the sort the HOD's Initial
-  // Assessment remark sometimes rendered after later events because the
-  // backend join order didn't guarantee chronological output.
-  const rows = Array.isArray(history)
-    ? [...history].sort((a, b) => {
-        const ta = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-        const tb = b.timestamp ? new Date(b.timestamp).getTime() : 0;
-        return ta - tb;
-      })
-    : [];
-  if (rows.length === 0) return null;
+// Round-3 R18: ActivityHistory removed — it duplicated the drawer-level
+// Status History block. Status History now carries the fromStatus → toStatus
+// pair with actor + timestamp, which covers every use case Activity History
+// did. The Resend-count chip is surfaced in the drawer header.
+
+// Round-3 R16 / R19: small helper that finds the StatusHistory entry that
+// terminated a given stage and returns "by {actor} · on {date}" — used to
+// stamp every read-only section with WHO captured it and WHEN.
+const findStageActor = (history, terminalTransitions) => {
+  if (!Array.isArray(history) || history.length === 0) return null;
+  // walk most-recent → first, return the first match. Using fromStatus as
+  // the discriminator catches the actual stage that produced the data
+  // (e.g. PENDING_HOD → anywhere = HOD's signoff).
+  for (const h of [...history].reverse()) {
+    if (terminalTransitions.includes(h.fromStatus)) {
+      return { actor: h.changedByUsername || h.actor, when: h.changedAt || h.timestamp };
+    }
+  }
+  return null;
+};
+
+const SectionStamp = ({ actor, when }) => {
+  if (!actor && !when) return null;
+  const d = when ? new Date(when) : null;
+  const formatted = d && !isNaN(d.getTime())
+    ? `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`
+    : null;
   return (
-    <Alert severity="info" icon={false} sx={{ mb: 2 }}>
-      <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap">
-        <HistoryIcon fontSize="small" />
-        <Typography variant="caption" sx={{ fontWeight: 700, letterSpacing: 0.4 }}>
-          ACTIVITY HISTORY · {rows.length} STEP{rows.length !== 1 ? 'S' : ''}
-        </Typography>
-        {resendCount > 0 && (
-          <Chip size="small" color="warning" label={`Resent ${resendCount}×`} />
-        )}
-        <Box sx={{ flex: 1 }} />
-        <Button size="small" onClick={() => setOpen((v) => !v)}>
-          {open ? 'Collapse' : 'Expand'}
-        </Button>
-      </Stack>
-      {open && (
-        <Stack spacing={0.8} sx={{ mt: 1 }}>
-          {rows.map((h, i) => (
-            <Box key={i} sx={{
-                borderLeft: '3px solid',
-                borderColor: h.toStatus === 'DRAFT' && h.fromStatus === 'PENDING_HOD'
-                              ? 'warning.main' : 'primary.main',
-                pl: 1.2, py: 0.4,
-              }}>
-              <Typography variant="caption" color="text.secondary">
-                {h.timestamp && formatDateTime(h.timestamp)} · {h.actor || '—'}
-              </Typography>
-              <Typography variant="body2">
-                <strong>{h.fromStatus} → {h.toStatus}</strong>
-                {h.toStatus === 'DRAFT' && h.fromStatus === 'PENDING_HOD' && (
-                  <Chip size="small" color="warning" label="RESEND" sx={{ ml: 0.5 }} />
-                )}
-              </Typography>
-              {h.comment && (
-                <Typography variant="caption" sx={{ display: 'block', whiteSpace: 'pre-wrap' }}>
-                  {h.comment}
-                </Typography>
-              )}
-            </Box>
-          ))}
-        </Stack>
-      )}
-    </Alert>
+    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.3 }}>
+      by <strong>{actor || '—'}</strong>{formatted ? ` · on ${formatted}` : ''}
+    </Typography>
   );
 };
 
@@ -311,17 +310,25 @@ const FieldEditor = ({ name, form, setForm, xs = 12 }) => {
         </Grid>
       );
     case 'category':
-      // "Category" is the Change Control Type per tester spec — same values as
-      // the old Risk Level (Critical / Major / Minor). Single source of truth.
+      // Round-3 R20: renamed to "Risk Level" UI-side. The underlying column
+      // stays as `category` to avoid churning the schema; the UI label is
+      // the single source of truth presented to the user.
       return (
         <Grid item xs={6}>
-          <TextField label="Change Control Type" select required fullWidth value={v}
+          <TextField label="Risk Level" select required fullWidth value={v}
                      onChange={(e) => set(e.target.value)}
-                     helperText="Critical / Major / Minor — same as Risk Level.">
+                     helperText="Critical / Major / Minor — drives the auto-target-date on QA Head approval.">
             {['', 'Critical', 'Major', 'Minor'].map((c) => (
               <MenuItem key={c || '__'} value={c}>{c || <em>— select —</em>}</MenuItem>
             ))}
           </TextField>
+          {v && (
+            <Box sx={{ mt: 1 }}>
+              <Chip size="small"
+                    label={`Risk: ${v}`}
+                    color={v === 'Critical' ? 'error' : v === 'Major' ? 'warning' : 'info'} />
+            </Box>
+          )}
         </Grid>
       );
     case 'regulatorySubmissionRequired':
@@ -389,21 +396,22 @@ const FieldEditor = ({ name, form, setForm, xs = 12 }) => {
     case 'verificationEffectiveOn':
       return (
         <Grid item xs={6}>
+          {/* Round-3 R29: effective/implemented date must be today or later.
+              Picker enforces min via the input attr; server re-validates. */}
           <TextField label="Effective / Implemented On" type="date" required fullWidth value={v}
                      onChange={(e) => set(e.target.value)}
                      InputLabelProps={{ shrink: true }}
-                     inputProps={{ autoComplete: 'off' }} />
+                     placeholder="DD/MM/YYYY"
+                     inputProps={{
+                       autoComplete: 'off',
+                       min: new Date().toISOString().slice(0, 10),
+                     }} />
         </Grid>
       );
     case 'verificationDocumentsReissue':
-      return (
-        <Grid item xs={6}>
-          <FormControlLabel
-            control={<Switch checked={!!form[name]} onChange={(e) => set(e.target.checked)} />}
-            label="Documents to be Reissued"
-          />
-        </Grid>
-      );
+      // Round-3 R29: Documents Reissue toggle removed from the verification
+      // form entirely. Field kept on the entity for legacy records.
+      return null;
     case 'verificationRegCommunication':
       return (
         <Grid item xs={12}>
@@ -430,6 +438,7 @@ const FieldEditor = ({ name, form, setForm, xs = 12 }) => {
 const ChangeControlStagePanel = ({ record, onUpdated }) => {
   const status = record?.status;
   const desc   = STAGE_DESCRIPTORS[status];
+  const { user: currentUser } = useAuth();
 
   const [form, setForm]           = useState({});
   const [comment, setComment]     = useState('');
@@ -519,10 +528,19 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
   const blockForward       = isDeptCommentStage && deptPending > 0;
 
   // ── QA Evaluation phase-specific descriptors ──────────────────
+  //
+  // Round-3 R21 / R22 / R24 / R25:
+  //   Phase 1 — Risk Level + Pre-Remark are mandatory. Approval routing
+  //              flags are HIDDEN. The workflow Remark / Justification is
+  //              MANDATORY only when QA hasn't invited any departments
+  //              (i.e. they're forwarding straight without a fan-out).
+  //   Phase 2 — after every invited department has responded. The QA
+  //              Evaluation Remark is now "Post Remark" (R24) and is
+  //              mandatory. Approval routing flags BECOME AVAILABLE so
+  //              QA can pick the downstream routing now that they have
+  //              dept feedback in hand.
   const qaPhase1Fields = ['category', 'preRemark'];
   const qaPhase1Required = ['category', 'preRemark'];
-  // Round-2 H2: regulatorySubmissionRequired + regulatorySubmissionReference
-  // moved out — they live exclusively on the RA Evaluation stage now.
   const qaPhase2Fields = [
     'qaEvalRemark',
     'riskAssessmentRequired', 'riskAssessment',
@@ -540,11 +558,13 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
     if (qaPhase === 1) {
       effectiveFields   = qaPhase1Fields;
       effectiveRequired = qaPhase1Required;
-      effectiveHelper   = 'PHASE 1 — Set the Change Control Type and write a Pre-Remark visible to invited departments. Then invite the departments via the Department-Wise Comments accordion below and save.';
+      effectiveHelper   = deptTotal === 0
+        ? 'PHASE 1 — Set the Risk Level and write a Pre-Remark. To send to departments, invite them via the Department-Wise Comments accordion below. Otherwise fill the Remark / Justification to forward directly.'
+        : 'PHASE 1 — Risk Level + Pre-Remark captured. Departments are now responding. The Remark / Justification is OPTIONAL while you wait; it becomes mandatory in Phase 2 once they finish.';
     } else {
       effectiveFields   = qaPhase2Fields;
       effectiveRequired = qaPhase2Required;
-      effectiveHelper   = 'PHASE 2 — All invited departments have responded. Capture your QA Evaluation Remark, decide whether a Risk Assessment is required, and flip the Site Head / Customer Communication / Regulatory Assessment flags as appropriate, then forward.';
+      effectiveHelper   = 'PHASE 2 — All invited departments have responded. Capture the Post Remark, decide Risk Assessment, and set Approval Routing (Site Head / Customer Communication) before forwarding to RA Evaluation.';
     }
   }
 
@@ -566,7 +586,13 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
       ? resendReason.trim()
       : comment.trim();
 
-    if (!effectiveComment) {
+    // Round-3 R21: at QA Phase 1 with depts invited, the workflow Remark
+    // is OPTIONAL — QA is still mid-flow. Other transitions stay strict.
+    const remarkOptional = action !== 'resend'
+                        && status === 'PENDING_QA_REVIEW'
+                        && qaPhase === 1
+                        && deptTotal > 0;
+    if (!effectiveComment && !remarkOptional) {
       setError(action === 'resend'
         ? 'A reason is required for Resend — please enter it in the dialog.'
         : 'A Remark / Justification is required for this action — it is recorded on the audit trail.');
@@ -660,6 +686,10 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
           // Pass through only the keys the stage owns
           effectiveFields.forEach((f) => { payload[f] = form[f]; });
         }
+        // Round-3 R26: at Head QA the workflow remark IS the Approval Comment.
+        if (status === 'PENDING_HEAD_QA') {
+          payload.approvalComments = effectiveComment;
+        }
         await updateChangeControlApi(record.id, payload);
       }
 
@@ -736,8 +766,8 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
       {status === 'PENDING_HOD' && <InitiatorContext record={record} lineItems={lineItems} />}
 
       {/* HOD's Initial Assessment — surfaced read-only to downstream stages.
-          Round-2 F1: now reads from the dedicated initial_assessment column
-          instead of the shared risk_assessment column. */}
+          Round-3 R19: stamped with actor + date.
+          Round-2 F1: reads from the dedicated initial_assessment column. */}
       {status !== 'PENDING_HOD' && record?.initialAssessment && (
         <Alert severity="info" icon={false} sx={{ mb: 2 }}>
           <Typography variant="caption" sx={{ display: 'block', fontWeight: 700, letterSpacing: 0.4 }}>
@@ -746,6 +776,10 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
           <Typography variant="body2" sx={{ mt: 0.4, whiteSpace: 'pre-wrap' }}>
             {record.initialAssessment}
           </Typography>
+          {(() => {
+            const stamp = findStageActor(record?.statusHistory, ['PENDING_HOD']);
+            return stamp ? <SectionStamp {...stamp} /> : null;
+          })()}
         </Alert>
       )}
 
@@ -759,6 +793,10 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
           <Typography variant="body2" sx={{ mt: 0.4, whiteSpace: 'pre-wrap' }}>
             {record.preRemark}
           </Typography>
+          {(() => {
+            const stamp = findStageActor(record?.statusHistory, ['PENDING_QA_REVIEW']);
+            return stamp ? <SectionStamp {...stamp} /> : null;
+          })()}
         </Alert>
       )}
 
@@ -777,7 +815,7 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
           <Grid container spacing={1} sx={{ mt: 0.4 }}>
             {record.category && (
               <Grid item xs={6}>
-                <Typography variant="body2"><strong>Change Control Type:</strong> {record.category}</Typography>
+                <Typography variant="body2"><strong>Risk Level:</strong> {record.category}</Typography>
               </Grid>
             )}
             {record.siteHeadRequired != null && (
@@ -798,32 +836,37 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
             {record.comments && (
               <Grid item xs={12}>
                 <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-                  <strong>QA Remark:</strong> {record.comments}
+                  <strong>QA Post Remark:</strong> {record.comments}
                 </Typography>
               </Grid>
             )}
           </Grid>
+          {(() => {
+            const stamp = findStageActor(record?.statusHistory,
+                                          ['PENDING_QA_REVIEW','PENDING_DEPT_COMMENT']);
+            return stamp ? <SectionStamp {...stamp} /> : null;
+          })()}
         </Alert>
       )}
 
-      {/* Activity history timeline for QA Evaluation */}
-      {status === 'PENDING_QA_REVIEW' && (
-        <ActivityHistory history={record?.statusHistory} resendCount={record?.resendCount || 0} />
-      )}
+      {/* Round-3 R18: Activity History removed — it duplicated the
+          drawer-level Status History block. Resend count is surfaced as
+          a chip in the drawer header instead. */}
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-      {/* Round-2 H4 — Stage attachments. Available on every non-terminal
-          stage so the actor can attach evidence (Word, PDF, JPG) to the
-          record at their stage. Hidden at DRAFT — the Initiator's attachment
-          is captured on the Create dialog instead. */}
-      {!['DRAFT','CLOSED','CANCELLED','REJECTED','REOPENED'].includes(status) && record?.id && (
-        <StageAttachments
-          moduleKey="changeControl"
-          recordId={record.id}
-          readOnly={false}
-          heading={`${desc.title} — attachments`}
-        />
+      {/* Stage attachments moved BELOW Remark/Justification per Round-3 R15. */}
+
+      {/* Round-3 R28: PENDING_ATTACHMENTS — show the dept-attachment fan-out
+          where each action-required dept uploads + Head QA approves. */}
+      {status === 'PENDING_ATTACHMENTS' && (
+        <Box sx={{ mb: 2 }}>
+          <QmsDepartmentAttachmentsSection
+            commonSlug="change-control"
+            recordId={record.id}
+            currentUser={currentUser}
+          />
+        </Box>
       )}
 
       {/* Dept-comment progress + forward gate (PENDING_DEPT_COMMENT only) */}
@@ -944,13 +987,44 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
         </Grid>
       )}
 
-      <TextField
-        label="Remark / Justification" required multiline rows={2} fullWidth
-        value={comment} onChange={(e) => setComment(e.target.value)}
-        placeholder="Recorded on the audit trail as the actor's remark for this transition."
-        sx={{ mb: 1.5 }}
-        inputProps={{ autoComplete: 'off' }}
-      />
+      {(() => {
+        // Round-3 R24: at QA Phase 2 the label flips to "Post Remark".
+        // Round-3 R26: at Head QA the field IS the Approval Comment.
+        // Round-3 R21: at QA Phase 1 with depts invited, the field is
+        //              OPTIONAL while we wait for them to respond.
+        const isQaPhase1WithDepts = status === 'PENDING_QA_REVIEW'
+                                    && qaPhase === 1 && deptTotal > 0;
+        const fieldLabel = status === 'PENDING_HEAD_QA' ? 'Approval Comment'
+                        : status === 'PENDING_QA_REVIEW' && qaPhase === 2 ? 'Post Remark'
+                        : 'Remark / Justification';
+        const placeholder = status === 'PENDING_HEAD_QA'
+          ? 'Final approval narrative — captured as the record\'s Approval Comment and on the audit trail.'
+          : isQaPhase1WithDepts
+            ? 'Optional while departments are responding. Will become mandatory in Phase 2.'
+            : 'Recorded on the audit trail as the actor\'s remark for this transition.';
+        return (
+          <TextField
+            label={fieldLabel} required={!isQaPhase1WithDepts}
+            multiline rows={2} fullWidth
+            value={comment} onChange={(e) => setComment(e.target.value)}
+            placeholder={placeholder}
+            sx={{ mb: 1.5 }}
+            inputProps={{ autoComplete: 'off' }}
+          />
+        );
+      })()}
+
+      {/* Round-3 R15: Stage attachments rendered BELOW the Remark /
+          Justification field so the actor sees their remark first and
+          attaches supporting evidence afterwards. */}
+      {!['DRAFT','CLOSED','CANCELLED','REJECTED','REOPENED'].includes(status) && record?.id && (
+        <StageAttachments
+          moduleKey="changeControl"
+          recordId={record.id}
+          readOnly={false}
+          heading={`${desc.title} — attachments`}
+        />
+      )}
 
       <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
         <Tooltip title={blockForward

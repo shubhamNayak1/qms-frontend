@@ -261,10 +261,22 @@ const StatusHistoryTimeline = ({ history }) => {
             <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: `${STATUS_COLORS[h.toStatus] || 'grey'}.main`, flexShrink: 0 }} />
             {i < sorted.length - 1 && <Box sx={{ width: 2, flex: 1, bgcolor: 'divider', mt: 0.5 }} />}
           </Box>
-          {/* content */}
+          {/* content — Round-3 R17: render "fromStatus → toStatus" so the
+              row reads as the action that was taken, not as the current state.
+              Resend bounces (any reviewer → DRAFT) get a small RESEND chip. */}
           <Box sx={{ pb: 1 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, flexWrap: 'wrap' }}>
+              {h.fromStatus && (
+                <>
+                  <Chip label={STATUS_LABELS[h.fromStatus] || h.fromStatus} size="small"
+                        variant="outlined" color={STATUS_COLORS[h.fromStatus] || 'default'} />
+                  <Typography variant="caption" sx={{ mx: 0.2 }}>→</Typography>
+                </>
+              )}
               <Chip label={STATUS_LABELS[h.toStatus] || h.toStatus} size="small" color={STATUS_COLORS[h.toStatus] || 'default'} />
+              {h.fromStatus && h.fromStatus !== 'DRAFT' && h.toStatus === 'DRAFT' && (
+                <Chip label="RESEND" size="small" color="warning" />
+              )}
               <Typography variant="caption" color="text.secondary">
                 by <strong>{h.changedByUsername}</strong> · {formatDateTime(h.changedAt)}
               </Typography>
@@ -298,11 +310,15 @@ const WorkflowButtons = ({ record, moduleKey, onAction }) => {
         </Button>
       )}
 
-      {/* Approve / Forward — canonical next step */}
-      {primaryForward.length > 0 && (
+      {/* Approve / Forward — canonical next step.
+          Round-3 R9: hidden at DRAFT (only Submit-for-Review should show there).
+          Round-3 R10: at PENDING_HOD the label reads "Review" since the HOD
+          is performing the review (they're not approving the change itself). */}
+      {status !== 'DRAFT' && primaryForward.length > 0 && (
         <Button variant="contained" size="small" color="success"
-          onClick={() => onAction('approve', 'Approve / Forward')}>
-          Approve / Forward
+          onClick={() => onAction('approve',
+              status === 'PENDING_HOD' ? 'Review' : 'Approve / Forward')}>
+          {status === 'PENDING_HOD' ? 'Review' : 'Approve / Forward'}
         </Button>
       )}
 
@@ -426,9 +442,17 @@ const RecordDetailDrawer = ({ open, onClose, recordId, moduleKey, onUpdated }) =
                 <Typography variant="h6" fontWeight={700} lineHeight={1.3} sx={{ mt: 0.25 }}>
                   {record.title}
                 </Typography>
-                <Box sx={{ display: 'flex', gap: 1, mt: 0.75, flexWrap: 'wrap' }}>
-                  <StatusChip status={record.status} />
+                {/* Round-3 R5: hide the status chip in DRAFT — the workflow
+                    stepper below already shows "Initiation" at that stage and
+                    the redundant chip clutters a half-empty record.
+                    Round-3 R7: surface Change Type + attachment count on
+                    every status. */}
+                <Box sx={{ display: 'flex', gap: 1, mt: 0.75, flexWrap: 'wrap', alignItems: 'center' }}>
+                  {record.status !== 'DRAFT' && <StatusChip status={record.status} />}
                   {record.priority && <PriorityChip priority={record.priority} />}
+                  {moduleKey === 'changeControl' && record.changeType && (
+                    <Chip size="small" variant="outlined" label={`Change Type: ${record.changeType}`} />
+                  )}
                   {record.overdue && <Chip label="Overdue" size="small" color="error" icon={<WarnIcon />} />}
                 </Box>
               </>
@@ -437,14 +461,15 @@ const RecordDetailDrawer = ({ open, onClose, recordId, moduleKey, onUpdated }) =
           </Box>
           <Box sx={{ display: 'flex', gap: 0.5 }}>
             <Tooltip title="Refresh"><IconButton size="small" onClick={fetchRecord} disabled={loading}><RefreshIcon fontSize="small" /></IconButton></Tooltip>
-            {/* Round-2 E2 — Print / Save as PDF. Uses the browser's native
-                print dialog so the user can pick "Save as PDF" without us
-                shipping a server-side PDF generator for every module. */}
-            <Tooltip title="Print / Save as PDF">
-              <IconButton size="small" onClick={() => window.print()} disabled={!record}>
-                <PrintIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
+            {/* Round-2 E2 — Print / Save as PDF. Hidden in DRAFT per
+                Round-3 R4 (printing a half-empty draft has no value). */}
+            {record?.status !== 'DRAFT' && (
+              <Tooltip title="Print / Save as PDF">
+                <IconButton size="small" onClick={() => window.print()} disabled={!record}>
+                  <PrintIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            )}
             <Tooltip title="Close"><IconButton size="small" onClick={onClose}><CloseIcon fontSize="small" /></IconButton></Tooltip>
           </Box>
         </Box>
@@ -504,9 +529,12 @@ const RecordDetailDrawer = ({ open, onClose, recordId, moduleKey, onUpdated }) =
                 </Alert>
               )}
 
-              {/* Common fields — Round-2 B1: Assigned To + Due Date aren't
-                  populated until HOD picks the record up, so hide them in
-                  DRAFT to match "only show what the Initiator captured". */}
+              {/* Common fields — Round-3 R5 + R6:
+                    • At DRAFT, hide Assigned To, Due Date, Description.
+                    • At DRAFT, surface Raised Date, Product/Material, Material Code
+                      (which the Initiator DID capture at create-time).
+                    • Description hidden in DRAFT because the field isn't
+                      captured on the Initiate dialog. */}
               <Grid container spacing={2}>
                 <Grid item xs={6}><Field label="Raised By" value={record.raisedByName || record.createdBy} /></Grid>
                 {!isDraft(record.status) && (
@@ -516,21 +544,41 @@ const RecordDetailDrawer = ({ open, onClose, recordId, moduleKey, onUpdated }) =
                 {!isDraft(record.status) && (
                   <Grid item xs={6}><Field label="Due Date" value={formatDate(record.dueDate)} /></Grid>
                 )}
+                {/* Round-3 R6: Raised Date always visible at every status */}
+                {record.createdAt && (
+                  <Grid item xs={6}><Field label="Raised Date" value={formatDate(record.createdAt)} /></Grid>
+                )}
+                {/* Round-3 R6: Product/Material + Material Code surfaced for
+                    Change Control on every status — these ARE captured at
+                    create-time and were being hidden by the DRAFT gate. */}
+                {moduleKey === 'changeControl' && record.productMaterial && (
+                  <Grid item xs={6}><Field label="Product / Material" value={record.productMaterial} /></Grid>
+                )}
+                {moduleKey === 'changeControl' && record.productMaterialCode && (
+                  <Grid item xs={6}><Field label="Material Code" value={record.productMaterialCode} /></Grid>
+                )}
                 {record.closedDate && <Grid item xs={6}><Field label="Closed Date" value={formatDate(record.closedDate)} /></Grid>}
                 {record.approvedByName && <Grid item xs={6}><Field label="Approved By" value={record.approvedByName} /></Grid>}
                 {record.approvalComments && <Grid item xs={12}><Field label="Approval Comments" value={record.approvalComments} /></Grid>}
-                <Grid item xs={12}><Field label="Description" value={record.description} /></Grid>
+                {/* Round-3 R5: Description hidden in DRAFT */}
+                {!isDraft(record.status) && record.description && (
+                  <Grid item xs={12}><Field label="Description" value={record.description} /></Grid>
+                )}
               </Grid>
 
-              <Divider sx={{ my: 2 }} />
-
-              {/* Module-specific fields */}
-              <Typography variant="caption" fontWeight={700} textTransform="uppercase" letterSpacing={0.5} color="text.secondary">
-                Module Details
-              </Typography>
-              <Box sx={{ mt: 1.5 }}>
-                <ModuleExtraFields moduleKey={moduleKey} record={record} />
-              </Box>
+              {/* Module-specific fields — Round-3 R5: hidden in DRAFT entirely.
+                  At DRAFT these are all empty placeholders and add noise. */}
+              {!isDraft(record.status) && (
+                <>
+                  <Divider sx={{ my: 2 }} />
+                  <Typography variant="caption" fontWeight={700} textTransform="uppercase" letterSpacing={0.5} color="text.secondary">
+                    Module Details
+                  </Typography>
+                  <Box sx={{ mt: 1.5 }}>
+                    <ModuleExtraFields moduleKey={moduleKey} record={record} />
+                  </Box>
+                </>
+              )}
 
               {/* ── Common QMS sections — work uniformly for every module ──────── */}
               {commonSlug && recordId && (
@@ -696,12 +744,30 @@ const RecordDetailDrawer = ({ open, onClose, recordId, moduleKey, onUpdated }) =
           )}
         </Box>
 
-        {/* Workflow buttons footer */}
-        {record && (
-          <Paper elevation={3} sx={{ px: 3, py: 2, borderTop: '1px solid', borderColor: 'divider' }}>
-            <WorkflowButtons record={record} moduleKey={moduleKey} onAction={handleAction} />
-          </Paper>
-        )}
+        {/* Workflow buttons footer.
+            Round-3 R14 + R30: For every module that has a per-stage embedded
+            action bar (CC + CAPA + Deviation + Incident + MarketComplaint),
+            hide this drawer footer at the stages where the panel renders its
+            own bottom bar. DRAFT and terminal states have no panel buttons,
+            so the drawer footer remains so the Initiator can Submit and so
+            terminal records can be reopened. */}
+        {record && (() => {
+          const panelStages = [
+            'PENDING_HOD','PENDING_QA_REVIEW','PENDING_DEPT_COMMENT',
+            'PENDING_RA_REVIEW','PENDING_SITE_HEAD','PENDING_CUSTOMER_COMMENT',
+            'PENDING_HEAD_QA','PENDING_INVESTIGATION','PENDING_ATTACHMENTS',
+            'PENDING_VERIFICATION','PENDING_VERIFICATION_REVIEW',
+          ];
+          const panelOwnsButtons = ['changeControl','capa','deviation',
+                                    'incident','marketComplaint'].includes(moduleKey)
+                                  && panelStages.includes(record.status);
+          if (panelOwnsButtons) return null;
+          return (
+            <Paper elevation={3} sx={{ px: 3, py: 2, borderTop: '1px solid', borderColor: 'divider' }}>
+              <WorkflowButtons record={record} moduleKey={moduleKey} onAction={handleAction} />
+            </Paper>
+          );
+        })()}
       </Drawer>
 
       <WorkflowActionDialog

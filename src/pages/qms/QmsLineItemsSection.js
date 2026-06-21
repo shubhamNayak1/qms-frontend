@@ -198,7 +198,7 @@ const QmsLineItemsSection = ({ commonSlug, recordId, readOnly = false }) => {
                          inputProps={{ autoComplete: 'off' }} />
             </Grid>
             <Grid item xs={12}>
-              <TextField label="Justification" multiline rows={2} fullWidth
+              <TextField label="Remark / Justification" multiline rows={2} fullWidth
                          value={form.justification}
                          onChange={(e) => setForm({ ...form, justification: e.target.value })}
                          inputProps={{ autoComplete: 'off' }} />

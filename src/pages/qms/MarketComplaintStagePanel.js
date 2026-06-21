@@ -39,7 +39,7 @@ const STAGE_DESCRIPTORS = {
     helper: 'Review the complaint details and attachments. Add a review comment, then approve to forward to QA Investigation.',
     fields: [],
     primary: 'approve',
-    primaryLabel: 'Approve & forward to QA Investigation',
+    primaryLabel: 'Review & forward to QA Investigation',
   },
   PENDING_INVESTIGATION: {
     title: 'QA Investigation',

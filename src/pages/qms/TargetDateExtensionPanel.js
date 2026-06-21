@@ -200,7 +200,7 @@ const TargetDateExtensionPanel = ({ commonSlug, recordId, currentTargetDate }) =
                      onChange={(e) => setReqDate(e.target.value)}
                      InputLabelProps={{ shrink: true }}
                      inputProps={{ min: tomorrow, autoComplete: 'off' }} />
-          <TextField label="Justification" multiline rows={3} required fullWidth
+          <TextField label="Remark / Justification" multiline rows={3} required fullWidth
                      value={reqReason}
                      onChange={(e) => setReqReason(e.target.value)}
                      placeholder="Why is the original target no longer achievable?"
@@ -224,7 +224,7 @@ const TargetDateExtensionPanel = ({ commonSlug, recordId, currentTargetDate }) =
         </DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
           {decideError && <Alert severity="error" sx={{ mb: 2 }}>{decideError}</Alert>}
-          <TextField label="Remark" required multiline rows={3} fullWidth
+          <TextField label="Remark / Justification" required multiline rows={3} fullWidth
                      value={decideRemark}
                      onChange={(e) => setDecideRemark(e.target.value)}
                      placeholder="Recorded on the audit trail."

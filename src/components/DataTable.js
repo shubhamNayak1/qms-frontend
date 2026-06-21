@@ -18,10 +18,12 @@ const DataTable = ({
 }) => {
   const skeletonRows = Array.from({ length: rowsPerPage });
 
+  // Round-3 R1: table fits the viewport, no horizontal scroll.
+  // Cells auto-truncate via the columns' renderCell logic.
   return (
     <Paper variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden' }}>
-      <TableContainer>
-        <Table size="small">
+      <TableContainer sx={{ overflowX: 'auto' }}>
+        <Table size="small" sx={{ tableLayout: 'auto' }}>
           <TableHead>
             <TableRow>
               {columns.map((col) => (

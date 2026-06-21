@@ -44,7 +44,7 @@ const STAGE_DESCRIPTORS = {
       'Capture the initial Remedial Action and Preventive Action with attachments. The CAPA is then sent to QA for evaluation.',
     fields: ['correctiveAction', 'preventiveAction', 'rootCause'],
     primary: 'approve',
-    primaryLabel: 'Approve & forward to QA Evaluation',
+    primaryLabel: 'Review & forward to QA Evaluation',
   },
   PENDING_QA_REVIEW: {
     title: 'Evaluation by QA',
