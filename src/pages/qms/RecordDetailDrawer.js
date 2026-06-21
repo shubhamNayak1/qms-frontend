@@ -156,17 +156,23 @@ const ModuleExtraFields = ({ moduleKey, record }) => {
             <Grid item xs={12}><Field label="Reason for Change" value={record.changeReason} /></Grid>
           </Grid>
 
-          {/* Approval routing — populated by QA at PENDING_QA_REVIEW.
-              Hidden until then (Round-2 B1). */}
-          {!isPreQA(status) && (
+          {/* Approval routing — Round-4 fix: only render when QA has
+              actually decided (at least one flag explicitly non-null).
+              Showing "No" for fields the QA hasn't touched yet was
+              misleading. */}
+          {!isPreQA(status) && (record.siteHeadRequired != null || record.customerCommunicationRequired != null) && (
             <>
               <Typography variant="caption" fontWeight={700} color="primary.main"
                           textTransform="uppercase" letterSpacing={0.4} display="block" sx={{ mb: 0.5 }}>
                 Approval Routing
               </Typography>
               <Grid container spacing={1} sx={{ mb: 1.5 }}>
-                <Grid item xs={6}><Field label="Site Head Required" value={record.siteHeadRequired ? 'Yes' : 'No'} /></Grid>
-                <Grid item xs={6}><Field label="Customer Comment Req." value={record.customerCommentRequired ? 'Yes' : 'No'} /></Grid>
+                {record.siteHeadRequired != null && (
+                  <Grid item xs={6}><Field label="Site Head Required" value={record.siteHeadRequired ? 'Yes' : 'No'} /></Grid>
+                )}
+                {record.customerCommunicationRequired != null && (
+                  <Grid item xs={6}><Field label="Customer Comm. Required" value={record.customerCommunicationRequired ? 'Yes' : 'No'} /></Grid>
+                )}
               </Grid>
             </>
           )}
@@ -529,42 +535,35 @@ const RecordDetailDrawer = ({ open, onClose, recordId, moduleKey, onUpdated }) =
                 </Alert>
               )}
 
-              {/* Common fields — Round-3 R5 + R6:
-                    • At DRAFT, hide Assigned To, Due Date, Description.
-                    • At DRAFT, surface Raised Date, Product/Material, Material Code
-                      (which the Initiator DID capture at create-time).
-                    • Description hidden in DRAFT because the field isn't
-                      captured on the Initiate dialog. */}
-              <Grid container spacing={2}>
-                <Grid item xs={6}><Field label="Raised By" value={record.raisedByName || record.createdBy} /></Grid>
-                {!isDraft(record.status) && (
-                  <Grid item xs={6}><Field label="Assigned To" value={record.assignedToName} /></Grid>
-                )}
-                <Grid item xs={6}><Field label="Department" value={record.department} /></Grid>
-                {!isDraft(record.status) && (
-                  <Grid item xs={6}><Field label="Due Date" value={formatDate(record.dueDate)} /></Grid>
-                )}
-                {/* Round-3 R6: Raised Date always visible at every status */}
-                {record.createdAt && (
-                  <Grid item xs={6}><Field label="Raised Date" value={formatDate(record.createdAt)} /></Grid>
-                )}
-                {/* Round-3 R6: Product/Material + Material Code surfaced for
-                    Change Control on every status — these ARE captured at
-                    create-time and were being hidden by the DRAFT gate. */}
-                {moduleKey === 'changeControl' && record.productMaterial && (
-                  <Grid item xs={6}><Field label="Product / Material" value={record.productMaterial} /></Grid>
-                )}
-                {moduleKey === 'changeControl' && record.productMaterialCode && (
-                  <Grid item xs={6}><Field label="Material Code" value={record.productMaterialCode} /></Grid>
-                )}
-                {record.closedDate && <Grid item xs={6}><Field label="Closed Date" value={formatDate(record.closedDate)} /></Grid>}
-                {record.approvedByName && <Grid item xs={6}><Field label="Approved By" value={record.approvedByName} /></Grid>}
-                {record.approvalComments && <Grid item xs={12}><Field label="Approval Comments" value={record.approvalComments} /></Grid>}
-                {/* Round-3 R5: Description hidden in DRAFT */}
-                {!isDraft(record.status) && record.description && (
-                  <Grid item xs={12}><Field label="Description" value={record.description} /></Grid>
-                )}
-              </Grid>
+              {/* Common fields — Round-4 F3: hidden for the 5 modules whose
+                  stage panel renders the linear flow. The Draft StageSection
+                  already shows Raised By (via SectionStamp), Department,
+                  Raised Date, Product/Material, Material Code etc. — and
+                  the downstream StageSections show Closed Date / Approved By
+                  / Approval Comments on the CLOSED + Head QA sections.
+                  Showing them again here was duplicative.
+                  Kept for modules with no linear flow yet (none currently). */}
+              {!['changeControl','capa','deviation','incident','marketComplaint'].includes(moduleKey) && (
+                <Grid container spacing={2}>
+                  <Grid item xs={6}><Field label="Raised By" value={record.raisedByName || record.createdBy} /></Grid>
+                  {!isDraft(record.status) && (
+                    <Grid item xs={6}><Field label="Assigned To" value={record.assignedToName} /></Grid>
+                  )}
+                  <Grid item xs={6}><Field label="Department" value={record.department} /></Grid>
+                  {!isDraft(record.status) && (
+                    <Grid item xs={6}><Field label="Due Date" value={formatDate(record.dueDate)} /></Grid>
+                  )}
+                  {record.createdAt && (
+                    <Grid item xs={6}><Field label="Raised Date" value={formatDate(record.createdAt)} /></Grid>
+                  )}
+                  {record.closedDate && <Grid item xs={6}><Field label="Closed Date" value={formatDate(record.closedDate)} /></Grid>}
+                  {record.approvedByName && <Grid item xs={6}><Field label="Approved By" value={record.approvedByName} /></Grid>}
+                  {record.approvalComments && <Grid item xs={12}><Field label="Approval Comments" value={record.approvalComments} /></Grid>}
+                  {!isDraft(record.status) && record.description && (
+                    <Grid item xs={12}><Field label="Description" value={record.description} /></Grid>
+                  )}
+                </Grid>
+              )}
 
               {/* Module-specific fields — Round-3 R5: hidden in DRAFT entirely.
                   At DRAFT these are all empty placeholders and add noise. */}

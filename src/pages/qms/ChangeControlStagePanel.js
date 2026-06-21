@@ -14,8 +14,9 @@ import {
   updateChangeControlApi, approveChangeControlApi, rejectChangeControlApi,
   closeChangeControlApi, transitionChangeControlApi,
 } from '../../api/qmsApi';
-import { listDeptCommentsApi, listLineItemsApi } from '../../api/qmsCommonApi';
+import { listDeptCommentsApi } from '../../api/qmsCommonApi';
 import QmsDepartmentAttachmentsSection from './QmsDepartmentAttachmentsSection';
+import QmsLineItemsSection from './QmsLineItemsSection';
 import { useAuth } from '../../store/AuthContext';
 import { formatDate } from '../../utils/helpers';
 import {
@@ -447,7 +448,10 @@ const FieldEditor = ({ name, form, setForm, xs = 12 }) => {
 // Each function renders a compact summary of the data captured during
 // that stage. Used when the stage is in the past (or terminal).
 
-const RoDraftView = ({ record, lineItems }) => (
+// Round-4 F1: line items now render via the shared QmsLineItemsSection
+// in readOnly mode so the styling matches the disabled Line Items block
+// the user sees in the drawer's accordion below.
+const RoDraftView = ({ record }) => (
   <>
     <Grid container spacing={1}>
       {record.recordNumber && (
@@ -478,21 +482,17 @@ const RoDraftView = ({ record, lineItems }) => (
         </Grid>
       )}
     </Grid>
-    {Array.isArray(lineItems) && lineItems.length > 0 && (
-      <>
-        <Divider sx={{ my: 1 }} />
-        <Typography variant="caption" sx={{ display: 'block', fontWeight: 700, mb: 0.5 }}>
-          LINE ITEMS ({lineItems.length})
+    {record?.id && (
+      <Box sx={{ mt: 1.5 }}>
+        <Typography variant="caption" sx={{ display: 'block', fontWeight: 700, letterSpacing: 0.4, mb: 0.5, color: 'text.secondary' }}>
+          LINE ITEMS
         </Typography>
-        <Stack spacing={0.5}>
-          {lineItems.map((li, i) => (
-            <Typography key={li.id || i} variant="body2" sx={{ pl: 1 }}>
-              <strong>#{i + 1}:</strong> {li.existingSystem} → {li.proposedSystem}
-              {li.justification && <em> · {li.justification}</em>}
-            </Typography>
-          ))}
-        </Stack>
-      </>
+        <QmsLineItemsSection
+          commonSlug="change-control"
+          recordId={record.id}
+          readOnly
+        />
+      </Box>
     )}
   </>
 );
@@ -663,7 +663,8 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
   const [eSignOpen, setESignOpen] = useState(false);
 
   const [deptComments, setDeptComments] = useState([]);
-  const [lineItems, setLineItems]       = useState([]);
+  // lineItems state retired in Round-4 F1: the Draft StageSection now
+  // mounts QmsLineItemsSection directly which fetches its own rows.
 
   // Two-phase QA Evaluation: Phase 2 is detected by ANY completed dept comment.
   const hasCompletedDeptComment = deptComments.some(d => d.status === 'COMPLETED');
@@ -716,13 +717,8 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
       .catch(() => setDeptComments([]));
   }, [record?.id, status]);
 
-  // Fetch line items for the Initiator-context block (HOD + downstream)
-  useEffect(() => {
-    if (!record?.id || status === 'DRAFT') { setLineItems([]); return; }
-    listLineItemsApi('change-control', record.id)
-      .then(({ data }) => setLineItems(data?.data || []))
-      .catch(() => setLineItems([]));
-  }, [record?.id, status]);
+  // Round-4 F1: line-items fetch retired — QmsLineItemsSection now fetches
+  // its own rows inside the Draft StageSection.
 
   if (!desc) return null;
 
@@ -1203,7 +1199,7 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
   // ── Read-only body for past stages ───────────────────────────
   const renderReadOnlyBody = (stageKey) => {
     switch (stageKey) {
-      case 'DRAFT':                    return <RoDraftView record={record} lineItems={lineItems} />;
+      case 'DRAFT':                    return <RoDraftView record={record} />;
       case 'PENDING_HOD':              return <RoHodView record={record} />;
       case 'QA_PHASE_1':               return <RoQaPhase1View record={record} />;
       case 'PENDING_DEPT_COMMENT':     return <RoDeptCommentsView deptComments={deptComments} />;
