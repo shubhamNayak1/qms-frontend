@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Paper, Typography, Grid, TextField, MenuItem, Stack, Button,
+  Typography, Grid, TextField, MenuItem, Stack, Button,
   Alert, FormControlLabel, Switch, Tooltip, Chip, Box, Divider,
   Dialog, DialogTitle, DialogContent, DialogActions,
 } from '@mui/material';
@@ -17,6 +17,10 @@ import {
 import { listDeptCommentsApi, listLineItemsApi } from '../../api/qmsCommonApi';
 import QmsDepartmentAttachmentsSection from './QmsDepartmentAttachmentsSection';
 import { useAuth } from '../../store/AuthContext';
+import { formatDate } from '../../utils/helpers';
+import {
+  StageSection, StickyActionBar, findStageActor as flowFindStageActor,
+} from './LinearFlow';
 // formatDateTime previously used by Activity History (removed in Round-3 R18).
 
 /**
@@ -165,14 +169,17 @@ const FIELD_LABELS = {
   verificationEffectiveOn: 'Effective / Implemented On',
 };
 
-// ── Read-only Initiator context — shown on EVERY downstream stage ──
-const InitiatorContext = ({ record, lineItems }) => (
+// Round-4 L2: InitiatorContext (the Alert-style "captured by initiator"
+// block) retired — replaced by the linear flow's StageSection at key=DRAFT
+// which renders RoDraftView. The component below is kept commented out as
+// reference for the canonical Initiator-captured field list.
+// eslint-disable-next-line no-unused-vars
+const _InitiatorContext_legacy = ({ record, lineItems }) => (
   <Alert severity="info" icon={false} sx={{ mb: 2 }}>
     <Stack direction="row" alignItems="baseline" spacing={1} flexWrap="wrap">
       <Typography variant="caption" sx={{ fontWeight: 700, letterSpacing: 0.4 }}>
         CAPTURED BY INITIATOR
       </Typography>
-      {/* Round-3 R16 / R19: every section stamps the actor + date. */}
       <SectionStamp actor={record?.raisedByName || record?.createdBy}
                     when={record?.createdAt} />
     </Stack>
@@ -266,8 +273,10 @@ const InitiatorContext = ({ record, lineItems }) => (
 // did. The Resend-count chip is surfaced in the drawer header.
 
 // Round-3 R16 / R19: small helper that finds the StatusHistory entry that
-// terminated a given stage and returns "by {actor} · on {date}" — used to
-// stamp every read-only section with WHO captured it and WHEN.
+// terminated a given stage. Round-4 L2: replaced by flowFindStageActor from
+// LinearFlow; the legacy version is kept (but unused) until the migration
+// of the other 4 module panels stabilises.
+// eslint-disable-next-line no-unused-vars
 const findStageActor = (history, terminalTransitions) => {
   if (!Array.isArray(history) || history.length === 0) return null;
   // walk most-recent → first, return the first match. Using fromStatus as
@@ -433,6 +442,202 @@ const FieldEditor = ({ name, form, setForm, xs = 12 }) => {
       return null;
   }
 };
+
+// ── Linear-flow read-only views ──────────────────────────────────
+// Each function renders a compact summary of the data captured during
+// that stage. Used when the stage is in the past (or terminal).
+
+const RoDraftView = ({ record, lineItems }) => (
+  <>
+    <Grid container spacing={1}>
+      {record.recordNumber && (
+        <Grid item xs={6}><Typography variant="body2"><strong>Change Control #:</strong> {record.recordNumber}</Typography></Grid>
+      )}
+      {record.createdAt && (
+        <Grid item xs={6}><Typography variant="body2"><strong>Raised on:</strong> {formatDate(record.createdAt)}</Typography></Grid>
+      )}
+      {record.department && (
+        <Grid item xs={6}><Typography variant="body2"><strong>Department:</strong> {record.department}</Typography></Grid>
+      )}
+      {record.productMaterial && (
+        <Grid item xs={6}><Typography variant="body2"><strong>Product / Material:</strong> {record.productMaterial}</Typography></Grid>
+      )}
+      {record.productMaterialCode && (
+        <Grid item xs={6}><Typography variant="body2"><strong>Material Code:</strong> {record.productMaterialCode}</Typography></Grid>
+      )}
+      {record.changeType && (
+        <Grid item xs={6}><Typography variant="body2"><strong>Change Type:</strong> {record.changeType}</Typography></Grid>
+      )}
+      {record.initialAttachmentDmsNumber && (
+        <Grid item xs={12}>
+          <Typography variant="body2">
+            <strong>Initial Attachment:</strong> {record.initialAttachmentDmsNumber}
+            {record.initialAttachmentDmsTitle && ` · ${record.initialAttachmentDmsTitle}`}
+            {record.initialAttachmentDmsVersion && ` v${record.initialAttachmentDmsVersion}`}
+          </Typography>
+        </Grid>
+      )}
+    </Grid>
+    {Array.isArray(lineItems) && lineItems.length > 0 && (
+      <>
+        <Divider sx={{ my: 1 }} />
+        <Typography variant="caption" sx={{ display: 'block', fontWeight: 700, mb: 0.5 }}>
+          LINE ITEMS ({lineItems.length})
+        </Typography>
+        <Stack spacing={0.5}>
+          {lineItems.map((li, i) => (
+            <Typography key={li.id || i} variant="body2" sx={{ pl: 1 }}>
+              <strong>#{i + 1}:</strong> {li.existingSystem} → {li.proposedSystem}
+              {li.justification && <em> · {li.justification}</em>}
+            </Typography>
+          ))}
+        </Stack>
+      </>
+    )}
+  </>
+);
+
+const RoHodView = ({ record }) => (
+  record.initialAssessment
+    ? <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{record.initialAssessment}</Typography>
+    : <Typography variant="caption" color="text.secondary">No initial assessment narrative.</Typography>
+);
+
+const RoQaPhase1View = ({ record }) => (
+  <Grid container spacing={1}>
+    {record.category && (
+      <Grid item xs={6}>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <Typography variant="body2"><strong>Risk Level:</strong></Typography>
+          <Chip size="small" label={record.category}
+                color={record.category === 'Critical' ? 'error'
+                     : record.category === 'Major'    ? 'warning' : 'info'} />
+        </Stack>
+      </Grid>
+    )}
+    {record.preRemark && (
+      <Grid item xs={12}>
+        <Typography variant="body2"><strong>Pre-Remark:</strong></Typography>
+        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', pl: 1 }}>{record.preRemark}</Typography>
+      </Grid>
+    )}
+  </Grid>
+);
+
+const RoDeptCommentsView = ({ deptComments }) => (
+  deptComments?.length > 0
+    ? (
+      <Stack spacing={1}>
+        {deptComments.map((c) => (
+          <Box key={c.id} sx={{ p: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+              <Typography variant="body2" fontWeight={600}>{c.departmentName}</Typography>
+              <Chip size="small" label={c.status}
+                    color={c.status === 'COMPLETED' ? 'success' : 'warning'} />
+              {c.actionRequired && <Chip size="small" color="warning" label="Action Required" />}
+              {c.targetDate && <Chip size="small" variant="outlined" label={`Target ${formatDate(c.targetDate)}`} />}
+              {c.doneByName && (
+                <Typography variant="caption" color="text.secondary">
+                  by {c.doneByName}{c.doneAt ? ` · ${formatDate(c.doneAt)}` : ''}
+                </Typography>
+              )}
+            </Stack>
+            {c.comment && (
+              <Typography variant="body2" sx={{ mt: 0.5, whiteSpace: 'pre-wrap' }}>{c.comment}</Typography>
+            )}
+          </Box>
+        ))}
+      </Stack>
+    )
+    : <Typography variant="caption" color="text.secondary">No department comments recorded.</Typography>
+);
+
+const RoQaPhase2View = ({ record }) => (
+  <Grid container spacing={1}>
+    {record.comments && (
+      <Grid item xs={12}>
+        <Typography variant="body2"><strong>Post Remark:</strong></Typography>
+        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', pl: 1 }}>{record.comments}</Typography>
+      </Grid>
+    )}
+    {record.siteHeadRequired != null && (
+      <Grid item xs={6}><Typography variant="body2"><strong>Site Head Required:</strong> {record.siteHeadRequired ? 'Yes' : 'No'}</Typography></Grid>
+    )}
+    {record.customerCommunicationRequired != null && (
+      <Grid item xs={6}><Typography variant="body2"><strong>Customer Comm. Required:</strong> {record.customerCommunicationRequired ? 'Yes' : 'No'}</Typography></Grid>
+    )}
+    {record.customerCommunicationRequired && record.customerRepresentative && (
+      <Grid item xs={6}><Typography variant="body2"><strong>Customer Rep:</strong> {record.customerRepresentative}</Typography></Grid>
+    )}
+    {record.riskAssessment && (
+      <Grid item xs={12}>
+        <Typography variant="body2"><strong>Risk Assessment:</strong></Typography>
+        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', pl: 1 }}>{record.riskAssessment}</Typography>
+      </Grid>
+    )}
+  </Grid>
+);
+
+const RoRaView = ({ record }) => (
+  <Grid container spacing={1}>
+    <Grid item xs={6}><Typography variant="body2"><strong>Regulatory Submission Required:</strong> {record.regulatorySubmissionRequired ? 'Yes' : 'No'}</Typography></Grid>
+    {record.regulatorySubmissionReference && (
+      <Grid item xs={6}><Typography variant="body2"><strong>Submission Reference:</strong> {record.regulatorySubmissionReference}</Typography></Grid>
+    )}
+  </Grid>
+);
+
+const RoSiteHeadView = ({ record }) => (
+  record.comments
+    ? <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{record.comments}</Typography>
+    : <Typography variant="caption" color="text.secondary">No site head concurrence remark recorded.</Typography>
+);
+
+const RoCustomerView = ({ record }) => (
+  <Grid container spacing={1}>
+    {record.customerRepresentative && (
+      <Grid item xs={6}><Typography variant="body2"><strong>Customer Representative:</strong> {record.customerRepresentative}</Typography></Grid>
+    )}
+    {record.customerComment && (
+      <Grid item xs={12}>
+        <Typography variant="body2"><strong>Customer Comment:</strong></Typography>
+        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', pl: 1 }}>{record.customerComment}</Typography>
+      </Grid>
+    )}
+  </Grid>
+);
+
+const RoHeadQaView = ({ record }) => (
+  record.approvalComments
+    ? <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}><strong>Approval Comment:</strong> {record.approvalComments}</Typography>
+    : <Typography variant="caption" color="text.secondary">No approval comment recorded.</Typography>
+);
+
+const RoVerificationView = ({ record }) => (
+  <Grid container spacing={1}>
+    {record.verificationActionTaken && (
+      <Grid item xs={12}>
+        <Typography variant="body2"><strong>Action Taken:</strong></Typography>
+        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', pl: 1 }}>{record.verificationActionTaken}</Typography>
+      </Grid>
+    )}
+    {record.verificationEffectiveOn && (
+      <Grid item xs={6}><Typography variant="body2"><strong>Effective / Implemented On:</strong> {formatDate(record.verificationEffectiveOn)}</Typography></Grid>
+    )}
+    {record.verificationRegCommunication && (
+      <Grid item xs={12}>
+        <Typography variant="body2"><strong>Reg. Communication:</strong></Typography>
+        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', pl: 1 }}>{record.verificationRegCommunication}</Typography>
+      </Grid>
+    )}
+    {record.verificationOtherComments && (
+      <Grid item xs={12}>
+        <Typography variant="body2"><strong>Other Comments:</strong></Typography>
+        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', pl: 1 }}>{record.verificationOtherComments}</Typography>
+      </Grid>
+    )}
+  </Grid>
+);
 
 // ── Main panel ─────────────────────────────────────────────────────
 const ChangeControlStagePanel = ({ record, onUpdated }) => {
@@ -739,115 +944,338 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
     primaryLabel = 'Approve & forward to RA Evaluation';
   }
 
+  // ── Round-4 linear-flow ────────────────────────────────────────
+  // Compute the canonical stage list + a state ('past' | 'current' |
+  // 'skipped' | 'future' | 'terminal') for each. Only past, current,
+  // skipped, and terminal sections render; future stages stay hidden.
+  const hasActionRequiredDept = deptComments.some((c) => c.actionRequired);
+  const CC_STAGES = [
+    { key: 'DRAFT',                   title: 'Draft / Initiation' },
+    { key: 'PENDING_HOD',             title: 'HOD Assessment' },
+    { key: 'QA_PHASE_1',              title: 'QA Evaluation — Pre-Remark',
+      matchesStatus: (s) => s === 'PENDING_QA_REVIEW' && qaPhase === 1 },
+    { key: 'PENDING_DEPT_COMMENT',    title: 'Department-Wise Comments' },
+    { key: 'QA_PHASE_2',              title: 'QA Evaluation — Post-Remark',
+      matchesStatus: (s) => s === 'PENDING_QA_REVIEW' && qaPhase === 2 },
+    { key: 'PENDING_RA_REVIEW',       title: 'RA Evaluation' },
+    { key: 'PENDING_SITE_HEAD',       title: 'Site Head Concurrence',
+      optional: true,
+      skipReason: record?.siteHeadRequired === false
+                  ? 'Site Head Required = No' : null },
+    { key: 'PENDING_CUSTOMER_COMMENT', title: 'Customer Comment',
+      optional: true,
+      skipReason: record?.customerCommunicationRequired === false
+                  ? 'Customer Communication Required = No' : null },
+    { key: 'PENDING_HEAD_QA',         title: 'Approval by Head QA' },
+    { key: 'PENDING_ATTACHMENTS',     title: 'Department Attachments',
+      optional: true,
+      skipReason: !hasActionRequiredDept
+                  ? 'No department flagged Action Required' : null },
+    { key: 'PENDING_VERIFICATION',    title: 'Verification of Implementation' },
+    { key: 'CLOSED',                  title: 'Closed' },
+  ];
+
+  // currentIdx — which CC_STAGES entry matches the current record state
+  let currentIdx = CC_STAGES.findIndex((s) =>
+    s.matchesStatus ? s.matchesStatus(status) : s.key === status
+  );
+  // Terminal non-canonical statuses (REJECTED, CANCELLED, REOPENED) — push
+  // "current" past the end so every stage renders as past.
+  const isTerminalAlt = ['REJECTED', 'CANCELLED', 'REOPENED'].includes(status);
+  if (currentIdx < 0 && isTerminalAlt) currentIdx = CC_STAGES.length;
+
+  const stageState = (stage, idx) => {
+    // Optional stages with a skip reason are "skipped" iff we've moved past
+    // their position in the canonical order. If we're at-or-before, treat
+    // them like any other (past/current/future).
+    if (stage.optional && stage.skipReason && idx < currentIdx) return 'skipped';
+    if (idx === currentIdx) {
+      return stage.key === 'CLOSED' ? 'terminal' : 'current';
+    }
+    return idx < currentIdx ? 'past' : 'future';
+  };
+
+  // Who filled / closed each stage — look up StatusHistory.
+  const stageActor = (stage) => {
+    switch (stage.key) {
+      case 'DRAFT':
+        return { actor: record?.raisedByName || record?.createdBy, when: record?.createdAt };
+      case 'PENDING_HOD':
+        return flowFindStageActor(record?.statusHistory, ['PENDING_HOD']);
+      case 'QA_PHASE_1':
+        // The transition that ended Phase 1 is PENDING_QA_REVIEW → PENDING_DEPT_COMMENT
+        return flowFindStageActor(record?.statusHistory, ['PENDING_QA_REVIEW'], ['PENDING_DEPT_COMMENT']);
+      case 'PENDING_DEPT_COMMENT':
+        // Closed by transition PENDING_DEPT_COMMENT → PENDING_QA_REVIEW (back to QA Phase 2)
+        return flowFindStageActor(record?.statusHistory, ['PENDING_DEPT_COMMENT']);
+      case 'QA_PHASE_2':
+        // Closed by transition PENDING_QA_REVIEW → PENDING_RA_REVIEW
+        return flowFindStageActor(record?.statusHistory, ['PENDING_QA_REVIEW'], ['PENDING_RA_REVIEW']);
+      case 'PENDING_RA_REVIEW':
+        return flowFindStageActor(record?.statusHistory, ['PENDING_RA_REVIEW']);
+      case 'PENDING_SITE_HEAD':
+        return flowFindStageActor(record?.statusHistory, ['PENDING_SITE_HEAD']);
+      case 'PENDING_CUSTOMER_COMMENT':
+        return flowFindStageActor(record?.statusHistory, ['PENDING_CUSTOMER_COMMENT']);
+      case 'PENDING_HEAD_QA':
+        return flowFindStageActor(record?.statusHistory, ['PENDING_HEAD_QA']);
+      case 'PENDING_ATTACHMENTS':
+        return flowFindStageActor(record?.statusHistory, ['PENDING_ATTACHMENTS']);
+      case 'PENDING_VERIFICATION':
+        return flowFindStageActor(record?.statusHistory, ['PENDING_VERIFICATION']);
+      case 'CLOSED':
+        return {
+          actor: record?.approvedByName || record?.changedByUsername,
+          when: record?.closedDate || record?.approvedAt,
+        };
+      default:
+        return null;
+    }
+  };
+
+  // ── Editable body for current stage ──────────────────────────
+  // The editable form (fields + Remark/Justification + StageAttachments)
+  // for the stage the user is currently filling. Returned by renderEditableBody.
+  const renderEditableBody = () => {
+    const isQaPhase1WithDepts = status === 'PENDING_QA_REVIEW'
+                                && qaPhase === 1 && deptTotal > 0;
+    const remarkLabel = status === 'PENDING_HEAD_QA' ? 'Approval Comment'
+                      : status === 'PENDING_QA_REVIEW' && qaPhase === 2 ? 'Post Remark'
+                      : 'Remark / Justification';
+    const remarkPlaceholder = status === 'PENDING_HEAD_QA'
+      ? 'Final approval narrative — captured as the record\'s Approval Comment and on the audit trail.'
+      : isQaPhase1WithDepts
+        ? 'Optional while departments are responding. Will become mandatory in Phase 2.'
+        : 'Recorded on the audit trail as the actor\'s remark for this transition.';
+
+    return (
+      <>
+        {/* Stage-specific helper banner */}
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+          {effectiveHelper}
+        </Typography>
+
+        {/* Phase-1 hint: invite at least one department */}
+        {status === 'PENDING_QA_REVIEW' && qaPhase === 1 && (
+          <Alert severity={deptTotal === 0 ? 'warning' : 'success'} sx={{ mb: 2 }}>
+            {deptTotal === 0
+              ? 'No departments invited yet — open the Department-Wise Comments accordion below and invite at least one before saving.'
+              : `${deptTotal} department${deptTotal !== 1 ? 's' : ''} invited. Save will route the record to PENDING_DEPT_COMMENT.`}
+          </Alert>
+        )}
+
+        {/* Dept-attachment fan-out form (PENDING_ATTACHMENTS only) */}
+        {status === 'PENDING_ATTACHMENTS' && (
+          <Box sx={{ mb: 2 }}>
+            <QmsDepartmentAttachmentsSection
+              commonSlug="change-control"
+              recordId={record.id}
+              currentUser={currentUser}
+            />
+          </Box>
+        )}
+
+        {/* Dept-comment progress + forward gate (PENDING_DEPT_COMMENT only) */}
+        {isDeptCommentStage && (
+          <Alert severity={blockForward ? 'warning' : 'success'} sx={{ mb: 2 }}>
+            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+              <Typography variant="body2">
+                Department comments: <strong>{deptCompleted}</strong>/<strong>{deptTotal || 0}</strong> completed
+              </Typography>
+              {deptTotal === 0 && <Chip size="small" label="No departments requested yet" />}
+              {blockForward && (
+                <Typography variant="caption" color="text.secondary">
+                  · Each requested department&apos;s HOD must fill their comment before this can be forwarded to RA Evaluation.
+                </Typography>
+              )}
+            </Stack>
+          </Alert>
+        )}
+
+        {/* Editable fields */}
+        {effectiveFields.length > 0 && (
+          <Grid container spacing={2} sx={{ mb: 2 }}>
+            {effectiveFields.map((f) => {
+              if (f === 'preRemark') {
+                return (
+                  <Grid key={f} item xs={12}>
+                    <TextField label="Pre-Remark" required multiline rows={3} fullWidth
+                               value={form.preRemark ?? ''}
+                               onChange={(e) => setForm(prev => ({ ...prev, preRemark: e.target.value }))}
+                               placeholder="QA's pre-dept-comment narrative — visible to invited dept HODs."
+                               inputProps={{ autoComplete: 'off' }} />
+                  </Grid>
+                );
+              }
+              if (f === 'qaEvalRemark') {
+                return (
+                  <Grid key={f} item xs={12}>
+                    <TextField label="QA Evaluation Remark" required multiline rows={3} fullWidth
+                               value={form.qaEvalRemark ?? ''}
+                               onChange={(e) => setForm(prev => ({ ...prev, qaEvalRemark: e.target.value }))}
+                               placeholder="QA's evaluation of the department feedback + next steps."
+                               inputProps={{ autoComplete: 'off' }} />
+                  </Grid>
+                );
+              }
+              if (f === 'riskAssessmentRequired') {
+                return (
+                  <Grid key={f} item xs={6}>
+                    <TextField label="Risk Assessment" select fullWidth
+                               value={form.riskAssessmentRequired ? 'Required' : 'Not Required'}
+                               onChange={(e) => setForm(prev => ({ ...prev, riskAssessmentRequired: e.target.value === 'Required' }))}>
+                      <MenuItem value="Required">Required</MenuItem>
+                      <MenuItem value="Not Required">Not Required</MenuItem>
+                    </TextField>
+                  </Grid>
+                );
+              }
+              if (f === 'riskAssessment') {
+                return form.riskAssessmentRequired ? (
+                  <Grid key={f} item xs={12}>
+                    <TextField label="Risk Assessment Narrative" required multiline rows={3} fullWidth
+                               value={form.riskAssessment ?? ''}
+                               onChange={(e) => setForm(prev => ({ ...prev, riskAssessment: e.target.value }))}
+                               inputProps={{ autoComplete: 'off' }} />
+                  </Grid>
+                ) : null;
+              }
+              if (f === 'siteHeadRequired') {
+                return (
+                  <Grid key={f} item xs={6}>
+                    <FormControlLabel
+                      control={<Switch checked={!!form.siteHeadRequired}
+                                       onChange={(e) => setForm(prev => ({ ...prev, siteHeadRequired: e.target.checked }))} />}
+                      label="Site Head Required"
+                    />
+                  </Grid>
+                );
+              }
+              if (f === 'customerCommunicationRequired') {
+                return (
+                  <Grid key={f} item xs={6}>
+                    <FormControlLabel
+                      control={<Switch checked={!!form.customerCommunicationRequired}
+                                       onChange={(e) => {
+                                         const next = e.target.checked;
+                                         setForm(prev => ({
+                                           ...prev,
+                                           customerCommunicationRequired: next,
+                                           ...(next ? {} : { customerRepresentative: '' }),
+                                         }));
+                                       }} />}
+                      label="Customer Communication Required"
+                    />
+                  </Grid>
+                );
+              }
+              if (f === 'customerRepresentative' && !form.customerCommunicationRequired) {
+                return null;
+              }
+              return <FieldEditor key={f} name={f} form={form} setForm={setForm} />;
+            })}
+          </Grid>
+        )}
+
+        {/* Remark / Justification (relabels per stage) */}
+        <TextField
+          label={remarkLabel} required={!isQaPhase1WithDepts}
+          multiline rows={2} fullWidth
+          value={comment} onChange={(e) => setComment(e.target.value)}
+          placeholder={remarkPlaceholder}
+          sx={{ mb: 1.5 }}
+          inputProps={{ autoComplete: 'off' }}
+        />
+
+        {/* Round-3 R15 — Stage attachments BELOW Remark / Justification. */}
+        {record?.id && (
+          <StageAttachments
+            moduleKey="changeControl"
+            recordId={record.id}
+            readOnly={false}
+            heading="Stage attachments"
+          />
+        )}
+      </>
+    );
+  };
+
+  // ── Read-only body for past stages ───────────────────────────
+  const renderReadOnlyBody = (stageKey) => {
+    switch (stageKey) {
+      case 'DRAFT':                    return <RoDraftView record={record} lineItems={lineItems} />;
+      case 'PENDING_HOD':              return <RoHodView record={record} />;
+      case 'QA_PHASE_1':               return <RoQaPhase1View record={record} />;
+      case 'PENDING_DEPT_COMMENT':     return <RoDeptCommentsView deptComments={deptComments} />;
+      case 'QA_PHASE_2':               return <RoQaPhase2View record={record} />;
+      case 'PENDING_RA_REVIEW':        return <RoRaView record={record} />;
+      case 'PENDING_SITE_HEAD':        return <RoSiteHeadView record={record} />;
+      case 'PENDING_CUSTOMER_COMMENT': return <RoCustomerView record={record} />;
+      case 'PENDING_HEAD_QA':          return <RoHeadQaView record={record} />;
+      case 'PENDING_ATTACHMENTS':      return (
+        <QmsDepartmentAttachmentsSection
+          commonSlug="change-control"
+          recordId={record.id}
+          currentUser={currentUser}
+        />
+      );
+      case 'PENDING_VERIFICATION':     return <RoVerificationView record={record} />;
+      case 'CLOSED':                   return (
+        <Typography variant="body2" color="success.main">
+          Record closed{record?.closedDate ? ` on ${formatDate(record.closedDate)}` : ''}.
+        </Typography>
+      );
+      default: return null;
+    }
+  };
+
   return (
-    <Paper variant="outlined" sx={{
-        p: 2, mb: 2, borderLeft: '4px solid', borderLeftColor: 'primary.main',
-        borderRadius: 1.5,
-      }}>
-      <Stack direction="row" alignItems="baseline" spacing={1} flexWrap="wrap" sx={{ mb: 1 }}>
-        <Typography variant="subtitle1" fontWeight={700}>{desc.title}</Typography>
-        <Typography variant="caption" color="text.secondary">· {desc.actor}</Typography>
+    <Box sx={{ mb: 2 }}>
+      {/* Round-4 linear-flow — walk every CC stage in canonical order.
+          Past stages render a read-only summary stamped with actor + date.
+          Skipped optional stages render a "Skipped" badge with the reason.
+          The current stage renders the editable form. Future stages are
+          NOT rendered at all so the user only sees what's already done +
+          what's currently being done. */}
+      <Stack direction="row" alignItems="baseline" spacing={1} flexWrap="wrap" sx={{ mb: 2 }}>
+        <Typography variant="subtitle1" fontWeight={700}>Workflow Progress</Typography>
         {status === 'PENDING_QA_REVIEW' && (
           <Chip size="small" color={qaPhase === 2 ? 'success' : 'default'}
-                label={`Phase ${qaPhase}`} />
+                label={`QA Phase ${qaPhase}`} />
         )}
         {(record?.resendCount > 0) && (
           <Chip size="small" color="warning" label={`Resent ${record.resendCount}×`} />
         )}
       </Stack>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        {effectiveHelper}
-      </Typography>
 
-      {/* Initiator's data — read-only context on every non-DRAFT stage */}
-      {status !== 'DRAFT' && status !== 'PENDING_HOD' /* HOD also sees it but below */ && (
-        <InitiatorContext record={record} lineItems={lineItems} />
-      )}
-      {status === 'PENDING_HOD' && <InitiatorContext record={record} lineItems={lineItems} />}
+      {/* Walk the canonical stage list. Render only past / current / skipped /
+          terminal sections — future stages stay hidden until reached. */}
+      {CC_STAGES.map((stage, idx) => {
+        const state = stageState(stage, idx);
+        if (state === 'future') return null;
+        const stamp = stageActor(stage) || {};
+        return (
+          <StageSection
+            key={stage.key}
+            title={stage.title}
+            state={state}
+            actor={stamp.actor}
+            when={stamp.when}
+            skippedReason={state === 'skipped' ? stage.skipReason : null}
+          >
+            {state === 'current' ? renderEditableBody()
+              : state === 'skipped' ? null
+              : renderReadOnlyBody(stage.key)}
+          </StageSection>
+        );
+      })}
 
-      {/* HOD's Initial Assessment — surfaced read-only to downstream stages.
-          Round-3 R19: stamped with actor + date.
-          Round-2 F1: reads from the dedicated initial_assessment column. */}
-      {status !== 'PENDING_HOD' && record?.initialAssessment && (
-        <Alert severity="info" icon={false} sx={{ mb: 2 }}>
-          <Typography variant="caption" sx={{ display: 'block', fontWeight: 700, letterSpacing: 0.4 }}>
-            HOD&apos;S INITIAL ASSESSMENT
-          </Typography>
-          <Typography variant="body2" sx={{ mt: 0.4, whiteSpace: 'pre-wrap' }}>
-            {record.initialAssessment}
-          </Typography>
-          {(() => {
-            const stamp = findStageActor(record?.statusHistory, ['PENDING_HOD']);
-            return stamp ? <SectionStamp {...stamp} /> : null;
-          })()}
-        </Alert>
-      )}
+      {/* Round-4 L2: HOD Initial Assessment + QA Pre-Remark blocks
+          retired — they're now rendered by the linear flow's StageSections
+          above (RoHodView + RoQaPhase1View). */}
 
-      {/* QA Pre-Remark — visible to depts during PENDING_DEPT_COMMENT */}
-      {(status === 'PENDING_DEPT_COMMENT' || (status === 'PENDING_QA_REVIEW' && qaPhase === 2))
-        && record?.preRemark && (
-        <Alert severity="info" icon={false} sx={{ mb: 2 }}>
-          <Typography variant="caption" sx={{ display: 'block', fontWeight: 700, letterSpacing: 0.4 }}>
-            QA PRE-REMARK
-          </Typography>
-          <Typography variant="body2" sx={{ mt: 0.4, whiteSpace: 'pre-wrap' }}>
-            {record.preRemark}
-          </Typography>
-          {(() => {
-            const stamp = findStageActor(record?.statusHistory, ['PENDING_QA_REVIEW']);
-            return stamp ? <SectionStamp {...stamp} /> : null;
-          })()}
-        </Alert>
-      )}
-
-      {/* QA Decision Summary — visible read-only on every stage downstream
-          of QA (RA, Site Head, Customer, Head QA, Verification). Shows the
-          Change Control Type + flags the QA Reviewer captured, so the next
-          actor doesn't have to scroll back. Round-2 H1: was previously
-          re-asked at RA stage which was wrong. */}
-      {['PENDING_RA_REVIEW','PENDING_SITE_HEAD','PENDING_CUSTOMER_COMMENT',
-        'PENDING_HEAD_QA','PENDING_VERIFICATION','CLOSED'].includes(status)
-        && (record?.category || record?.comments) && (
-        <Alert severity="info" icon={false} sx={{ mb: 2 }}>
-          <Typography variant="caption" sx={{ display: 'block', fontWeight: 700, letterSpacing: 0.4 }}>
-            QA EVALUATION SUMMARY
-          </Typography>
-          <Grid container spacing={1} sx={{ mt: 0.4 }}>
-            {record.category && (
-              <Grid item xs={6}>
-                <Typography variant="body2"><strong>Risk Level:</strong> {record.category}</Typography>
-              </Grid>
-            )}
-            {record.siteHeadRequired != null && (
-              <Grid item xs={6}>
-                <Typography variant="body2"><strong>Site Head:</strong> {record.siteHeadRequired ? 'Required' : 'Not required'}</Typography>
-              </Grid>
-            )}
-            {record.customerCommunicationRequired != null && (
-              <Grid item xs={6}>
-                <Typography variant="body2"><strong>Customer Comm.:</strong> {record.customerCommunicationRequired ? 'Required' : 'Not required'}</Typography>
-              </Grid>
-            )}
-            {record.customerCommunicationRequired && record.customerRepresentative && (
-              <Grid item xs={6}>
-                <Typography variant="body2"><strong>Customer Rep:</strong> {record.customerRepresentative}</Typography>
-              </Grid>
-            )}
-            {record.comments && (
-              <Grid item xs={12}>
-                <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-                  <strong>QA Post Remark:</strong> {record.comments}
-                </Typography>
-              </Grid>
-            )}
-          </Grid>
-          {(() => {
-            const stamp = findStageActor(record?.statusHistory,
-                                          ['PENDING_QA_REVIEW','PENDING_DEPT_COMMENT']);
-            return stamp ? <SectionStamp {...stamp} /> : null;
-          })()}
-        </Alert>
-      )}
+      {/* Round-4 L2: QA Decision Summary block retired — linear flow's
+          RoQaPhase2View covers it. */}
 
       {/* Round-3 R18: Activity History removed — it duplicated the
           drawer-level Status History block. Resend count is surfaced as
@@ -855,178 +1283,20 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
-      {/* Stage attachments moved BELOW Remark/Justification per Round-3 R15. */}
+      {/* Round-4 L2: in-place editable form, dept-attachment fan-out, dept-
+          progress alert, phase-1 hint, action buttons — all relocated.
+          The editable form is now rendered INSIDE the current StageSection
+          above (via renderEditableBody). The action buttons live in the
+          StickyActionBar below so they're always visible. */}
 
-      {/* Round-3 R28: PENDING_ATTACHMENTS — show the dept-attachment fan-out
-          where each action-required dept uploads + Head QA approves. */}
-      {status === 'PENDING_ATTACHMENTS' && (
-        <Box sx={{ mb: 2 }}>
-          <QmsDepartmentAttachmentsSection
-            commonSlug="change-control"
-            recordId={record.id}
-            currentUser={currentUser}
-          />
-        </Box>
-      )}
-
-      {/* Dept-comment progress + forward gate (PENDING_DEPT_COMMENT only) */}
-      {isDeptCommentStage && (
-        <Alert severity={blockForward ? 'warning' : 'success'} sx={{ mb: 2 }}>
-          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-            <Typography variant="body2">
-              Department comments: <strong>{deptCompleted}</strong>/<strong>{deptTotal || 0}</strong> completed
-            </Typography>
-            {deptTotal === 0 && <Chip size="small" label="No departments requested yet" />}
-            {blockForward && (
-              <Typography variant="caption" color="text.secondary">
-                · Each requested department&apos;s HOD must fill their comment before this can be forwarded to RA Evaluation.
-              </Typography>
-            )}
-          </Stack>
-        </Alert>
-      )}
-
-      {/* Phase-1 hint: invite at least one department */}
-      {status === 'PENDING_QA_REVIEW' && qaPhase === 1 && (
-        <Alert severity={deptTotal === 0 ? 'warning' : 'success'} sx={{ mb: 2 }}>
-          {deptTotal === 0
-            ? 'No departments invited yet — open the Department-Wise Comments accordion below and invite at least one before saving.'
-            : `${deptTotal} department${deptTotal !== 1 ? 's' : ''} invited. Save will route the record to PENDING_DEPT_COMMENT.`}
-        </Alert>
-      )}
-
-      {/* Editable fields */}
-      {effectiveFields.length > 0 && (
-        <Grid container spacing={2} sx={{ mb: 2 }}>
-          {effectiveFields.map((f) => {
-            if (f === 'preRemark') {
-              return (
-                <Grid key={f} item xs={12}>
-                  <TextField label="Pre-Remark" required multiline rows={3} fullWidth
-                             value={form.preRemark ?? ''}
-                             onChange={(e) => setForm(prev => ({ ...prev, preRemark: e.target.value }))}
-                             placeholder="QA's pre-dept-comment narrative — visible to invited dept HODs."
-                             inputProps={{ autoComplete: 'off' }} />
-                </Grid>
-              );
-            }
-            if (f === 'qaEvalRemark') {
-              return (
-                <Grid key={f} item xs={12}>
-                  <TextField label="QA Evaluation Remark" required multiline rows={3} fullWidth
-                             value={form.qaEvalRemark ?? ''}
-                             onChange={(e) => setForm(prev => ({ ...prev, qaEvalRemark: e.target.value }))}
-                             placeholder="QA's evaluation of the department feedback + next steps."
-                             inputProps={{ autoComplete: 'off' }} />
-                </Grid>
-              );
-            }
-            if (f === 'riskAssessmentRequired') {
-              return (
-                <Grid key={f} item xs={6}>
-                  <TextField label="Risk Assessment" select fullWidth
-                             value={form.riskAssessmentRequired ? 'Required' : 'Not Required'}
-                             onChange={(e) => setForm(prev => ({ ...prev, riskAssessmentRequired: e.target.value === 'Required' }))}>
-                    <MenuItem value="Required">Required</MenuItem>
-                    <MenuItem value="Not Required">Not Required</MenuItem>
-                  </TextField>
-                </Grid>
-              );
-            }
-            if (f === 'riskAssessment') {
-              return form.riskAssessmentRequired ? (
-                <Grid key={f} item xs={12}>
-                  <TextField label="Risk Assessment Narrative" required multiline rows={3} fullWidth
-                             value={form.riskAssessment ?? ''}
-                             onChange={(e) => setForm(prev => ({ ...prev, riskAssessment: e.target.value }))}
-                             inputProps={{ autoComplete: 'off' }} />
-                </Grid>
-              ) : null;
-            }
-            if (f === 'siteHeadRequired') {
-              return (
-                <Grid key={f} item xs={6}>
-                  <FormControlLabel
-                    control={<Switch checked={!!form.siteHeadRequired}
-                                     onChange={(e) => setForm(prev => ({ ...prev, siteHeadRequired: e.target.checked }))} />}
-                    label="Site Head Required"
-                  />
-                </Grid>
-              );
-            }
-            if (f === 'customerCommunicationRequired') {
-              return (
-                <Grid key={f} item xs={6}>
-                  <FormControlLabel
-                    control={<Switch checked={!!form.customerCommunicationRequired}
-                                     onChange={(e) => {
-                                       const next = e.target.checked;
-                                       // Round-2 F2: turning Customer Communication
-                                       // off also clears the Customer Representative
-                                       // field so we don't carry a stale value.
-                                       setForm(prev => ({
-                                         ...prev,
-                                         customerCommunicationRequired: next,
-                                         ...(next ? {} : { customerRepresentative: '' }),
-                                       }));
-                                     }} />}
-                    label="Customer Communication Required"
-                  />
-                </Grid>
-              );
-            }
-            // Round-2 F2: Customer Representative is conditional. Hide entirely
-            // when Customer Communication is not flagged — the field has no
-            // meaning without the comm leg, and showing it always was confusing
-            // the testers.
-            if (f === 'customerRepresentative' && !form.customerCommunicationRequired) {
-              return null;
-            }
-            return <FieldEditor key={f} name={f} form={form} setForm={setForm} />;
-          })}
-        </Grid>
-      )}
-
-      {(() => {
-        // Round-3 R24: at QA Phase 2 the label flips to "Post Remark".
-        // Round-3 R26: at Head QA the field IS the Approval Comment.
-        // Round-3 R21: at QA Phase 1 with depts invited, the field is
-        //              OPTIONAL while we wait for them to respond.
-        const isQaPhase1WithDepts = status === 'PENDING_QA_REVIEW'
-                                    && qaPhase === 1 && deptTotal > 0;
-        const fieldLabel = status === 'PENDING_HEAD_QA' ? 'Approval Comment'
-                        : status === 'PENDING_QA_REVIEW' && qaPhase === 2 ? 'Post Remark'
-                        : 'Remark / Justification';
-        const placeholder = status === 'PENDING_HEAD_QA'
-          ? 'Final approval narrative — captured as the record\'s Approval Comment and on the audit trail.'
-          : isQaPhase1WithDepts
-            ? 'Optional while departments are responding. Will become mandatory in Phase 2.'
-            : 'Recorded on the audit trail as the actor\'s remark for this transition.';
-        return (
-          <TextField
-            label={fieldLabel} required={!isQaPhase1WithDepts}
-            multiline rows={2} fullWidth
-            value={comment} onChange={(e) => setComment(e.target.value)}
-            placeholder={placeholder}
-            sx={{ mb: 1.5 }}
-            inputProps={{ autoComplete: 'off' }}
-          />
-        );
-      })()}
-
-      {/* Round-3 R15: Stage attachments rendered BELOW the Remark /
-          Justification field so the actor sees their remark first and
-          attaches supporting evidence afterwards. */}
-      {!['DRAFT','CLOSED','CANCELLED','REJECTED','REOPENED'].includes(status) && record?.id && (
-        <StageAttachments
-          moduleKey="changeControl"
-          recordId={record.id}
-          readOnly={false}
-          heading={`${desc.title} — attachments`}
-        />
-      )}
-
-      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+      {/* Round-4 L2 — sticky action bar at the bottom of the drawer.
+          Shows the current-stage buttons (Approve / Resend / Reject etc.)
+          regardless of how far the user has scrolled. */}
+      <StickyActionBar
+        helperText={blockForward
+          ? `${deptPending} department comment(s) still pending — forward is blocked.`
+          : null}
+      >
         <Tooltip title={blockForward
             ? `Cannot forward — ${deptPending} department comment(s) still pending`
             : `POST .../${desc.primary}?comment=…`}>
@@ -1036,17 +1306,13 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
               startIcon={desc.primary === 'close' ? <SaveIcon /> : <ForwardIcon />}
               color={desc.primary === 'close' ? 'success' : 'primary'}
               onClick={() => submit(desc.primary)}
-              disabled={saving || rejecting || resending || !comment.trim() || blockForward}
+              disabled={saving || rejecting || resending || (!comment.trim() && !(status === 'PENDING_QA_REVIEW' && qaPhase === 1 && deptTotal > 0)) || blockForward}
             >
               {saving ? 'Saving…' : primaryLabel}
             </Button>
           </span>
         </Tooltip>
 
-        {/* Resend to Initiator — shown on EVERY reviewer stage (not just HOD).
-            Round-2 tester feedback (D1, F3, H3): QA / RA / Site Head / Customer
-            / Head-QA reviewers should send back to Initiator for revision
-            rather than reject outright. */}
         {['PENDING_HOD','PENDING_QA_REVIEW','PENDING_RA_REVIEW','PENDING_SITE_HEAD',
           'PENDING_CUSTOMER_COMMENT','PENDING_HEAD_QA','PENDING_VERIFICATION'].includes(status) && (
           <Tooltip title="Send back to Initiator for revision — record returns to DRAFT, not REJECTED">
@@ -1070,14 +1336,11 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
           </Button>
         )}
 
-        {/* Reject — Round-2 tester feedback (C4, D1, F3, H3): only HOD
-            Assessment shows Reject. Every other reviewer stage uses Resend. */}
         {status === 'PENDING_HOD' && (
           <Tooltip title="POST .../reject?comment=…  (terminal — Initiator must re-raise)">
             <span>
               <Button
-                variant="outlined"
-                color="error"
+                variant="outlined" color="error"
                 startIcon={<RejectIcon />}
                 onClick={() => submit('reject')}
                 disabled={saving || rejecting || resending || !comment.trim()}
@@ -1087,7 +1350,7 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
             </span>
           </Tooltip>
         )}
-      </Stack>
+      </StickyActionBar>
 
       {/* Resend confirmation — has its own Reason field so the reviewer
           doesn't need to first fill the panel-level Remark to use it.
@@ -1158,7 +1421,7 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
                     : pendingAction === 'close'  ? 'Sign & close'
                     : 'Sign & forward'}
       />
-    </Paper>
+    </Box>
   );
 };
 

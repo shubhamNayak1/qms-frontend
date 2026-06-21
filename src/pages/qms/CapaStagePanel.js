@@ -14,6 +14,8 @@ import { listDeptCommentsApi } from '../../api/qmsCommonApi';
 import { useAuth } from '../../store/AuthContext';
 import QmsCapaAssessmentsSection from './QmsCapaAssessmentsSection';
 import QmsDepartmentAttachmentsSection from './QmsDepartmentAttachmentsSection';
+import { StageSection, StickyActionBar, findStageActor as flowFindStageActor } from './LinearFlow';
+import { formatDate } from '../../utils/helpers';
 
 /**
  * CapaStagePanel — stage-aware editable form for CAPA.
@@ -391,22 +393,90 @@ const CapaStagePanel = ({ record, onUpdated }) => {
     }
   };
 
+  // ── Round-4 L6 linear-flow ──────────────────────────────────────
+  const CAPA_STAGES = [
+    { key: 'DRAFT',                       title: 'Draft / Initiation' },
+    { key: 'PENDING_HOD',                 title: 'HOD Assessment' },
+    { key: 'PENDING_QA_REVIEW',           title: 'QA Evaluation' },
+    { key: 'PENDING_DEPT_COMMENT',        title: 'Department-Wise Comments',
+      optional: true, skipReason: deptComments.length === 0 ? 'No departments invited' : null },
+    { key: 'PENDING_SITE_HEAD',           title: 'Site Head',
+      optional: true, skipReason: record?.siteHeadRequired === false ? 'Site Head Req. = No' : null },
+    { key: 'PENDING_HEAD_QA',             title: 'Approval by Head QA' },
+    { key: 'PENDING_ATTACHMENTS',         title: 'Department Attachments',
+      optional: true, skipReason: !deptComments.some((c) => c.actionRequired) ? 'No dept flagged Action Required' : null },
+    { key: 'PENDING_VERIFICATION',        title: 'Verification (Add)' },
+    { key: 'PENDING_VERIFICATION_REVIEW', title: 'Verification Review' },
+    { key: 'CLOSED',                      title: 'Closed' },
+  ];
+  const capaCurrentIdx = CAPA_STAGES.findIndex((s) => s.key === status);
+  const capaStageState = (stage, idx) => {
+    if (stage.optional && stage.skipReason && idx < capaCurrentIdx) return 'skipped';
+    if (idx === capaCurrentIdx) return stage.key === 'CLOSED' ? 'terminal' : 'current';
+    return idx < capaCurrentIdx ? 'past' : 'future';
+  };
+  const capaStageActor = (stage) => {
+    if (stage.key === 'DRAFT') return { actor: record?.raisedByName || record?.createdBy, when: record?.createdAt };
+    if (stage.key === 'CLOSED') return { actor: record?.approvedByName, when: record?.closedDate || record?.approvedAt };
+    return flowFindStageActor(record?.statusHistory, [stage.key]);
+  };
+  const capaRoBody = (key) => {
+    switch (key) {
+      case 'DRAFT': return (
+        <Grid container spacing={1}>
+          {record.capaType && <Grid item xs={6}><Typography variant="body2"><strong>CAPA Type:</strong> {record.capaType}</Typography></Grid>}
+          {record.source && <Grid item xs={6}><Typography variant="body2"><strong>Source:</strong> {record.source}</Typography></Grid>}
+          {record.parentRecordNumber && <Grid item xs={12}><Typography variant="body2"><strong>Parent:</strong> {record.parentRecordType?.replace('_', ' ')} {record.parentRecordNumber}</Typography></Grid>}
+          {record.rootCause && <Grid item xs={12}><Typography variant="body2"><strong>Root Cause:</strong> {record.rootCause}</Typography></Grid>}
+        </Grid>
+      );
+      case 'PENDING_HOD': return record?.initialAssessment
+        ? <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{record.initialAssessment}</Typography>
+        : <Typography variant="caption" color="text.secondary">No HOD assessment.</Typography>;
+      case 'PENDING_QA_REVIEW': return record?.comments
+        ? <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{record.comments}</Typography>
+        : <Typography variant="caption" color="text.secondary">No QA narrative.</Typography>;
+      case 'PENDING_HEAD_QA': return record?.approvalComments
+        ? <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}><strong>Approval Comment:</strong> {record.approvalComments}</Typography>
+        : <Typography variant="caption" color="text.secondary">No approval comment.</Typography>;
+      case 'PENDING_VERIFICATION': return record?.verificationActionTaken
+        ? <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}><strong>Action Taken:</strong> {record.verificationActionTaken}</Typography>
+        : <Typography variant="caption" color="text.secondary">No verification narrative.</Typography>;
+      case 'CLOSED': return (
+        <Typography variant="body2" color="success.main">
+          Record closed{record?.closedDate ? ` on ${formatDate(record.closedDate)}` : ''}.
+        </Typography>
+      );
+      default: return null;
+    }
+  };
+
   return (
-    <Paper variant="outlined" sx={{
-        p: 2, mb: 2, borderLeft: '4px solid', borderLeftColor: 'primary.main',
-        borderRadius: 1.5,
-      }}>
-      <Stack direction="row" alignItems="baseline" spacing={1} flexWrap="wrap" sx={{ mb: 1 }}>
-        <Typography variant="subtitle1" fontWeight={700}>{desc.title}</Typography>
-        <Typography variant="caption" color="text.secondary">· {desc.actor}</Typography>
+    <Box sx={{ mb: 2 }}>
+      <Stack direction="row" alignItems="baseline" spacing={1} flexWrap="wrap" sx={{ mb: 1.5 }}>
+        <Typography variant="subtitle1" fontWeight={700}>Workflow Progress</Typography>
         {record?.parentRecordType && record?.parentRecordNumber && (
           <Chip size="small" color="secondary"
                 label={`From ${record.parentRecordType.replace('_', ' ')} ${record.parentRecordNumber}`} />
         )}
       </Stack>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        {desc.helper}
-      </Typography>
+
+      {CAPA_STAGES.map((stage, idx) => {
+        const state = capaStageState(stage, idx);
+        if (state === 'future') return null;
+        const stamp = capaStageActor(stage) || {};
+        return (
+          <StageSection key={stage.key}
+            title={stage.title} state={state}
+            actor={stamp.actor} when={stamp.when}
+            skippedReason={state === 'skipped' ? stage.skipReason : null}
+          >
+            {state === 'current' ? (
+              <Typography variant="body2" color="text.secondary">{desc.helper}</Typography>
+            ) : state === 'skipped' ? null : capaRoBody(stage.key)}
+          </StageSection>
+        );
+      })}
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
@@ -489,7 +559,11 @@ const CapaStagePanel = ({ record, onUpdated }) => {
         inputProps={{ autoComplete: 'off' }}
       />
 
-      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+      <StickyActionBar
+        helperText={blockForward
+          ? `${deptPending} department comment(s) still pending — forward is blocked.`
+          : null}
+      >
         <Tooltip title={blockForward
             ? `Cannot advance — ${deptPending} department comment(s) still pending`
             : `POST .../${desc.primary}?comment=…`}>
@@ -528,8 +602,7 @@ const CapaStagePanel = ({ record, onUpdated }) => {
         <Tooltip title="POST .../reject?comment=…">
           <span>
             <Button
-              variant="outlined"
-              color="error"
+              variant="outlined" color="error"
               startIcon={<RejectIcon />}
               onClick={() => submit('reject')}
               disabled={saving || rejecting || !comment.trim()}
@@ -538,8 +611,8 @@ const CapaStagePanel = ({ record, onUpdated }) => {
             </Button>
           </span>
         </Tooltip>
-      </Stack>
-    </Paper>
+      </StickyActionBar>
+    </Box>
   );
 };
 

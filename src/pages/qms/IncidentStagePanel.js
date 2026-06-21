@@ -15,6 +15,8 @@ import {
 import { listDeptCommentsApi } from '../../api/qmsCommonApi';
 import { useAuth } from '../../store/AuthContext';
 import QmsDepartmentAttachmentsSection from './QmsDepartmentAttachmentsSection';
+import { StageSection, StickyActionBar, findStageActor as flowFindStageActor } from './LinearFlow';
+import { formatDate } from '../../utils/helpers';
 
 /**
  * IncidentStagePanel — stage-aware editable form for Incident.
@@ -417,22 +419,94 @@ const IncidentStagePanel = ({ record, onUpdated }) => {
     }
   };
 
+  // ── Round-4 L4 linear-flow ──────────────────────────────────────
+  const INC_STAGES = [
+    { key: 'DRAFT',                  title: 'Draft / Initiation' },
+    { key: 'PENDING_HOD',            title: 'HOD Assessment' },
+    { key: 'PENDING_QA_REVIEW',      title: 'QA Evaluation' },
+    { key: 'PENDING_DEPT_COMMENT',   title: 'Department-Wise Comments',
+      optional: true,
+      skipReason: deptComments.length === 0 ? 'No departments invited' : null },
+    { key: 'PENDING_SITE_HEAD',      title: 'Site Head',
+      optional: true,
+      skipReason: record?.siteHeadRequired === false ? 'Site Head Required = No' : null },
+    { key: 'PENDING_HEAD_QA',        title: 'Approval by Head QA' },
+    { key: 'PENDING_ATTACHMENTS',    title: 'Department Attachments',
+      optional: true,
+      skipReason: !deptComments.some((c) => c.actionRequired) ? 'No department flagged Action Required' : null },
+    { key: 'PENDING_VERIFICATION',   title: 'Verification' },
+    { key: 'CLOSED',                 title: 'Closed' },
+  ];
+  const incCurrentIdx = INC_STAGES.findIndex((s) => s.key === status);
+  const incStageState = (stage, idx) => {
+    if (stage.optional && stage.skipReason && idx < incCurrentIdx) return 'skipped';
+    if (idx === incCurrentIdx) return stage.key === 'CLOSED' ? 'terminal' : 'current';
+    return idx < incCurrentIdx ? 'past' : 'future';
+  };
+  const incStageActor = (stage) => {
+    if (stage.key === 'DRAFT') return { actor: record?.raisedByName || record?.createdBy, when: record?.createdAt };
+    if (stage.key === 'CLOSED') return { actor: record?.approvedByName, when: record?.closedDate || record?.approvedAt };
+    return flowFindStageActor(record?.statusHistory, [stage.key]);
+  };
+  const incRoBody = (key) => {
+    switch (key) {
+      case 'DRAFT': return (
+        <Grid container spacing={1}>
+          {record.incidentType && <Grid item xs={6}><Typography variant="body2"><strong>Incident Type:</strong> {record.incidentType}</Typography></Grid>}
+          {record.incidentSubType && <Grid item xs={6}><Typography variant="body2"><strong>Sub-Type:</strong> {record.incidentSubType}</Typography></Grid>}
+          {record.location && <Grid item xs={6}><Typography variant="body2"><strong>Location:</strong> {record.location}</Typography></Grid>}
+          {record.occurrenceDate && <Grid item xs={6}><Typography variant="body2"><strong>Occurrence Date:</strong> {formatDate(record.occurrenceDate)}</Typography></Grid>}
+          {record.immediateAction && <Grid item xs={12}><Typography variant="body2"><strong>Immediate Action:</strong> {record.immediateAction}</Typography></Grid>}
+        </Grid>
+      );
+      case 'PENDING_HOD': return record?.initialAssessment
+        ? <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{record.initialAssessment}</Typography>
+        : <Typography variant="caption" color="text.secondary">No HOD assessment recorded.</Typography>;
+      case 'PENDING_QA_REVIEW': return record?.comments
+        ? <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{record.comments}</Typography>
+        : <Typography variant="caption" color="text.secondary">No QA evaluation narrative.</Typography>;
+      case 'PENDING_HEAD_QA': return record?.approvalComments
+        ? <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}><strong>Approval Comment:</strong> {record.approvalComments}</Typography>
+        : <Typography variant="caption" color="text.secondary">No approval comment.</Typography>;
+      case 'PENDING_VERIFICATION': return record?.verificationActionTaken
+        ? <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}><strong>Action Taken:</strong> {record.verificationActionTaken}</Typography>
+        : <Typography variant="caption" color="text.secondary">No verification narrative.</Typography>;
+      case 'CLOSED': return (
+        <Typography variant="body2" color="success.main">
+          Record closed{record?.closedDate ? ` on ${formatDate(record.closedDate)}` : ''}.
+        </Typography>
+      );
+      default: return null;
+    }
+  };
+
   return (
-    <Paper variant="outlined" sx={{
-        p: 2, mb: 2, borderLeft: '4px solid', borderLeftColor: 'primary.main',
-        borderRadius: 1.5,
-      }}>
-      <Stack direction="row" alignItems="baseline" spacing={1} flexWrap="wrap" sx={{ mb: 1 }}>
-        <Typography variant="subtitle1" fontWeight={700}>{desc.title}</Typography>
-        <Typography variant="caption" color="text.secondary">· {desc.actor}</Typography>
-        {record?.incidentSubType && (
-          <Chip size="small" label={record.incidentSubType}
+    <Box sx={{ mb: 2 }}>
+      <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1.5 }}>
+        Workflow Progress {record?.incidentSubType && (
+          <Chip size="small" sx={{ ml: 1 }} label={record.incidentSubType}
                 color={record.incidentSubType === 'LABORATORY' ? 'info' : 'default'} />
         )}
-      </Stack>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        {desc.helper}
       </Typography>
+
+      {INC_STAGES.map((stage, idx) => {
+        const state = incStageState(stage, idx);
+        if (state === 'future') return null;
+        const stamp = incStageActor(stage) || {};
+        return (
+          <StageSection key={stage.key}
+            title={stage.title}
+            state={state}
+            actor={stamp.actor}
+            when={stamp.when}
+            skippedReason={state === 'skipped' ? stage.skipReason : null}
+          >
+            {state === 'current' ? (
+              <Typography variant="body2" color="text.secondary">{desc.helper}</Typography>
+            ) : state === 'skipped' ? null : incRoBody(stage.key)}
+          </StageSection>
+        );
+      })}
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
@@ -487,7 +561,11 @@ const IncidentStagePanel = ({ record, onUpdated }) => {
         inputProps={{ autoComplete: 'off' }}
       />
 
-      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+      <StickyActionBar
+        helperText={blockForward
+          ? `${deptPending} department comment(s) still pending — forward is blocked.`
+          : null}
+      >
         <Tooltip title={blockForward
             ? `Cannot advance — ${deptPending} department comment(s) still pending`
             : `POST .../${desc.primary}?comment=…`}>
@@ -553,8 +631,7 @@ const IncidentStagePanel = ({ record, onUpdated }) => {
         <Tooltip title="POST .../reject?comment=…">
           <span>
             <Button
-              variant="outlined"
-              color="error"
+              variant="outlined" color="error"
               startIcon={<RejectIcon />}
               onClick={() => submit('reject')}
               disabled={saving || rejecting || spawning || !comment.trim()}
@@ -563,8 +640,8 @@ const IncidentStagePanel = ({ record, onUpdated }) => {
             </Button>
           </span>
         </Tooltip>
-      </Stack>
-    </Paper>
+      </StickyActionBar>
+    </Box>
   );
 };
 

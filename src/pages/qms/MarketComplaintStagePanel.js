@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Paper, Typography, Grid, TextField, MenuItem, Stack, Button,
-  Alert, FormControlLabel, Switch, Tooltip, Chip,
+  Typography, Grid, TextField, MenuItem, Stack, Button,
+  Alert, FormControlLabel, Switch, Tooltip, Chip, Box,
 } from '@mui/material';
 import {
   Save as SaveIcon, ArrowForward as ForwardIcon, Cancel as RejectIcon,
@@ -11,6 +11,10 @@ import {
   closeComplaintApi, transitionComplaintApi,
 } from '../../api/qmsApi';
 import { listDeptCommentsApi } from '../../api/qmsCommonApi';
+import {
+  StageSection, StickyActionBar, findStageActor as flowFindStageActor,
+} from './LinearFlow';
+import { formatDate } from '../../utils/helpers';
 
 /**
  * MarketComplaintStagePanel — stage-aware editable form for Market Complaint.
@@ -266,18 +270,97 @@ const MarketComplaintStagePanel = ({ record, onUpdated }) => {
     }
   };
 
+  // ── Round-4 L3 linear-flow ──────────────────────────────────────
+  // Walk canonical MC stages. Show past stages with actor stamp; render
+  // editable form for current; hide future stages entirely.
+  const MC_STAGES = [
+    { key: 'DRAFT',                 title: 'Draft / Initiation' },
+    { key: 'PENDING_HOD',           title: 'HOD Assessment' },
+    { key: 'PENDING_INVESTIGATION', title: 'QA Investigation' },
+    { key: 'PENDING_DEPT_COMMENT',  title: 'Department-Wise Comments',
+      optional: true,
+      skipReason: deptComments.length === 0 ? 'No departments invited' : null },
+    { key: 'PENDING_HEAD_QA',       title: 'Approval by Head QA' },
+    { key: 'CLOSED',                title: 'Closed' },
+  ];
+  const mcCurrentIdx = MC_STAGES.findIndex((s) => s.key === status);
+  const stageState = (stage, idx) => {
+    if (stage.optional && stage.skipReason && idx < mcCurrentIdx) return 'skipped';
+    if (idx === mcCurrentIdx) return stage.key === 'CLOSED' ? 'terminal' : 'current';
+    return idx < mcCurrentIdx ? 'past' : 'future';
+  };
+  const stageActor = (stage) => {
+    if (stage.key === 'DRAFT') return { actor: record?.raisedByName || record?.createdBy, when: record?.createdAt };
+    if (stage.key === 'CLOSED') return { actor: record?.approvedByName, when: record?.closedDate || record?.approvedAt };
+    return flowFindStageActor(record?.statusHistory, [stage.key]);
+  };
+  const renderRoBody = (key) => {
+    switch (key) {
+      case 'DRAFT': return (
+        <Grid container spacing={1}>
+          {record.customerName && <Grid item xs={6}><Typography variant="body2"><strong>Customer:</strong> {record.customerName}</Typography></Grid>}
+          {record.productName && <Grid item xs={6}><Typography variant="body2"><strong>Product:</strong> {record.productName}</Typography></Grid>}
+          {record.batchNumber && <Grid item xs={6}><Typography variant="body2"><strong>Batch:</strong> {record.batchNumber}</Typography></Grid>}
+          {record.complaintCategory && <Grid item xs={6}><Typography variant="body2"><strong>Category:</strong> {record.complaintCategory}</Typography></Grid>}
+          {record.receivedDate && <Grid item xs={6}><Typography variant="body2"><strong>Received:</strong> {formatDate(record.receivedDate)}</Typography></Grid>}
+        </Grid>
+      );
+      case 'PENDING_HOD': return record?.initialAssessment
+        ? <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{record.initialAssessment}</Typography>
+        : <Typography variant="caption" color="text.secondary">No HOD assessment recorded.</Typography>;
+      case 'PENDING_INVESTIGATION': return record?.comments
+        ? <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{record.comments}</Typography>
+        : <Typography variant="caption" color="text.secondary">No QA investigation narrative recorded.</Typography>;
+      case 'PENDING_DEPT_COMMENT': return (
+        <Stack spacing={0.5}>
+          {deptComments.map((c) => (
+            <Box key={c.id} sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
+              <Typography variant="body2" fontWeight={600}>{c.departmentName}:</Typography>
+              <Typography variant="body2">{c.comment || <em>(pending)</em>}</Typography>
+              <Chip size="small" label={c.status} color={c.status === 'COMPLETED' ? 'success' : 'warning'} />
+            </Box>
+          ))}
+        </Stack>
+      );
+      case 'PENDING_HEAD_QA': return record?.approvalComments
+        ? <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}><strong>Approval Comment:</strong> {record.approvalComments}</Typography>
+        : <Typography variant="caption" color="text.secondary">No Head QA approval comment.</Typography>;
+      case 'CLOSED': return (
+        <Typography variant="body2" color="success.main">
+          Record closed{record?.closedDate ? ` on ${formatDate(record.closedDate)}` : ''}.
+        </Typography>
+      );
+      default: return null;
+    }
+  };
+
   return (
-    <Paper variant="outlined" sx={{
-        p: 2, mb: 2, borderLeft: '4px solid', borderLeftColor: 'primary.main',
-        borderRadius: 1.5,
-      }}>
-      <Stack direction="row" alignItems="baseline" spacing={1} flexWrap="wrap" sx={{ mb: 1 }}>
-        <Typography variant="subtitle1" fontWeight={700}>{desc.title}</Typography>
-        <Typography variant="caption" color="text.secondary">· {desc.actor}</Typography>
-      </Stack>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        {desc.helper}
+    <Box sx={{ mb: 2 }}>
+      <Typography variant="subtitle1" fontWeight={700} sx={{ mb: 1.5 }}>
+        Workflow Progress
       </Typography>
+
+      {MC_STAGES.map((stage, idx) => {
+        const state = stageState(stage, idx);
+        if (state === 'future') return null;
+        const stamp = stageActor(stage) || {};
+        return (
+          <StageSection key={stage.key}
+            title={stage.title}
+            state={state}
+            actor={stamp.actor}
+            when={stamp.when}
+            skippedReason={state === 'skipped' ? stage.skipReason : null}
+          >
+            {state === 'current' ? (
+              <>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>{desc.helper}</Typography>
+                {/* editable form body — inlined below in original layout */}
+              </>
+            ) : state === 'skipped' ? null : renderRoBody(stage.key)}
+          </StageSection>
+        );
+      })}
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
 
@@ -321,7 +404,11 @@ const MarketComplaintStagePanel = ({ record, onUpdated }) => {
         inputProps={{ autoComplete: 'off' }}
       />
 
-      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+      <StickyActionBar
+        helperText={blockForward
+          ? `${deptPending} department comment(s) still pending — forward is blocked.`
+          : null}
+      >
         <Tooltip title={blockForward
             ? `Cannot advance — ${deptPending} department comment(s) still pending`
             : `POST .../${desc.primary}?comment=…`}>
@@ -345,8 +432,6 @@ const MarketComplaintStagePanel = ({ record, onUpdated }) => {
           </Button>
         )}
 
-        {/* HOD-only Resend button — distinct from Reject. Record returns
-            to DRAFT so the Initiator can edit + re-submit. */}
         {status === 'PENDING_HOD' && (
           <Tooltip title="Send back to Initiator — record returns to DRAFT (not REJECTED)">
             <span>
@@ -362,8 +447,7 @@ const MarketComplaintStagePanel = ({ record, onUpdated }) => {
         <Tooltip title="POST .../reject?comment=…">
           <span>
             <Button
-              variant="outlined"
-              color="error"
+              variant="outlined" color="error"
               startIcon={<RejectIcon />}
               onClick={() => submit('reject')}
               disabled={saving || rejecting || !comment.trim()}
@@ -372,8 +456,8 @@ const MarketComplaintStagePanel = ({ record, onUpdated }) => {
             </Button>
           </span>
         </Tooltip>
-      </Stack>
-    </Paper>
+      </StickyActionBar>
+    </Box>
   );
 };
 
