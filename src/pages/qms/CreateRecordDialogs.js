@@ -82,6 +82,8 @@ const F = ({ label, name, form, setForm, type = 'text', options, multiline, requ
           multiline={multiline}
           rows={multiline ? 3 : undefined}
           InputLabelProps={type === 'date' || shrinkLabel ? { shrink: true } : undefined}
+          /* Round-4 G2 (=R11): every date input carries DD/MM/YYYY hint. */
+          helperText={type === 'date' ? 'DD/MM/YYYY' : undefined}
         />
       )}
     </Grid>

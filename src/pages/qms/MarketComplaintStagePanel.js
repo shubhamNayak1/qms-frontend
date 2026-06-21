@@ -226,12 +226,16 @@ const MarketComplaintStagePanel = ({ record, onUpdated }) => {
     flag(true);
     try {
       // Step 1 — persist field updates if any.
-      if (desc.fields.length > 0) {
+      if (desc.fields.length > 0 || status === 'PENDING_HEAD_QA') {
         const payload = {
           title:    record.title,
           priority: record.priority,
           ...form,
         };
+        // Round-4 G5: at Head QA the workflow Remark also fills approvalComments.
+        if (status === 'PENDING_HEAD_QA' && (action === 'approve' || action === 'close')) {
+          payload.approvalComments = comment.trim();
+        }
         await updateComplaintApi(record.id, payload);
       }
 
@@ -397,9 +401,13 @@ const MarketComplaintStagePanel = ({ record, onUpdated }) => {
       )}
 
       <TextField
-        label="Remark / Justification" required multiline rows={2} fullWidth
+        // Round-4 G5 (=Round-3 R26): at Head QA the field IS the Approval Comment.
+        label={status === 'PENDING_HEAD_QA' ? 'Approval Comment' : 'Remark / Justification'}
+        required multiline rows={2} fullWidth
         value={comment} onChange={(e) => setComment(e.target.value)}
-        placeholder="Recorded on the audit trail as the actor's remark for this transition."
+        placeholder={status === 'PENDING_HEAD_QA'
+          ? 'Final approval narrative — captured as the record\'s Approval Comment and on the audit trail.'
+          : 'Recorded on the audit trail as the actor\'s remark for this transition.'}
         sx={{ mb: 1.5 }}
         inputProps={{ autoComplete: 'off' }}
       />

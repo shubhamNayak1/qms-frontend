@@ -342,8 +342,8 @@ const QmsDepartmentCommentsSection = ({ commonSlug, recordId, currentUser, recor
               }}
               helperText={
                 recordTargetDate
-                  ? `Optional. If set, must be future and on or before the parent record's target completion date (${recordTargetDate}).`
-                  : 'Optional. Set a future date if your department needs a deadline.'
+                  ? `DD/MM/YYYY · Optional. If set, must be future and on or before the parent record's target completion date (${recordTargetDate}).`
+                  : 'DD/MM/YYYY · Optional. Set a future date if your department needs a deadline.'
               }
               sx={{ mt: 1 }}
             />

@@ -23,6 +23,7 @@ import {
   getChangeControlByIdApi, submitChangeControlApi, approveChangeControlApi, rejectChangeControlApi,
   closeChangeControlApi, cancelChangeControlApi, reopenChangeControlApi, transitionChangeControlApi,
 } from '../../api/qmsApi';
+import { listRecordAttachmentsApi } from '../../api/qmsCommonApi';
 import {
   STATUS_COLORS, STATUS_LABELS, PRIORITY_COLORS,
   BRANCH_TRANSITIONS, getPrimaryForward, ACTION_LABELS,
@@ -375,6 +376,8 @@ const RecordDetailDrawer = ({ open, onClose, recordId, moduleKey, onUpdated }) =
   const [record, setRecord]   = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState(null);
+  // Round-4 G1 (=R7): attachment count for the small chip in the header.
+  const [attachmentCount, setAttachmentCount] = useState(0);
 
   // Workflow action dialog state
   const [wfOpen, setWfOpen]           = useState(false);
@@ -404,6 +407,22 @@ const RecordDetailDrawer = ({ open, onClose, recordId, moduleKey, onUpdated }) =
     if (open && recordId) fetchRecord();
     if (!open) setRecord(null);
   }, [open, recordId, fetchRecord]);
+
+  // Round-4 G1 (=R7): fetch attachment count whenever the record (re)loads.
+  // We refetch on every drawer open or refresh so the chip reflects uploads
+  // that happened in the current session.
+  useEffect(() => {
+    if (!open || !recordId || !moduleKey) { setAttachmentCount(0); return; }
+    const recordType = {
+      changeControl: 'CHANGE_CONTROL', capa: 'CAPA',
+      deviation: 'DEVIATION', incident: 'INCIDENT',
+      marketComplaint: 'MARKET_COMPLAINT',
+    }[moduleKey];
+    if (!recordType) { setAttachmentCount(0); return; }
+    listRecordAttachmentsApi(recordType, recordId)
+      .then(({ data }) => setAttachmentCount((data?.data || []).length))
+      .catch(() => setAttachmentCount(0));
+  }, [open, recordId, moduleKey, record?.updatedAt]);
 
   // Open workflow action dialog
   const handleAction = (action, label, targetStatus = null) => {
@@ -458,6 +477,11 @@ const RecordDetailDrawer = ({ open, onClose, recordId, moduleKey, onUpdated }) =
                   {record.priority && <PriorityChip priority={record.priority} />}
                   {moduleKey === 'changeControl' && record.changeType && (
                     <Chip size="small" variant="outlined" label={`Change Type: ${record.changeType}`} />
+                  )}
+                  {/* Round-4 G1 (=R7): attachment-count chip. */}
+                  {attachmentCount > 0 && (
+                    <Chip size="small" variant="outlined" color="primary"
+                          label={`${attachmentCount} attachment${attachmentCount !== 1 ? 's' : ''}`} />
                   )}
                   {record.overdue && <Chip label="Overdue" size="small" color="error" icon={<WarnIcon />} />}
                 </Box>

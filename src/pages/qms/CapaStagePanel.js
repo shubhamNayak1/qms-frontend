@@ -79,9 +79,11 @@ const STAGE_DESCRIPTORS = {
   PENDING_HEAD_QA: {
     title: 'Approval by Head QA',
     actor: 'Head of QA',
+    // Round-4 G5 (=Round-3 R26): the workflow Remark / Justification IS
+    // the Approval Comment at this stage — no separate field.
     helper:
-      'Final approval of the proposed CAPA. After approval the responsible departments have 30 days to upload attachments and run the Verification cycle.',
-    fields: ['approvalComments'],
+      'Final approval of the proposed CAPA. Record the Approval Comment, then approve and forward.',
+    fields: [],
     primary: 'approve',
     primaryLabel: 'Approve & forward to Department Attachments',
     secondary: { kind: 'transition', target: 'PENDING_QA_REVIEW', label: 'Send back to QA' },
@@ -100,8 +102,9 @@ const STAGE_DESCRIPTORS = {
     actor: 'Originating dept HOD',
     helper:
       'Capture the Action Taken and the Effective Document reference for the closure cover sheet.',
+    // Round-4 G5 (=Round-3 R29): Documents Reissue toggle dropped.
     fields: ['verificationActionTaken', 'verificationEffectiveOn',
-             'verificationDocumentsReissue', 'verificationOtherComments'],
+             'verificationOtherComments'],
     primary: 'approve',
     primaryLabel: 'Forward to Verification Review',
   },
@@ -192,6 +195,7 @@ const FieldEditor = ({ name, form, setForm }) => {
           <TextField label="Effective / Implemented On" type="date" fullWidth value={v}
                      onChange={(e) => set(e.target.value)}
                      InputLabelProps={{ shrink: true }}
+                     helperText="DD/MM/YYYY"
                      inputProps={{ autoComplete: 'off' }} />
         </Grid>
       );
@@ -341,7 +345,7 @@ const CapaStagePanel = ({ record, onUpdated }) => {
       // Step 1 — persist field updates if any. For the closing moment we
       // also stamp assessment_frequency + assessment_count so the engine
       // seeds the assessment cycles when close fires.
-      if (desc.fields.length > 0 || isClosingMoment) {
+      if (desc.fields.length > 0 || isClosingMoment || status === 'PENDING_HEAD_QA') {
         const payload = {
           title:    record.title,
           priority: record.priority,
@@ -350,6 +354,10 @@ const CapaStagePanel = ({ record, onUpdated }) => {
         if (isClosingMoment && action === 'approve') {
           payload.assessmentFrequency = freq;
           payload.assessmentCount = Number(count) || 0;
+        }
+        // Round-4 G5: at Head QA the workflow Remark IS the Approval Comment.
+        if (status === 'PENDING_HEAD_QA' && action === 'approve') {
+          payload.approvalComments = comment.trim();
         }
         await updateCapaApi(record.id, payload);
       }
@@ -552,9 +560,13 @@ const CapaStagePanel = ({ record, onUpdated }) => {
       )}
 
       <TextField
-        label="Remark / Justification" required multiline rows={2} fullWidth
+        // Round-4 G5 (=Round-3 R26): at Head QA the field IS the Approval Comment.
+        label={status === 'PENDING_HEAD_QA' ? 'Approval Comment' : 'Remark / Justification'}
+        required multiline rows={2} fullWidth
         value={comment} onChange={(e) => setComment(e.target.value)}
-        placeholder="Recorded on the audit trail as the actor's remark for this transition."
+        placeholder={status === 'PENDING_HEAD_QA'
+          ? 'Final approval narrative — captured as the record\'s Approval Comment and on the audit trail.'
+          : 'Recorded on the audit trail as the actor\'s remark for this transition.'}
         sx={{ mb: 1.5 }}
         inputProps={{ autoComplete: 'off' }}
       />

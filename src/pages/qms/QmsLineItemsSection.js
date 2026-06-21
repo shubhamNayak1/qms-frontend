@@ -206,6 +206,7 @@ const QmsLineItemsSection = ({ commonSlug, recordId, readOnly = false }) => {
             <Grid item xs={6}>
               <TextField label="Proposed Date" type="date" fullWidth
                          InputLabelProps={{ shrink: true }}
+                         helperText="DD/MM/YYYY"
                          value={form.proposedDate}
                          onChange={(e) => setForm({ ...form, proposedDate: e.target.value })}
                          inputProps={{ autoComplete: 'off' }} />

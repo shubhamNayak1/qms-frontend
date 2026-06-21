@@ -412,6 +412,7 @@ const FieldEditor = ({ name, form, setForm, xs = 12 }) => {
                      onChange={(e) => set(e.target.value)}
                      InputLabelProps={{ shrink: true }}
                      placeholder="DD/MM/YYYY"
+                     helperText="DD/MM/YYYY — today or later"
                      inputProps={{
                        autoComplete: 'off',
                        min: new Date().toISOString().slice(0, 10),

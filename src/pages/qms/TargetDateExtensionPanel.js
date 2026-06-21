@@ -199,6 +199,7 @@ const TargetDateExtensionPanel = ({ commonSlug, recordId, currentTargetDate }) =
                      value={reqDate}
                      onChange={(e) => setReqDate(e.target.value)}
                      InputLabelProps={{ shrink: true }}
+                     helperText="DD/MM/YYYY — must be in the future"
                      inputProps={{ min: tomorrow, autoComplete: 'off' }} />
           <TextField label="Remark / Justification" multiline rows={3} required fullWidth
                      value={reqReason}

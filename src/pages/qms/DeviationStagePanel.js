@@ -94,9 +94,10 @@ const STAGE_DESCRIPTORS = {
   PENDING_HEAD_QA: {
     title: 'Approval by Head QA',
     actor: 'Head of QA',
+    // Round-4 G5 (=Round-3 R26): the workflow Remark IS the Approval Comment.
     helper:
-      'Final approval. After approval the responsible departments have 30 days to upload their attachments (each requires your approval) before the Deviation can be closed.',
-    fields: ['approvalComments'],
+      'Final approval. Record the Approval Comment, then approve and forward.',
+    fields: [],
     primary: 'approve',
     primaryLabel: 'Approve & forward to Department Attachments',
     secondary: { kind: 'transition', target: 'PENDING_QA_REVIEW', label: 'Send back to QA' },
@@ -318,12 +319,16 @@ const DeviationStagePanel = ({ record, onUpdated }) => {
     const flag = action === 'reject' ? setRejecting : setSaving;
     flag(true);
     try {
-      if (desc.fields.length > 0) {
+      if (desc.fields.length > 0 || status === 'PENDING_HEAD_QA') {
         const payload = {
           title:    record.title,
           priority: record.priority,
           ...form,
         };
+        // Round-4 G5: at Head QA the workflow Remark IS the Approval Comment.
+        if (status === 'PENDING_HEAD_QA' && action === 'approve') {
+          payload.approvalComments = comment.trim();
+        }
         await updateDeviationApi(record.id, payload);
       }
 
@@ -493,9 +498,13 @@ const DeviationStagePanel = ({ record, onUpdated }) => {
       )}
 
       <TextField
-        label="Remark / Justification" required multiline rows={2} fullWidth
+        // Round-4 G5 (=Round-3 R26): at Head QA the field IS the Approval Comment.
+        label={status === 'PENDING_HEAD_QA' ? 'Approval Comment' : 'Remark / Justification'}
+        required multiline rows={2} fullWidth
         value={comment} onChange={(e) => setComment(e.target.value)}
-        placeholder="Recorded on the audit trail as the actor's remark for this transition."
+        placeholder={status === 'PENDING_HEAD_QA'
+          ? 'Final approval narrative — captured as the record\'s Approval Comment and on the audit trail.'
+          : 'Recorded on the audit trail as the actor\'s remark for this transition.'}
         sx={{ mb: 1.5 }}
         inputProps={{ autoComplete: 'off' }}
       />
