@@ -9,7 +9,6 @@ import {
   Refresh as RefreshIcon,
   Warning as WarnIcon,
   ExpandMore as ExpandMoreIcon,
-  Print as PrintIcon,
 } from '@mui/icons-material';
 import {
   getCapaByIdApi, submitCapaApi, approveCapaApi, rejectCapaApi,
@@ -61,7 +60,10 @@ const StatusChip = ({ status }) => (
   />
 );
 
-const PriorityChip = ({ priority }) => (
+// Round-5 H2: PriorityChip retired from the drawer header. Replaced with
+// a Risk Level chip that only renders after QA has set category.
+// eslint-disable-next-line no-unused-vars
+const _PriorityChip_legacy = ({ priority }) => (
   <Chip label={priority} size="small" color={PRIORITY_COLORS[priority] || 'default'} variant="outlined" />
 );
 
@@ -474,11 +476,18 @@ const RecordDetailDrawer = ({ open, onClose, recordId, moduleKey, onUpdated }) =
                     every status. */}
                 <Box sx={{ display: 'flex', gap: 1, mt: 0.75, flexWrap: 'wrap', alignItems: 'center' }}>
                   {record.status !== 'DRAFT' && <StatusChip status={record.status} />}
-                  {record.priority && <PriorityChip priority={record.priority} />}
+                  {/* Round-5 H2: drop the default "Medium" priority chip.
+                      Show a Risk Level chip ONLY after QA has set category. */}
+                  {record.category && (
+                    <Chip size="small"
+                          label={`Risk: ${record.category}`}
+                          color={record.category === 'Critical' ? 'error'
+                               : record.category === 'Major'    ? 'warning'
+                               : record.category === 'Minor'    ? 'info' : 'default'} />
+                  )}
                   {moduleKey === 'changeControl' && record.changeType && (
                     <Chip size="small" variant="outlined" label={`Change Type: ${record.changeType}`} />
                   )}
-                  {/* Round-4 G1 (=R7): attachment-count chip. */}
                   {attachmentCount > 0 && (
                     <Chip size="small" variant="outlined" color="primary"
                           label={`${attachmentCount} attachment${attachmentCount !== 1 ? 's' : ''}`} />
@@ -491,15 +500,9 @@ const RecordDetailDrawer = ({ open, onClose, recordId, moduleKey, onUpdated }) =
           </Box>
           <Box sx={{ display: 'flex', gap: 0.5 }}>
             <Tooltip title="Refresh"><IconButton size="small" onClick={fetchRecord} disabled={loading}><RefreshIcon fontSize="small" /></IconButton></Tooltip>
-            {/* Round-2 E2 — Print / Save as PDF. Hidden in DRAFT per
-                Round-3 R4 (printing a half-empty draft has no value). */}
-            {record?.status !== 'DRAFT' && (
-              <Tooltip title="Print / Save as PDF">
-                <IconButton size="small" onClick={() => window.print()} disabled={!record}>
-                  <PrintIcon fontSize="small" />
-                </IconButton>
-              </Tooltip>
-            )}
+            {/* Round-5 H1: Print / Save as PDF removed entirely.
+                A proper server-side report endpoint (Round-2 E2 plan) would
+                replace this if/when we ship a real CC dossier print. */}
             <Tooltip title="Close"><IconButton size="small" onClick={onClose}><CloseIcon fontSize="small" /></IconButton></Tooltip>
           </Box>
         </Box>

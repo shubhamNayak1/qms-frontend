@@ -16,6 +16,7 @@ import {
 } from '../../api/qmsApi';
 import { listDeptCommentsApi } from '../../api/qmsCommonApi';
 import QmsDepartmentAttachmentsSection from './QmsDepartmentAttachmentsSection';
+import QmsDepartmentCommentsSection from './QmsDepartmentCommentsSection';
 import QmsLineItemsSection from './QmsLineItemsSection';
 import { useAuth } from '../../store/AuthContext';
 import { formatDate } from '../../utils/helpers';
@@ -452,51 +453,69 @@ const FieldEditor = ({ name, form, setForm, xs = 12 }) => {
 // Round-4 F1: line items now render via the shared QmsLineItemsSection
 // in readOnly mode so the styling matches the disabled Line Items block
 // the user sees in the drawer's accordion below.
-const RoDraftView = ({ record }) => (
-  <>
-    <Grid container spacing={1}>
-      {record.recordNumber && (
-        <Grid item xs={6}><Typography variant="body2"><strong>Change Control #:</strong> {record.recordNumber}</Typography></Grid>
-      )}
-      {record.createdAt && (
-        <Grid item xs={6}><Typography variant="body2"><strong>Raised on:</strong> {formatDate(record.createdAt)}</Typography></Grid>
-      )}
-      {record.department && (
-        <Grid item xs={6}><Typography variant="body2"><strong>Department:</strong> {record.department}</Typography></Grid>
-      )}
-      {record.productMaterial && (
-        <Grid item xs={6}><Typography variant="body2"><strong>Product / Material:</strong> {record.productMaterial}</Typography></Grid>
-      )}
-      {record.productMaterialCode && (
-        <Grid item xs={6}><Typography variant="body2"><strong>Material Code:</strong> {record.productMaterialCode}</Typography></Grid>
-      )}
-      {record.changeType && (
-        <Grid item xs={6}><Typography variant="body2"><strong>Change Type:</strong> {record.changeType}</Typography></Grid>
-      )}
-      {record.initialAttachmentDmsNumber && (
-        <Grid item xs={12}>
-          <Typography variant="body2">
-            <strong>Initial Attachment:</strong> {record.initialAttachmentDmsNumber}
-            {record.initialAttachmentDmsTitle && ` · ${record.initialAttachmentDmsTitle}`}
-            {record.initialAttachmentDmsVersion && ` v${record.initialAttachmentDmsVersion}`}
-          </Typography>
+// Round-5 H6: render every Initiator-captured field unconditionally with
+// "—" placeholders for missing values so the HOD never sees a blank Draft
+// section even if a field happens to be null on the response.
+const RoDraftView = ({ record }) => {
+  const dash = (v) => (v == null || v === '' ? '—' : v);
+  return (
+    <>
+      <Grid container spacing={1}>
+        <Grid item xs={6}>
+          <Typography variant="body2"><strong>Title:</strong> {dash(record.title)}</Typography>
         </Grid>
+        <Grid item xs={6}>
+          <Typography variant="body2"><strong>Change Control #:</strong> {dash(record.recordNumber)}</Typography>
+        </Grid>
+        <Grid item xs={6}>
+          <Typography variant="body2"><strong>Raised By:</strong> {dash(record.raisedByName || record.createdBy)}</Typography>
+        </Grid>
+        <Grid item xs={6}>
+          <Typography variant="body2"><strong>Raised On:</strong> {record.createdAt ? formatDate(record.createdAt) : '—'}</Typography>
+        </Grid>
+        <Grid item xs={6}>
+          <Typography variant="body2"><strong>Department:</strong> {dash(record.department)}</Typography>
+        </Grid>
+        <Grid item xs={6}>
+          <Typography variant="body2"><strong>Change Type:</strong> {dash(record.changeType)}</Typography>
+        </Grid>
+        <Grid item xs={6}>
+          <Typography variant="body2"><strong>Product / Material:</strong> {dash(record.productMaterial)}</Typography>
+        </Grid>
+        <Grid item xs={6}>
+          <Typography variant="body2"><strong>Material Code:</strong> {dash(record.productMaterialCode)}</Typography>
+        </Grid>
+        {record.changeReason && (
+          <Grid item xs={12}>
+            <Typography variant="body2"><strong>Reason for Change:</strong></Typography>
+            <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', pl: 1 }}>{record.changeReason}</Typography>
+          </Grid>
+        )}
+        {record.initialAttachmentDmsNumber && (
+          <Grid item xs={12}>
+            <Typography variant="body2">
+              <strong>Initial Attachment:</strong> {record.initialAttachmentDmsNumber}
+              {record.initialAttachmentDmsTitle && ` · ${record.initialAttachmentDmsTitle}`}
+              {record.initialAttachmentDmsVersion && ` v${record.initialAttachmentDmsVersion}`}
+            </Typography>
+          </Grid>
+        )}
+      </Grid>
+      {record?.id && (
+        <Box sx={{ mt: 1.5 }}>
+          <Typography variant="caption" sx={{ display: 'block', fontWeight: 700, letterSpacing: 0.4, mb: 0.5, color: 'text.secondary' }}>
+            LINE ITEMS
+          </Typography>
+          <QmsLineItemsSection
+            commonSlug="change-control"
+            recordId={record.id}
+            readOnly
+          />
+        </Box>
       )}
-    </Grid>
-    {record?.id && (
-      <Box sx={{ mt: 1.5 }}>
-        <Typography variant="caption" sx={{ display: 'block', fontWeight: 700, letterSpacing: 0.4, mb: 0.5, color: 'text.secondary' }}>
-          LINE ITEMS
-        </Typography>
-        <QmsLineItemsSection
-          commonSlug="change-control"
-          recordId={record.id}
-          readOnly
-        />
-      </Box>
-    )}
-  </>
-);
+    </>
+  );
+};
 
 const RoHodView = ({ record }) => (
   record.initialAssessment
@@ -667,9 +686,24 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
   // lineItems state retired in Round-4 F1: the Draft StageSection now
   // mounts QmsLineItemsSection directly which fetches its own rows.
 
-  // Two-phase QA Evaluation: Phase 2 is detected by ANY completed dept comment.
+  // Two-phase QA Evaluation:
+  //  Phase 1 — QA captures Risk Level + Pre-Remark, optionally invites depts.
+  //  Phase 2 — every invited dept has filled their row; QA now captures the
+  //            Post Remark + approval routing flags and forwards to RA.
+  //
+  // Round-5 H4 — qaPhase = 2 also applies when status === PENDING_DEPT_COMMENT
+  // and every invited dept has COMPLETED. Previously the QA Reviewer had to
+  // bounce the record back to PENDING_QA_REVIEW (a separate transition) to
+  // enter Phase 2, which confused the testers. With this change the QA
+  // Reviewer at PENDING_DEPT_COMMENT (all done) sees the Phase 2 form
+  // immediately and can approve directly to RA Evaluation.
   const hasCompletedDeptComment = deptComments.some(d => d.status === 'COMPLETED');
-  const qaPhase = (status === 'PENDING_QA_REVIEW' && hasCompletedDeptComment) ? 2 : 1;
+  const allDeptsDone = deptComments.length > 0
+                    && deptComments.every(d => d.status === 'COMPLETED');
+  const qaPhase =
+        (status === 'PENDING_QA_REVIEW' && hasCompletedDeptComment) ? 2
+      : (status === 'PENDING_DEPT_COMMENT' && allDeptsDone)         ? 2
+      : 1;
 
   // ── Form state setup ────────────────────────────────────────────
   useEffect(() => {
@@ -769,6 +803,14 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
       effectiveHelper   = 'PHASE 2 — All invited departments have responded. Capture the Post Remark, decide Risk Assessment, and set Approval Routing (Site Head / Customer Communication) before forwarding to RA Evaluation.';
     }
   }
+  // Round-5 H4 — at PENDING_DEPT_COMMENT with every invited dept COMPLETED,
+  // render Phase 2 of the QA Evaluation form so the QA Reviewer can capture
+  // Post Remark + approval routing and forward to RA in one step.
+  if (status === 'PENDING_DEPT_COMMENT' && qaPhase === 2) {
+    effectiveFields   = qaPhase2Fields;
+    effectiveRequired = qaPhase2Required;
+    effectiveHelper   = 'PHASE 2 — Every invited department has responded. Capture the Post Remark, decide Risk Assessment, and set Approval Routing before forwarding to RA Evaluation.';
+  }
 
   // ── Submit ────────────────────────────────────────────────────
   //
@@ -828,7 +870,8 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
         return;
       }
       // Phase-2 conditional: when Risk Assessment Required = YES, narrative is mandatory
-      if (status === 'PENDING_QA_REVIEW' && qaPhase === 2
+      if ((status === 'PENDING_QA_REVIEW' || status === 'PENDING_DEPT_COMMENT')
+          && qaPhase === 2
           && form.riskAssessmentRequired && !form.riskAssessment?.trim()) {
         setError('Risk Assessment is set to Required — please write the assessment narrative before forwarding.');
         return;
@@ -861,11 +904,13 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
           payload.preRemark  = form.preRemark;
           payload.riskLevel  = form.category; // mirror — same values
         }
-        if (status === 'PENDING_QA_REVIEW' && qaPhase === 2) {
+        if ((status === 'PENDING_QA_REVIEW' || status === 'PENDING_DEPT_COMMENT') && qaPhase === 2) {
           // Round-2 H2: regulatorySubmissionRequired / Reference removed —
           // they live on the RA stage now.
           // Round-2 F2: customerRepresentative only persisted when
           // customerCommunicationRequired = TRUE; otherwise NULL.
+          // Round-5 H4: same Phase-2 payload applies at PENDING_DEPT_COMMENT
+          // once all depts are done.
           payload.comments                     = form.qaEvalRemark;
           payload.riskAssessment               = form.riskAssessmentRequired ? form.riskAssessment : null;
           payload.siteHeadRequired             = !!form.siteHeadRequired;
@@ -933,11 +978,13 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
     }
   };
 
-  // Primary button label adapts at QA Phase 1
+  // Primary button label adapts to the QA two-phase flow
   let primaryLabel = desc.primaryLabel;
   if (status === 'PENDING_QA_REVIEW' && qaPhase === 1) {
     primaryLabel = 'Save & route to Department Comments';
-  } else if (status === 'PENDING_QA_REVIEW' && qaPhase === 2) {
+  } else if ((status === 'PENDING_QA_REVIEW' || status === 'PENDING_DEPT_COMMENT')
+              && qaPhase === 2) {
+    // Round-5 H4: PENDING_DEPT_COMMENT (all done) advances to RA from here.
     primaryLabel = 'Approve & forward to RA Evaluation';
   }
 
@@ -951,9 +998,15 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
     { key: 'PENDING_HOD',             title: 'HOD Assessment' },
     { key: 'QA_PHASE_1',              title: 'QA Evaluation — Pre-Remark',
       matchesStatus: (s) => s === 'PENDING_QA_REVIEW' && qaPhase === 1 },
-    { key: 'PENDING_DEPT_COMMENT',    title: 'Department-Wise Comments' },
+    // Round-5 H4: PENDING_DEPT_COMMENT is "current" only while at least one
+    // dept is still PENDING. Once they're all COMPLETED the QA Phase-2
+    // synthetic key takes over so the same StageSection renders Post Remark
+    // + approval routing.
+    { key: 'PENDING_DEPT_COMMENT',    title: 'Department-Wise Comments',
+      matchesStatus: (s) => s === 'PENDING_DEPT_COMMENT' && !allDeptsDone },
     { key: 'QA_PHASE_2',              title: 'QA Evaluation — Post-Remark',
-      matchesStatus: (s) => s === 'PENDING_QA_REVIEW' && qaPhase === 2 },
+      matchesStatus: (s) => (s === 'PENDING_QA_REVIEW' && qaPhase === 2)
+                          || (s === 'PENDING_DEPT_COMMENT' && allDeptsDone) },
     { key: 'PENDING_RA_REVIEW',       title: 'RA Evaluation' },
     { key: 'PENDING_SITE_HEAD',       title: 'Site Head Concurrence',
       optional: true,
@@ -1036,8 +1089,11 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
   const renderEditableBody = () => {
     const isQaPhase1WithDepts = status === 'PENDING_QA_REVIEW'
                                 && qaPhase === 1 && deptTotal > 0;
+    // Round-5 H4: Post Remark label also applies at PENDING_DEPT_COMMENT (Phase 2).
+    const isQaPhase2 = qaPhase === 2
+                       && (status === 'PENDING_QA_REVIEW' || status === 'PENDING_DEPT_COMMENT');
     const remarkLabel = status === 'PENDING_HEAD_QA' ? 'Approval Comment'
-                      : status === 'PENDING_QA_REVIEW' && qaPhase === 2 ? 'Post Remark'
+                      : isQaPhase2 ? 'Post Remark'
                       : 'Remark / Justification';
     const remarkPlaceholder = status === 'PENDING_HEAD_QA'
       ? 'Final approval narrative — captured as the record\'s Approval Comment and on the audit trail.'
@@ -1056,9 +1112,26 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
         {status === 'PENDING_QA_REVIEW' && qaPhase === 1 && (
           <Alert severity={deptTotal === 0 ? 'warning' : 'success'} sx={{ mb: 2 }}>
             {deptTotal === 0
-              ? 'No departments invited yet — open the Department-Wise Comments accordion below and invite at least one before saving.'
+              ? 'No departments invited yet — use the Department-Wise Comments block below to invite at least one before saving.'
               : `${deptTotal} department${deptTotal !== 1 ? 's' : ''} invited. Save will route the record to PENDING_DEPT_COMMENT.`}
           </Alert>
+        )}
+
+        {/* Round-5 H3 — Department-Wise Comments mounted INLINE between
+            Pre-Remark and Remark / Justification at the QA stages. Previously
+            this only lived in the drawer accordion below; the user couldn't
+            see it while editing Phase 1. The same section also fills the
+            invite/read role at PENDING_DEPT_COMMENT for the dept HOD. */}
+        {(status === 'PENDING_QA_REVIEW' || status === 'PENDING_DEPT_COMMENT')
+          && record?.id && (
+          <Box sx={{ mb: 2 }}>
+            <QmsDepartmentCommentsSection
+              commonSlug="change-control"
+              recordId={record.id}
+              currentUser={currentUser}
+              recordTargetDate={record?.targetCompletionDate}
+            />
+          </Box>
         )}
 
         {/* Dept-attachment fan-out form (PENDING_ATTACHMENTS only) */}
@@ -1262,7 +1335,25 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
           >
             {state === 'current' ? renderEditableBody()
               : state === 'skipped' ? null
-              : renderReadOnlyBody(stage.key)}
+              : (
+                <>
+                  {renderReadOnlyBody(stage.key)}
+                  {/* Round-5 H5 — surface the transition remark captured
+                      when this stage was completed. Mirrors what the user
+                      typed in Remark / Justification (or Post Remark /
+                      Approval Comment depending on stage). */}
+                  {stamp.comment && (
+                    <Box sx={{ mt: 1.2, pt: 1, borderTop: '1px dashed', borderColor: 'divider' }}>
+                      <Typography variant="caption" sx={{ fontWeight: 700, letterSpacing: 0.4, color: 'text.secondary' }}>
+                        REMARK / JUSTIFICATION
+                      </Typography>
+                      <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', mt: 0.3 }}>
+                        {stamp.comment}
+                      </Typography>
+                    </Box>
+                  )}
+                </>
+              )}
           </StageSection>
         );
       })}

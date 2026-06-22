@@ -74,8 +74,11 @@ export const findStageActor = (history, fromStatuses, toStatuses = null) => {
     if (!fromStatuses.includes(h.fromStatus)) continue;
     if (toStatuses && !toStatuses.includes(h.toStatus)) continue;
     return {
-      actor: h.changedByUsername || h.actor,
-      when:  h.changedAt || h.timestamp,
+      actor:   h.changedByUsername || h.actor,
+      when:    h.changedAt || h.timestamp,
+      // Round-5 H5 — surface the transition remark too so each past
+      // StageSection can show "Remark: …" alongside the actor stamp.
+      comment: h.comment,
     };
   }
   return null;
