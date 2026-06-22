@@ -792,15 +792,20 @@ const RecordDetailDrawer = ({ open, onClose, recordId, moduleKey, onUpdated }) =
             so the drawer footer remains so the Initiator can Submit and so
             terminal records can be reopened. */}
         {record && (() => {
+          // Round-5 I1: CC now has a DRAFT descriptor + Submit handler in
+          // the panel, so DRAFT joins the panel-owns-buttons list (CC only).
+          // Other modules' DRAFT still uses the drawer footer.
           const panelStages = [
             'PENDING_HOD','PENDING_QA_REVIEW','PENDING_DEPT_COMMENT',
             'PENDING_RA_REVIEW','PENDING_SITE_HEAD','PENDING_CUSTOMER_COMMENT',
             'PENDING_HEAD_QA','PENDING_INVESTIGATION','PENDING_ATTACHMENTS',
             'PENDING_VERIFICATION','PENDING_VERIFICATION_REVIEW',
           ];
-          const panelOwnsButtons = ['changeControl','capa','deviation',
-                                    'incident','marketComplaint'].includes(moduleKey)
-                                  && panelStages.includes(record.status);
+          const ccOwnsDraft = moduleKey === 'changeControl' && record.status === 'DRAFT';
+          const panelOwnsButtons = (['changeControl','capa','deviation',
+                                     'incident','marketComplaint'].includes(moduleKey)
+                                   && panelStages.includes(record.status))
+                                 || ccOwnsDraft;
           if (panelOwnsButtons) return null;
           return (
             <Paper elevation={3} sx={{ px: 3, py: 2, borderTop: '1px solid', borderColor: 'divider' }}>

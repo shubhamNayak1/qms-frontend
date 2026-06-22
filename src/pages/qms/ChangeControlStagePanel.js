@@ -12,7 +12,7 @@ import {
 } from '@mui/icons-material';
 import {
   updateChangeControlApi, approveChangeControlApi, rejectChangeControlApi,
-  closeChangeControlApi, transitionChangeControlApi,
+  closeChangeControlApi, transitionChangeControlApi, submitChangeControlApi,
 } from '../../api/qmsApi';
 import { listDeptCommentsApi } from '../../api/qmsCommonApi';
 import QmsDepartmentAttachmentsSection from './QmsDepartmentAttachmentsSection';
@@ -58,6 +58,19 @@ import {
 
 // ── Stage descriptors ───────────────────────────────────────────────
 const STAGE_DESCRIPTORS = {
+  // Round-5 I1: DRAFT now has a descriptor so the panel renders for the
+  // Initiator. There are no editable fields here — the Initiator edits
+  // line items / attachments via the linear-flow's inline sections.
+  // The only action is Submit for Review.
+  DRAFT: {
+    title: 'Draft / Initiation',
+    actor: 'Initiator',
+    helper: 'Review what you captured below. When ready, click Submit for Review to forward the record to HOD Assessment.',
+    fields: [],
+    requiredFields: [],
+    primary: 'submit',
+    primaryLabel: 'Submit for Review',
+  },
   PENDING_HOD: {
     title: 'HOD Assessment',
     actor: 'Head of Department',
@@ -941,6 +954,10 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
       }
 
       switch (action) {
+        case 'submit':
+          // Round-5 I1: DRAFT → PENDING_HOD via the dedicated submit endpoint.
+          await submitChangeControlApi(record.id, effectiveComment);
+          break;
         case 'approve':
           await approveChangeControlApi(record.id, effectiveComment);
           break;
@@ -978,9 +995,12 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
     }
   };
 
-  // Primary button label adapts to the QA two-phase flow
+  // Primary button label adapts to the stage / phase
   let primaryLabel = desc.primaryLabel;
-  if (status === 'PENDING_QA_REVIEW' && qaPhase === 1) {
+  if (status === 'DRAFT') {
+    // Round-5 I1: post-resend the Initiator re-submits the corrected record.
+    primaryLabel = record.resendCount > 0 ? 'Resend the Record' : 'Submit for Review';
+  } else if (status === 'PENDING_QA_REVIEW' && qaPhase === 1) {
     primaryLabel = 'Save & route to Department Comments';
   } else if ((status === 'PENDING_QA_REVIEW' || status === 'PENDING_DEPT_COMMENT')
               && qaPhase === 2) {
