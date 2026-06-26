@@ -216,12 +216,12 @@ const _InitiatorContext_legacy = ({ record, lineItems }) => (
       )}
       {record.productMaterial && (
         <Grid item xs={6}>
-          <Typography variant="body2"><strong>Product / Material:</strong> {record.productMaterial}</Typography>
+          <Typography variant="body2"><strong>Product / Material Name:</strong> {record.productMaterial}</Typography>
         </Grid>
       )}
       {record.productMaterialCode && (
         <Grid item xs={6}>
-          <Typography variant="body2"><strong>Material Code:</strong> {record.productMaterialCode}</Typography>
+          <Typography variant="body2"><strong>Product / Material Code:</strong> {record.productMaterialCode}</Typography>
         </Grid>
       )}
       {record.changeType && (
@@ -475,10 +475,10 @@ const RoDraftView = ({ record }) => {
     <>
       <Grid container spacing={1}>
         <Grid item xs={6}>
-          <Typography variant="body2"><strong>Title:</strong> {dash(record.title)}</Typography>
+          <Typography variant="body2"><strong>Change Control Title:</strong> {dash(record.title)}</Typography>
         </Grid>
         <Grid item xs={6}>
-          <Typography variant="body2"><strong>Change Control #:</strong> {dash(record.recordNumber)}</Typography>
+          <Typography variant="body2"><strong>Change Control No.:</strong> {dash(record.recordNumber)}</Typography>
         </Grid>
         <Grid item xs={6}>
           <Typography variant="body2"><strong>Raised By:</strong> {dash(record.raisedByName || record.createdBy)}</Typography>
@@ -493,10 +493,10 @@ const RoDraftView = ({ record }) => {
           <Typography variant="body2"><strong>Change Type:</strong> {dash(record.changeType)}</Typography>
         </Grid>
         <Grid item xs={6}>
-          <Typography variant="body2"><strong>Product / Material:</strong> {dash(record.productMaterial)}</Typography>
+          <Typography variant="body2"><strong>Product / Material Name:</strong> {dash(record.productMaterial)}</Typography>
         </Grid>
         <Grid item xs={6}>
-          <Typography variant="body2"><strong>Material Code:</strong> {dash(record.productMaterialCode)}</Typography>
+          <Typography variant="body2"><strong>Product / Material Code:</strong> {dash(record.productMaterialCode)}</Typography>
         </Grid>
         {record.changeReason && (
           <Grid item xs={12}>

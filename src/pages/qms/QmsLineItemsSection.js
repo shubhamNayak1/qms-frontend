@@ -145,7 +145,7 @@ const QmsLineItemsSection = ({ commonSlug, recordId, readOnly = false }) => {
                 <th style={{ width: 36 }}>#</th>
                 <th>Existing System</th>
                 <th>Proposed System</th>
-                <th>Justification</th>
+                <th>Remark / Justification</th>
                 <th style={{ width: 100 }}>Proposed By</th>
                 <th style={{ width: 100 }}>Date</th>
                 {!readOnly && <th style={{ width: 70 }}></th>}
