@@ -63,7 +63,7 @@ const STAGE_DESCRIPTORS = {
   // line items / attachments via the linear-flow's inline sections.
   // The only action is Submit for Review.
   DRAFT: {
-    title: 'Draft / Initiation',
+    title: 'Initiation',
     actor: 'Initiator',
     helper: 'Review what you captured below. When ready, click Submit for Review to forward the record to HOD Assessment.',
     fields: [],
@@ -466,14 +466,23 @@ const FieldEditor = ({ name, form, setForm, xs = 12 }) => {
 // Round-4 F1: line items now render via the shared QmsLineItemsSection
 // in readOnly mode so the styling matches the disabled Line Items block
 // the user sees in the drawer's accordion below.
-// Round-5 H6: render every Initiator-captured field unconditionally with
-// "—" placeholders for missing values so the HOD never sees a blank Draft
-// section even if a field happens to be null on the response.
+// Round-5 H6 + K2: render every Initiator-captured field unconditionally
+// with "—" placeholders for missing values so the HOD never sees a blank
+// Draft section. K2 added an explicit info banner at the top so reviewers
+// know this block is the Initiator's submission (vs the editable HOD form
+// below).
 const RoDraftView = ({ record }) => {
   const dash = (v) => (v == null || v === '' ? '—' : v);
   return (
     <>
-      <Grid container spacing={1}>
+      <Alert severity="info" icon={false} sx={{ mb: 1.5, py: 0.6 }}>
+        <Typography variant="caption" sx={{ display: 'block' }}>
+          <strong>The fields below were captured by the Initiator on the Create dialog.</strong>
+          {' '}Review them, then write your <em>Initial Assessment</em> and
+          <em> Remark / Justification</em> in the form lower down before forwarding to QA.
+        </Typography>
+      </Alert>
+      <Grid container spacing={1.2}>
         <Grid item xs={6}>
           <Typography variant="body2"><strong>Change Control Title:</strong> {dash(record.title)}</Typography>
         </Grid>
@@ -515,7 +524,7 @@ const RoDraftView = ({ record }) => {
         )}
       </Grid>
       {record?.id && (
-        <Box sx={{ mt: 1.5 }}>
+        <Box sx={{ mt: 1.8 }}>
           <Typography variant="caption" sx={{ display: 'block', fontWeight: 700, letterSpacing: 0.4, mb: 0.5, color: 'text.secondary' }}>
             LINE ITEMS
           </Typography>
@@ -1014,7 +1023,10 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
   // skipped, and terminal sections render; future stages stay hidden.
   const hasActionRequiredDept = deptComments.some((c) => c.actionRequired);
   const CC_STAGES = [
-    { key: 'DRAFT',                   title: 'Draft / Initiation' },
+    // Round-5 K2: tester wants the section labelled simply "Initiation"
+    // (renders "Initiation · Initiator" via the actor stamp). The HOD's
+    // editable form sits below it.
+    { key: 'DRAFT',                   title: 'Initiation' },
     { key: 'PENDING_HOD',             title: 'HOD Assessment' },
     { key: 'QA_PHASE_1',              title: 'QA Evaluation — Pre-Remark',
       matchesStatus: (s) => s === 'PENDING_QA_REVIEW' && qaPhase === 1 },
