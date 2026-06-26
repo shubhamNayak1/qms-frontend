@@ -254,6 +254,9 @@ const ModuleExtraFields = ({ moduleKey, record }) => {
 };
 
 // ── Status History Timeline (custom — no @mui/lab needed) ────────────────────
+// Round-5 J2: no longer rendered. Kept as legacy reference until we're
+// sure the per-StageSection display covers every audit-trail use case.
+// eslint-disable-next-line no-unused-vars
 const StatusHistoryTimeline = ({ history }) => {
   if (!history?.length) return (
     <Typography variant="body2" color="text.secondary" sx={{ py: 1 }}>No history yet.</Typography>
@@ -781,19 +784,10 @@ const RecordDetailDrawer = ({ open, onClose, recordId, moduleKey, onUpdated }) =
                 </>
               )}
 
-              {/* Status History — Round-2 B1: at DRAFT the only entry is
-                  DRAFT itself, which adds no info, so suppress. */}
-              {!isDraft(record.status) && (
-                <>
-                  <Divider sx={{ my: 2 }} />
-                  <Typography variant="caption" fontWeight={700} textTransform="uppercase" letterSpacing={0.5} color="text.secondary">
-                    Status History
-                  </Typography>
-                  <Box sx={{ mt: 1 }}>
-                    <StatusHistoryTimeline history={record.statusHistory} />
-                  </Box>
-                </>
-              )}
+              {/* Round-5 J2: Status History block removed for every module.
+                  Each past StageSection now stamps actor + date and surfaces
+                  the transition Remark / Justification (Round-5 H5), so the
+                  separate timeline at the bottom is redundant. */}
             </>
           )}
         </Box>
