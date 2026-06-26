@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
-  Drawer, Box, Typography, Chip, Divider, IconButton, Tooltip,
+  // Round-5 J1: switched from a side Drawer to a centred Dialog so the
+  // record opens like the Create-Draft dialog. Component name kept as
+  // RecordDetailDrawer to avoid touching every call site.
+  Dialog,
+  Box, Typography, Chip, Divider, IconButton, Tooltip,
   CircularProgress, Alert, Button, Stack, Paper, Grid,
   Accordion, AccordionSummary, AccordionDetails,
 } from '@mui/material';
@@ -454,11 +458,21 @@ const RecordDetailDrawer = ({ open, onClose, recordId, moduleKey, onUpdated }) =
 
   return (
     <>
-      <Drawer
-        anchor="right"
+      <Dialog
         open={open}
         onClose={onClose}
-        PaperProps={{ sx: { width: { xs: '100%', sm: 640 }, display: 'flex', flexDirection: 'column' } }}
+        maxWidth="lg"
+        fullWidth
+        scroll="paper"
+        PaperProps={{ sx: {
+          display: 'flex',
+          flexDirection: 'column',
+          // Keep the dialog tall enough that the workflow stepper + several
+          // StageSections + sticky action bar all fit without aggressive
+          // internal scroll on a typical 1080p viewport.
+          height: { xs: '100%', sm: '92vh' },
+          maxHeight: { xs: '100%', sm: '92vh' },
+        }}}
       >
         {/* Header */}
         <Box sx={{ px: 3, py: 2, borderBottom: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'flex-start', gap: 1 }}>
@@ -813,7 +827,7 @@ const RecordDetailDrawer = ({ open, onClose, recordId, moduleKey, onUpdated }) =
             </Paper>
           );
         })()}
-      </Drawer>
+      </Dialog>
 
       <WorkflowActionDialog
         open={wfOpen}
