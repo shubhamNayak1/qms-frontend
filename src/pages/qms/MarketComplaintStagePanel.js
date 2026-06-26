@@ -37,6 +37,20 @@ import { formatDate } from '../../utils/helpers';
  */
 
 const STAGE_DESCRIPTORS = {
+  // Round-L (2026-06-26): peer-review gate (see CAPA notes). For MC the
+  // Initiator role is "Employee" — the dept Reviewer was previously the
+  // one who submitted DRAFT → PENDING_HOD; now they get a dedicated
+  // stage between DRAFT and PENDING_HOD, matching the other 4 modules.
+  PENDING_REVIEW: {
+    title: 'Peer Review',
+    actor: 'Department Reviewer',
+    helper: 'Verify the complaint details captured by the Employee below. Forward to HOD when correct, or send back for edits.',
+    fields: [],
+    requiredFields: [],
+    primary: 'approve',
+    primaryLabel: 'Submit to HOD',
+    secondary: { kind: 'transition', target: 'DRAFT', label: 'Send back to Initiator' },
+  },
   PENDING_HOD: {
     title: 'HOD Assessment',
     actor: 'Head of Department (complainant\'s dept)',
@@ -278,7 +292,9 @@ const MarketComplaintStagePanel = ({ record, onUpdated }) => {
   // Walk canonical MC stages. Show past stages with actor stamp; render
   // editable form for current; hide future stages entirely.
   const MC_STAGES = [
-    { key: 'DRAFT',                 title: 'Draft / Initiation' },
+    { key: 'DRAFT',                 title: 'Initiation' },
+    // Round-L: peer-review gate.
+    { key: 'PENDING_REVIEW',        title: 'Peer Review' },
     { key: 'PENDING_HOD',           title: 'HOD Assessment' },
     { key: 'PENDING_INVESTIGATION', title: 'QA Investigation' },
     { key: 'PENDING_DEPT_COMMENT',  title: 'Department-Wise Comments',

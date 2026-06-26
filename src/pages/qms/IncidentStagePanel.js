@@ -42,6 +42,17 @@ import { formatDate } from '../../utils/helpers';
  */
 
 const STAGE_DESCRIPTORS = {
+  // Round-L (2026-06-26): peer-review gate (see CAPA notes).
+  PENDING_REVIEW: {
+    title: 'Peer Review',
+    actor: 'Department Reviewer',
+    helper: 'Verify the details captured by the Initiator below. Forward to HOD when correct, or send back to the Initiator for edits.',
+    fields: [],
+    requiredFields: [],
+    primary: 'approve',
+    primaryLabel: 'Submit to HOD',
+    secondary: { kind: 'transition', target: 'DRAFT', label: 'Send back to Initiator' },
+  },
   PENDING_HOD: {
     title: 'HOD Assessment',
     actor: 'HOD of originating dept',
@@ -426,7 +437,9 @@ const IncidentStagePanel = ({ record, onUpdated }) => {
 
   // ── Round-4 L4 linear-flow ──────────────────────────────────────
   const INC_STAGES = [
-    { key: 'DRAFT',                  title: 'Draft / Initiation' },
+    { key: 'DRAFT',                  title: 'Initiation' },
+    // Round-L: peer-review gate.
+    { key: 'PENDING_REVIEW',         title: 'Peer Review' },
     { key: 'PENDING_HOD',            title: 'HOD Assessment' },
     { key: 'PENDING_QA_REVIEW',      title: 'QA Evaluation' },
     { key: 'PENDING_DEPT_COMMENT',   title: 'Department-Wise Comments',

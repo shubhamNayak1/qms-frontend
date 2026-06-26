@@ -65,11 +65,24 @@ const STAGE_DESCRIPTORS = {
   DRAFT: {
     title: 'Initiation',
     actor: 'Initiator',
-    helper: 'Review what you captured below. When ready, click Submit for Review to forward the record to HOD Assessment.',
+    helper: 'Review what you captured below. When ready, click Submit for Review to forward the record to a peer reviewer in your department.',
     fields: [],
     requiredFields: [],
     primary: 'submit',
     primaryLabel: 'Submit for Review',
+  },
+  // Round-L (2026-06-26): peer-review gate. A different user in the
+  // creator's department (flagged is_dept_reviewer) verifies the
+  // captured fields, then forwards to HOD or sends back for edits.
+  PENDING_REVIEW: {
+    title: 'Peer Review',
+    actor: 'Department Reviewer',
+    helper: 'Verify the details captured by the Initiator below. Forward to HOD when correct, or send back to the Initiator for edits.',
+    fields: [],
+    requiredFields: [],
+    primary: 'approve',
+    primaryLabel: 'Submit to HOD',
+    secondary: { kind: 'transition', target: 'DRAFT', label: 'Send back to Initiator' },
   },
   PENDING_HOD: {
     title: 'HOD Assessment',
@@ -538,6 +551,17 @@ const RoDraftView = ({ record }) => {
     </>
   );
 };
+
+// Round-L: peer-review gate has no dedicated field — the reviewer's
+// remark is captured as the workflow transition comment and rendered
+// by the StageSection's actor stamp. Past-state body shows a short
+// confirmation line so the section isn't empty.
+// eslint-disable-next-line no-unused-vars
+const RoReviewView = ({ record }) => (
+  <Typography variant="caption" color="text.secondary">
+    Verified by Department Reviewer and forwarded to HOD. See the actor stamp above for the reviewer's remark.
+  </Typography>
+);
 
 const RoHodView = ({ record }) => (
   record.initialAssessment
@@ -1027,6 +1051,8 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
     // (renders "Initiation · Initiator" via the actor stamp). The HOD's
     // editable form sits below it.
     { key: 'DRAFT',                   title: 'Initiation' },
+    // Round-L (2026-06-26): peer-review gate between Initiation and HOD.
+    { key: 'PENDING_REVIEW',          title: 'Peer Review' },
     { key: 'PENDING_HOD',             title: 'HOD Assessment' },
     { key: 'QA_PHASE_1',              title: 'QA Evaluation — Pre-Remark',
       matchesStatus: (s) => s === 'PENDING_QA_REVIEW' && qaPhase === 1 },
@@ -1306,6 +1332,7 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
   const renderReadOnlyBody = (stageKey) => {
     switch (stageKey) {
       case 'DRAFT':                    return <RoDraftView record={record} />;
+      case 'PENDING_REVIEW':           return <RoReviewView record={record} />;
       case 'PENDING_HOD':              return <RoHodView record={record} />;
       case 'QA_PHASE_1':               return <RoQaPhase1View record={record} />;
       case 'PENDING_DEPT_COMMENT':     return <RoDeptCommentsView deptComments={deptComments} />;
