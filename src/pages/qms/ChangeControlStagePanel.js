@@ -1166,6 +1166,17 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
           {effectiveHelper}
         </Typography>
 
+        {/* Round-L (2026-06-27): at the Initiation and Peer Review stages
+            the editor needs to *see* the Initiator's captured fields
+            (Title, Product/Material, Material Code, Change Type, line
+            items …) — without them the form looks empty. RoDraftView
+            renders them read-only above the Remark/Justification box. */}
+        {(status === 'DRAFT' || status === 'PENDING_REVIEW') && (
+          <Box sx={{ mb: 2 }}>
+            <RoDraftView record={record} />
+          </Box>
+        )}
+
         {/* Phase-1 hint: invite at least one department */}
         {status === 'PENDING_QA_REVIEW' && qaPhase === 1 && (
           <Alert severity={deptTotal === 0 ? 'warning' : 'success'} sx={{ mb: 2 }}>
