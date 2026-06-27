@@ -90,7 +90,11 @@ const Field = ({ label, value, children }) => (
 // Customer-Comment-Required, etc.). At DRAFT / PENDING_HOD we don't show their
 // empty slots — only sections genuinely populated by the actor get rendered.
 const isDraft = (s) => s === 'DRAFT';
-const isPreQA = (s) => s === 'DRAFT' || s === 'PENDING_HOD';
+// Round-L (2026-06-27): PENDING_REVIEW added — the peer-review gate
+// sits before HOD, well before QA invites departments. Hide every
+// "pre-QA" UI block (Department-Wise Comments, target-date extension,
+// downstream risk / customer / site-head chips) at this stage too.
+const isPreQA = (s) => s === 'DRAFT' || s === 'PENDING_REVIEW' || s === 'PENDING_HOD';
 
 const ModuleExtraFields = ({ moduleKey, record }) => {
   if (!record) return null;
