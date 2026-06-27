@@ -72,6 +72,34 @@ export const formatDateTime = (dateStr) => {
   return `${datePart}, ${timePart} IST`;
 };
 
+/**
+ * Round-L (2026-06-27): "DD/MM/YYYY : HH:MM AM/PM" rendered in IST.
+ * Used by the per-stage actor stamp so the workflow audit trail surfaces
+ * the time-of-day as well as the date. Example: "27/06/2026 : 02:35 PM".
+ */
+export const formatDateTimeAmPm = (dateStr) => {
+  if (!dateStr) return '—';
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return '—';
+  const dateParts = new Intl.DateTimeFormat('en-GB', {
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    timeZone: INDIA_TZ,
+  }).formatToParts(d);
+  const dd   = dateParts.find(p => p.type === 'day')?.value   || '';
+  const mm   = dateParts.find(p => p.type === 'month')?.value || '';
+  const yyyy = dateParts.find(p => p.type === 'year')?.value  || '';
+  // en-US gives 12-hour with AM/PM. We pull hour + minute + dayPeriod
+  // explicitly so the separator stays " : " and isn't locale-dependent.
+  const timeParts = new Intl.DateTimeFormat('en-US', {
+    hour: '2-digit', minute: '2-digit', hour12: true,
+    timeZone: INDIA_TZ,
+  }).formatToParts(d);
+  const hh     = timeParts.find(p => p.type === 'hour')?.value      || '';
+  const mins   = timeParts.find(p => p.type === 'minute')?.value    || '';
+  const period = timeParts.find(p => p.type === 'dayPeriod')?.value || '';
+  return `${dd}/${mm}/${yyyy} : ${hh}:${mins} ${period}`;
+};
+
 export const getStatusColor = (status) => {
   const map = {
     ACTIVE: 'success',

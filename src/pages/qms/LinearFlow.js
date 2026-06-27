@@ -8,7 +8,7 @@ import {
   RemoveCircleOutline as SkippedIcon,
   Lock as TerminalIcon,
 } from '@mui/icons-material';
-import { formatDate } from '../../utils/helpers';
+import { formatDateTimeAmPm } from '../../utils/helpers';
 
 /**
  * LinearFlow — shared building blocks for the Round-4 linear-stage layout.
@@ -47,11 +47,15 @@ import { formatDate } from '../../utils/helpers';
  */
 
 // ── SectionStamp ─────────────────────────────────────────────
-// Compact "by X · on DD/MM/YYYY" line. Used by every stage section to
-// surface WHO filled the stage and WHEN.
+// Compact "by X · on DD/MM/YYYY : HH:MM AM/PM" line. Used by every stage
+// section to surface WHO filled the stage and WHEN.
+//
+// Round-L (2026-06-27): the timestamp now includes time-of-day in 12-hour
+// IST so the audit trail surfaces when each transition actually happened,
+// not just the day.
 export const SectionStamp = ({ actor, when, label = 'by' }) => {
   if (!actor && !when) return null;
-  const formatted = when ? formatDate(when) : null;
+  const formatted = when ? formatDateTimeAmPm(when) : null;
   return (
     <Typography variant="caption" color="text.secondary">
       {label} <strong>{actor || '—'}</strong>{formatted ? ` · on ${formatted}` : ''}
