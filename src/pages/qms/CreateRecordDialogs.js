@@ -12,6 +12,8 @@ import {
 import {
   createCapaApi, createDeviationApi, createIncidentApi,
   createComplaintApi, createChangeControlApi,
+  submitCapaApi, submitDeviationApi, submitIncidentApi,
+  submitComplaintApi, submitChangeControlApi,
   getIncidentsApi, getDeviationsApi, getComplaintsApi, getChangeControlsApi,
 } from '../../api/qmsApi';
 import { createLineItemApi, uploadRecordAttachmentApi } from '../../api/qmsCommonApi';
@@ -331,7 +333,14 @@ export const CreateCapaDialog = ({ open, onClose, onCreated }) => {
           throw new FormValidationError(
               'Pick a parent record (Incident / Deviation / CC / Market Complaint) for an Existing CAPA.');
         }
-        await createCapaApi(form);
+        const { data } = await createCapaApi(form);
+        const newId = (data?.data || data)?.id;
+        // Round-L (2026-06-27): auto-submit straight to PENDING_REVIEW.
+        if (newId) {
+          await submitCapaApi(newId,
+            'Draft created via Initiate dialog and auto-submitted for peer review.')
+            .catch(() => null);
+        }
         onCreated?.();
       }}
     >
@@ -512,7 +521,14 @@ export const CreateDeviationDialog = ({ open, onClose, onCreated }) => {
           throw new FormValidationError(
               'Parent Incident is required — every Deviation must descend from an Incident.');
         }
-        await createDeviationApi(form);
+        const { data } = await createDeviationApi(form);
+        const newId = (data?.data || data)?.id;
+        // Round-L (2026-06-27): auto-submit straight to PENDING_REVIEW.
+        if (newId) {
+          await submitDeviationApi(newId,
+            'Draft created via Initiate dialog and auto-submitted for peer review.')
+            .catch(() => null);
+        }
         onCreated?.();
       }}
     >
@@ -587,7 +603,17 @@ export const CreateIncidentDialog = ({ open, onClose, onCreated }) => {
     <BaseDialog
       open={open} onClose={onClose} title="Report Incident"
       initialForm={initialForm}
-      onSubmit={async (form) => { await createIncidentApi(form); onCreated?.(); }}
+      onSubmit={async (form) => {
+        const { data } = await createIncidentApi(form);
+        const newId = (data?.data || data)?.id;
+        // Round-L (2026-06-27): auto-submit straight to PENDING_REVIEW.
+        if (newId) {
+          await submitIncidentApi(newId,
+            'Draft created via Initiate dialog and auto-submitted for peer review.')
+            .catch(() => null);
+        }
+        onCreated?.();
+      }}
     >
       {({ form, setForm }) => {
         const p = { form, setForm };
@@ -760,6 +786,18 @@ export const CreateChangeControlDialog = ({ open, onClose, onCreated }) => {
         justification:  li.justification.trim(),
         proposedDate:   today,
       }).catch(() => null)));
+    }
+    // Round-L (2026-06-27): tester feedback — after the Initiate dialog
+    // creates the record, the Initiator was being asked again to type a
+    // Remark and click Submit-for-Review on the Initiation panel. That's
+    // redundant: the Create dialog already collected everything. Auto-
+    // submit so the record goes straight to PENDING_REVIEW (peer review)
+    // without the extra click. The remark is a fixed string explaining
+    // the auto-transition for the audit trail.
+    if (newId) {
+      await submitChangeControlApi(newId,
+        'Draft created via Initiate dialog and auto-submitted for peer review.')
+        .catch(() => null);
     }
     onCreated?.();
   };
@@ -1135,7 +1173,17 @@ export const CreateComplaintDialog = ({ open, onClose, onCreated }) => {
     <BaseDialog
       open={open} onClose={onClose} title="Log Market Complaint"
       initialForm={initialForm}
-      onSubmit={async (form) => { await createComplaintApi(form); onCreated?.(); }}
+      onSubmit={async (form) => {
+        const { data } = await createComplaintApi(form);
+        const newId = (data?.data || data)?.id;
+        // Round-L (2026-06-27): auto-submit straight to PENDING_REVIEW.
+        if (newId) {
+          await submitComplaintApi(newId,
+            'Draft created via Initiate dialog and auto-submitted for peer review.')
+            .catch(() => null);
+        }
+        onCreated?.();
+      }}
     >
       {({ form, setForm }) => {
         const p = { form, setForm };
