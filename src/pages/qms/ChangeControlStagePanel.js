@@ -552,16 +552,14 @@ const RoDraftView = ({ record }) => {
   );
 };
 
-// Round-L: peer-review gate has no dedicated field — the reviewer's
-// remark is captured as the workflow transition comment and rendered
-// by the StageSection's actor stamp. Past-state body shows a short
-// confirmation line so the section isn't empty.
+// Round-L: peer-review gate has no dedicated record field — the
+// reviewer's remark is captured as the workflow transition comment
+// (rendered via stamp.comment as REMARK / JUSTIFICATION below the
+// StageSection body) and the reviewer's name + timestamp surfaces
+// via the SectionStamp header. So the body of this past-state block
+// is intentionally empty — there's nothing else to show.
 // eslint-disable-next-line no-unused-vars
-const RoReviewView = ({ record }) => (
-  <Typography variant="caption" color="text.secondary">
-    Verified by Department Reviewer and forwarded to HOD. See the actor stamp above for the reviewer's remark.
-  </Typography>
-);
+const RoReviewView = ({ record }) => null;
 
 const RoHodView = ({ record }) => (
   record.initialAssessment
@@ -1108,6 +1106,11 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
     switch (stage.key) {
       case 'DRAFT':
         return { actor: record?.raisedByName || record?.createdBy, when: record?.createdAt };
+      // Round-L (2026-06-27): peer-review gate. Find the transition row
+      // that left PENDING_REVIEW — that's who reviewed it. The Remark /
+      // Justification typed by the reviewer surfaces via stamp.comment.
+      case 'PENDING_REVIEW':
+        return flowFindStageActor(record?.statusHistory, ['PENDING_REVIEW']);
       case 'PENDING_HOD':
         return flowFindStageActor(record?.statusHistory, ['PENDING_HOD']);
       case 'QA_PHASE_1':

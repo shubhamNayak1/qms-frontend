@@ -378,7 +378,24 @@ const MarketComplaintStagePanel = ({ record, onUpdated }) => {
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>{desc.helper}</Typography>
                 {/* editable form body — inlined below in original layout */}
               </>
-            ) : state === 'skipped' ? null : renderRoBody(stage.key)}
+            ) : state === 'skipped' ? null : (
+              <>
+                {renderRoBody(stage.key)}
+                {/* Round-L (2026-06-27): surface the transition Remark /
+                    Justification captured when this past stage was
+                    completed. Mirrors CC's H5 pattern. */}
+                {stamp.comment && (
+                  <Box sx={{ mt: 1.2, pt: 1, borderTop: '1px dashed', borderColor: 'divider' }}>
+                    <Typography variant="caption" sx={{ fontWeight: 700, letterSpacing: 0.4, color: 'text.secondary' }}>
+                      REMARK / JUSTIFICATION
+                    </Typography>
+                    <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', mt: 0.3 }}>
+                      {stamp.comment}
+                    </Typography>
+                  </Box>
+                )}
+              </>
+            )}
           </StageSection>
         );
       })}

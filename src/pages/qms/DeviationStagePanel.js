@@ -460,7 +460,24 @@ const DeviationStagePanel = ({ record, onUpdated }) => {
           >
             {state === 'current' ? (
               <Typography variant="body2" color="text.secondary">{desc.helper}</Typography>
-            ) : state === 'skipped' ? null : devRoBody(stage.key)}
+            ) : state === 'skipped' ? null : (
+              <>
+                {devRoBody(stage.key)}
+                {/* Round-L (2026-06-27): surface the transition Remark /
+                    Justification captured when this past stage was
+                    completed. Mirrors CC's H5 pattern. */}
+                {stamp.comment && (
+                  <Box sx={{ mt: 1.2, pt: 1, borderTop: '1px dashed', borderColor: 'divider' }}>
+                    <Typography variant="caption" sx={{ fontWeight: 700, letterSpacing: 0.4, color: 'text.secondary' }}>
+                      REMARK / JUSTIFICATION
+                    </Typography>
+                    <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', mt: 0.3 }}>
+                      {stamp.comment}
+                    </Typography>
+                  </Box>
+                )}
+              </>
+            )}
           </StageSection>
         );
       })}
