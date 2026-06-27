@@ -748,8 +748,16 @@ const RecordDetailDrawer = ({ open, onClose, recordId, moduleKey, onUpdated }) =
                   {/* Department comments — Round-2 B1: hidden in DRAFT and
                       PENDING_HOD because depts haven't been invited yet. At
                       PENDING_QA_REVIEW we DO show it (QA invites depts here)
-                      and on every downstream stage as read-only history. */}
-                  {!isPreQA(record.status) && (
+                      and on every downstream stage as read-only history.
+                      Round-L (2026-06-27): for the 5 linear-flow modules
+                      the panel already mounts QmsDepartmentCommentsSection
+                      inline at the QA + Dept-Comment stages, and surfaces
+                      the read-only history in past StageSections — having
+                      the drawer-level accordion too creates a duplicate
+                      "Department-Wise Comments" block below the action
+                      bar. Hide it for those 5 modules. */}
+                  {!['changeControl','capa','deviation','incident','marketComplaint'].includes(moduleKey)
+                    && !isPreQA(record.status) && (
                     <Accordion defaultExpanded disableGutters elevation={0}
                                sx={{ '&:before': { display: 'none' }, border: '1px solid',
                                       borderColor: 'divider', borderRadius: 1.5, mb: 1.5 }}>
