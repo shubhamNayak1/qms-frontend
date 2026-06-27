@@ -34,7 +34,7 @@ import { formatDateTime } from '../../utils/helpers';
  *                          May 2026 tester feedback). The server is still
  *                          authoritative.
  */
-const QmsDepartmentCommentsSection = ({ commonSlug, recordId, currentUser, recordTargetDate }) => {
+const QmsDepartmentCommentsSection = ({ commonSlug, recordId, currentUser, recordTargetDate, onChange }) => {
   const [rows, setRows]               = useState([]);
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading]         = useState(false);
@@ -83,6 +83,7 @@ const QmsDepartmentCommentsSection = ({ commonSlug, recordId, currentUser, recor
       await requestDeptCommentApi(commonSlug, recordId, reqDept);
       setReqOpen(false); setReqDept('');
       fetch();
+      onChange?.();
     } catch (err) {
       setReqError(err.response?.data?.message || 'Failed to request comment.');
     } finally {
@@ -128,6 +129,7 @@ const QmsDepartmentCommentsSection = ({ commonSlug, recordId, currentUser, recor
       });
       setFillRow(null);
       fetch();
+      onChange?.();
     } catch (err) {
       setFillError(err.response?.data?.message || 'Failed to save comment.');
     } finally {
@@ -153,18 +155,20 @@ const QmsDepartmentCommentsSection = ({ commonSlug, recordId, currentUser, recor
   const canFill = (row) =>
     !!currentUser?.departmentId && currentUser.departmentId === row.departmentId;
 
-  // Round-L (2026-06-27): QA Reviewer / QA Head can remove a PENDING
-  // dept row if they invited the wrong department. Backend enforces;
-  // we just hide the icon when clearly not applicable.
-  const canRemove = (row) =>
-    row.status === 'PENDING'
-    && (currentUser?.isQaReviewer || currentUser?.isQaHead || currentUser?.isSuperAdmin);
+  // Round-L (2026-06-27): show the remove icon on every PENDING row.
+  // The backend gates which actors may actually delete (QA Reviewer /
+  // QA Head / SUPER_ADMIN) — mirroring how canFill is just a heuristic.
+  // Hiding the icon based on optimistically-derived role flags led to
+  // testers not seeing it at all because the currentUser DTO doesn't
+  // expose isQaReviewer / isQaHead directly.
+  const canRemove = (row) => row.status === 'PENDING';
 
   const handleRemove = async (row) => {
     if (!window.confirm(`Remove ${row.departmentName} from the requested departments?`)) return;
     try {
       await deleteDeptCommentApi(commonSlug, recordId, row.id);
       fetch();
+      onChange?.();
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to remove department row.');
     }

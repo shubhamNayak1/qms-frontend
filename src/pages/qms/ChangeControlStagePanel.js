@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Typography, Grid, TextField, MenuItem, Stack, Button,
   Alert, FormControlLabel, Switch, Tooltip, Chip, Box, Divider,
@@ -786,7 +786,7 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
   }, [record?.id, status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Fetch dept comments (drives Phase 1 vs Phase 2 detection + dept-gate)
-  useEffect(() => {
+  const refreshDeptComments = useCallback(() => {
     if (!record?.id) { setDeptComments([]); return; }
     if (status !== 'PENDING_QA_REVIEW' && status !== 'PENDING_DEPT_COMMENT') {
       setDeptComments([]); return;
@@ -795,6 +795,7 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
       .then(({ data }) => setDeptComments(data?.data || []))
       .catch(() => setDeptComments([]));
   }, [record?.id, status]);
+  useEffect(() => { refreshDeptComments(); }, [refreshDeptComments]);
 
   // Round-4 F1: line-items fetch retired — QmsLineItemsSection now fetches
   // its own rows inside the Draft StageSection.
@@ -1238,6 +1239,7 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
               recordId={record.id}
               currentUser={currentUser}
               recordTargetDate={record?.targetCompletionDate}
+              onChange={refreshDeptComments}
             />
           </Box>
         )}
