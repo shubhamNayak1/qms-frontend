@@ -38,6 +38,11 @@ export const requestDeptCommentApi = (recordType, recordId, departmentId) =>
 export const fillDeptCommentApi = (recordType, recordId, commentRowId, payload) =>
   apiClient.put(`${root(recordType, recordId)}/department-comments/${commentRowId}`, payload);
 
+// Round-L (2026-06-27): soft-delete a PENDING dept-comment row so QA
+// can fix an accidental invite. Backend rejects COMPLETED rows.
+export const deleteDeptCommentApi = (recordType, recordId, commentRowId) =>
+  apiClient.delete(`${root(recordType, recordId)}/department-comments/${commentRowId}`);
+
 // ── Department attachments (per-dept file upload + Head QA approval) ──
 //
 // Mirrors department-comments but for binary files. Backs the

@@ -6,9 +6,11 @@ import {
 } from '@mui/material';
 import {
   Add as AddIcon, Edit as EditIcon, Refresh as RefreshIcon,
+  Delete as DeleteIcon,
 } from '@mui/icons-material';
 import {
   listDeptCommentsApi, requestDeptCommentApi, fillDeptCommentApi,
+  deleteDeptCommentApi,
 } from '../../api/qmsCommonApi';
 import { listDepartmentsApi } from '../../api/orgApi';
 import { formatDateTime } from '../../utils/helpers';
@@ -151,6 +153,23 @@ const QmsDepartmentCommentsSection = ({ commonSlug, recordId, currentUser, recor
   const canFill = (row) =>
     !!currentUser?.departmentId && currentUser.departmentId === row.departmentId;
 
+  // Round-L (2026-06-27): QA Reviewer / QA Head can remove a PENDING
+  // dept row if they invited the wrong department. Backend enforces;
+  // we just hide the icon when clearly not applicable.
+  const canRemove = (row) =>
+    row.status === 'PENDING'
+    && (currentUser?.isQaReviewer || currentUser?.isQaHead || currentUser?.isSuperAdmin);
+
+  const handleRemove = async (row) => {
+    if (!window.confirm(`Remove ${row.departmentName} from the requested departments?`)) return;
+    try {
+      await deleteDeptCommentApi(commonSlug, recordId, row.id);
+      fetch();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to remove department row.');
+    }
+  };
+
   return (
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 1, gap: 0.5 }}>
@@ -229,6 +248,15 @@ const QmsDepartmentCommentsSection = ({ commonSlug, recordId, currentUser, recor
                   <Tooltip title="Fill in comment">
                     <IconButton size="small" color="primary" onClick={() => openFill(r)}>
                       <EditIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                )}
+                {/* Round-L (2026-06-27): QA can drop a PENDING row in case
+                    the wrong dept was invited. */}
+                {canRemove(r) && (
+                  <Tooltip title="Remove department">
+                    <IconButton size="small" color="error" onClick={() => handleRemove(r)}>
+                      <DeleteIcon fontSize="small" />
                     </IconButton>
                   </Tooltip>
                 )}
