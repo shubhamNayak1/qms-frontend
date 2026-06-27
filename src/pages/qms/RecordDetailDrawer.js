@@ -804,6 +804,12 @@ const RecordDetailDrawer = ({ open, onClose, recordId, moduleKey, onUpdated }) =
           // the panel, so DRAFT joins the panel-owns-buttons list (CC only).
           // Other modules' DRAFT still uses the drawer footer.
           const panelStages = [
+            // Round-L (2026-06-27): PENDING_REVIEW added — every module's
+            // panel now owns the action buttons at the peer-review stage
+            // (Submit-to-HOD + Send-back-to-Initiator live on the
+            // StickyActionBar). Without this the legacy drawer footer
+            // also rendered an "Approve / Forward" button below.
+            'PENDING_REVIEW',
             'PENDING_HOD','PENDING_QA_REVIEW','PENDING_DEPT_COMMENT',
             'PENDING_RA_REVIEW','PENDING_SITE_HEAD','PENDING_CUSTOMER_COMMENT',
             'PENDING_HEAD_QA','PENDING_INVESTIGATION','PENDING_ATTACHMENTS',
