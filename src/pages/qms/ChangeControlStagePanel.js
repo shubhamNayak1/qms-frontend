@@ -834,13 +834,23 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
   let effectiveRequired  = desc.requiredFields || [];
   let effectiveHelper    = desc.helper;
 
+  // Round-L (2026-06-27): QA-no-depts shortcut. When the QA Reviewer
+  // does NOT invite any departments, the dept-comment loop is skipped
+  // entirely — Phase 1 + Phase 2 fields combine into one form and the
+  // action button forwards straight to RA Evaluation.
+  const qaSkipDepts = status === 'PENDING_QA_REVIEW'
+                      && qaPhase === 1
+                      && deptTotal === 0;
   if (status === 'PENDING_QA_REVIEW') {
-    if (qaPhase === 1) {
+    if (qaSkipDepts) {
+      // Combined single-pass form (Phase 1 + Phase 2 fields)
+      effectiveFields   = [...qaPhase1Fields, ...qaPhase2Fields];
+      effectiveRequired = [...qaPhase1Required, ...qaPhase2Required];
+      effectiveHelper   = 'No departments invited — capture the Pre-Remark, Post-Remark and routing decisions, then forward directly to RA Evaluation. Invite a department from the accordion below if you want their input first.';
+    } else if (qaPhase === 1) {
       effectiveFields   = qaPhase1Fields;
       effectiveRequired = qaPhase1Required;
-      effectiveHelper   = deptTotal === 0
-        ? 'PHASE 1 — Set the Risk Level and write a Pre-Remark. To send to departments, invite them via the Department-Wise Comments accordion below. Otherwise fill the Remark / Justification to forward directly.'
-        : 'PHASE 1 — Risk Level + Pre-Remark captured. Departments are now responding. The Remark / Justification is OPTIONAL while you wait; it becomes mandatory in Phase 2 once they finish.';
+      effectiveHelper   = 'PHASE 1 — Risk Level + Pre-Remark captured. Departments are now responding. The Remark / Justification is OPTIONAL while you wait; it becomes mandatory in Phase 2 once they finish.';
     } else {
       effectiveFields   = qaPhase2Fields;
       effectiveRequired = qaPhase2Required;
@@ -908,11 +918,10 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
         if (typeof v === 'boolean') return false;
         return v == null || (typeof v === 'string' && !v.trim());
       });
-      // Phase-1 also requires at least one department invited
-      if (status === 'PENDING_QA_REVIEW' && qaPhase === 1 && deptTotal === 0) {
-        setError('Phase 1 requires at least one department to be invited via the Department-Wise Comments accordion below before saving.');
-        return;
-      }
+      // Round-L (2026-06-27): the "at least one dept required" guard is
+      // gone — when QA invites zero depts they now skip the dept-comment
+      // loop and forward directly to RA Evaluation (handled by the
+      // qaSkipDepts branch below).
       // Phase-2 conditional: when Risk Assessment Required = YES, narrative is mandatory
       if ((status === 'PENDING_QA_REVIEW' || status === 'PENDING_DEPT_COMMENT')
           && qaPhase === 2
@@ -947,6 +956,19 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
           payload.category   = form.category;
           payload.preRemark  = form.preRemark;
           payload.riskLevel  = form.category; // mirror — same values
+          // Round-L (2026-06-27): in the no-depts shortcut we also persist
+          // the Phase-2 fields so the QA Reviewer captures the post-remark
+          // + approval routing in one save and the record can advance to
+          // RA Evaluation with everything in place.
+          if (qaSkipDepts) {
+            payload.comments                     = form.qaEvalRemark;
+            payload.riskAssessment               = form.riskAssessmentRequired ? form.riskAssessment : null;
+            payload.siteHeadRequired             = !!form.siteHeadRequired;
+            payload.customerCommunicationRequired= !!form.customerCommunicationRequired;
+            payload.customerRepresentative       = form.customerCommunicationRequired
+                                                    ? (form.customerRepresentative || null)
+                                                    : null;
+          }
         }
         if ((status === 'PENDING_QA_REVIEW' || status === 'PENDING_DEPT_COMMENT') && qaPhase === 2) {
           // Round-2 H2: regulatorySubmissionRequired / Reference removed —
@@ -990,7 +1012,18 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
           await submitChangeControlApi(record.id, effectiveComment);
           break;
         case 'approve':
-          await approveChangeControlApi(record.id, effectiveComment);
+          // Round-L (2026-06-27): when QA invited zero depts, the canonical
+          // "approve" target (PENDING_DEPT_COMMENT) doesn't apply — we
+          // forward straight to RA Evaluation via the explicit transition
+          // endpoint.
+          if (qaSkipDepts) {
+            await transitionChangeControlApi(record.id, {
+              targetStatus: 'PENDING_RA_REVIEW',
+              comment: effectiveComment,
+            });
+          } else {
+            await approveChangeControlApi(record.id, effectiveComment);
+          }
           break;
         case 'close':
           await closeChangeControlApi(record.id, effectiveComment);
@@ -1032,7 +1065,10 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
     // Round-5 I1: post-resend the Initiator re-submits the corrected record.
     primaryLabel = record.resendCount > 0 ? 'Resend the Record' : 'Submit for Review';
   } else if (status === 'PENDING_QA_REVIEW' && qaPhase === 1) {
-    primaryLabel = 'Save & route to Department Comments';
+    // Round-L (2026-06-27): no depts invited → direct forward to RA.
+    primaryLabel = qaSkipDepts
+      ? 'Approve & forward to RA Evaluation'
+      : 'Save & route to Department Comments';
   } else if ((status === 'PENDING_QA_REVIEW' || status === 'PENDING_DEPT_COMMENT')
               && qaPhase === 2) {
     // Round-5 H4: PENDING_DEPT_COMMENT (all done) advances to RA from here.
