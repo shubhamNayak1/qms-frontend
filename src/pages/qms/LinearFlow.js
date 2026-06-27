@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  Box, Typography, Stack, Chip, Paper, Divider,
+  Box, Typography, Stack, Chip, Paper, Divider, Alert, Grid,
 } from '@mui/material';
 import {
   CheckCircle as PastIcon,
@@ -8,7 +8,8 @@ import {
   RemoveCircleOutline as SkippedIcon,
   Lock as TerminalIcon,
 } from '@mui/icons-material';
-import { formatDateTimeAmPm } from '../../utils/helpers';
+import { formatDate, formatDateTimeAmPm } from '../../utils/helpers';
+import QmsLineItemsSection from './QmsLineItemsSection';
 
 /**
  * LinearFlow — shared building blocks for the Round-4 linear-stage layout.
@@ -60,6 +61,85 @@ export const SectionStamp = ({ actor, when, label = 'by' }) => {
     <Typography variant="caption" color="text.secondary">
       {label} <strong>{actor || '—'}</strong>{formatted ? ` · on ${formatted}` : ''}
     </Typography>
+  );
+};
+
+// ── InitiatorSubmissionView ───────────────────────────────────
+// Round-L (2026-06-27): every module's panel needs to surface the
+// Initiator-captured fields at the Initiation (DRAFT) and Peer Review
+// (PENDING_REVIEW) stages — otherwise the editor + the peer reviewer
+// stare at a blank form because the workflow fields all live on
+// downstream stages.
+//
+// Renders a compact info Alert + a grid of common fields + the
+// QmsLineItemsSection. Per-module extras (e.g. CC's Product/Material,
+// CAPA's source-record link) are passed via the `extras` prop as an
+// array of {label, value} pairs and rendered alongside the common
+// fields.
+//
+// Props:
+//   record     : record DTO (must have id + the common QmsRecord fields)
+//   commonSlug : kebab-case backend recordType for QmsLineItemsSection
+//                (capa | deviation | incident | change-control | market-complaint)
+//   extras     : optional [{label, value}, …] for per-module specifics
+//   showLineItems : default true; pass false if the module doesn't use them
+export const InitiatorSubmissionView = ({
+  record,
+  commonSlug,
+  extras = [],
+  showLineItems = true,
+}) => {
+  if (!record) return null;
+  const dash = (v) => (v == null || v === '' ? '—' : v);
+  return (
+    <>
+      <Alert severity="info" icon={false} sx={{ mb: 1.5, py: 0.6 }}>
+        <Typography variant="caption" sx={{ display: 'block' }}>
+          <strong>The fields below were captured by the Initiator on the Create dialog.</strong>
+          {' '}Verify them, then write your <em>Remark / Justification</em> below before forwarding.
+        </Typography>
+      </Alert>
+      <Grid container spacing={1.2}>
+        <Grid item xs={6}>
+          <Typography variant="body2"><strong>Title:</strong> {dash(record.title)}</Typography>
+        </Grid>
+        <Grid item xs={6}>
+          <Typography variant="body2"><strong>Record No.:</strong> {dash(record.recordNumber)}</Typography>
+        </Grid>
+        <Grid item xs={6}>
+          <Typography variant="body2"><strong>Raised By:</strong> {dash(record.raisedByName || record.createdBy)}</Typography>
+        </Grid>
+        <Grid item xs={6}>
+          <Typography variant="body2"><strong>Raised On:</strong> {record.createdAt ? formatDate(record.createdAt) : '—'}</Typography>
+        </Grid>
+        <Grid item xs={6}>
+          <Typography variant="body2"><strong>Department:</strong> {dash(record.department)}</Typography>
+        </Grid>
+        {extras.filter(e => e && e.label).map((e, i) => (
+          <Grid item xs={6} key={`extra-${i}`}>
+            <Typography variant="body2"><strong>{e.label}:</strong> {dash(e.value)}</Typography>
+          </Grid>
+        ))}
+        {record.description && (
+          <Grid item xs={12}>
+            <Typography variant="body2"><strong>Description:</strong></Typography>
+            <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', pl: 1 }}>{record.description}</Typography>
+          </Grid>
+        )}
+      </Grid>
+      {showLineItems && record?.id && (
+        <Box sx={{ mt: 1.8 }}>
+          <Typography variant="caption" sx={{ display: 'block', fontWeight: 700, letterSpacing: 0.4, mb: 0.5, color: 'text.secondary' }}>
+            LINE ITEMS
+          </Typography>
+          <QmsLineItemsSection
+            commonSlug={commonSlug}
+            recordId={record.id}
+            readOnly
+          />
+        </Box>
+      )}
+    </>
   );
 };
 

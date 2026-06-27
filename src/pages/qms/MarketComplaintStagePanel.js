@@ -13,6 +13,7 @@ import {
 import { listDeptCommentsApi } from '../../api/qmsCommonApi';
 import {
   StageSection, StickyActionBar, findStageActor as flowFindStageActor,
+  InitiatorSubmissionView,
 } from './LinearFlow';
 import { formatDate } from '../../utils/helpers';
 
@@ -406,6 +407,26 @@ const MarketComplaintStagePanel = ({ record, onUpdated }) => {
             )}
           </Stack>
         </Alert>
+      )}
+
+      {/* Round-L (2026-06-27): surface Initiator-captured fields at
+          Initiation + Peer Review. MC has no line items, so disable
+          that block in the shared view. */}
+      {(status === 'DRAFT' || status === 'PENDING_REVIEW') && (
+        <Box sx={{ mb: 2 }}>
+          <InitiatorSubmissionView
+            record={record}
+            commonSlug="market-complaint"
+            showLineItems={false}
+            extras={[
+              { label: 'Priority',          value: record.priority },
+              { label: 'Customer Name',     value: record.customerName },
+              { label: 'Product / Material', value: record.productMaterial },
+              { label: 'Batch No.',         value: record.batchNumber },
+              { label: 'Received On',       value: record.complaintReceivedDate ? formatDate(record.complaintReceivedDate) : null },
+            ]}
+          />
+        </Box>
       )}
 
       {desc.fields.length > 0 && (

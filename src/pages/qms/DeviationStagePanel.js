@@ -13,7 +13,7 @@ import {
 import { listDeptCommentsApi } from '../../api/qmsCommonApi';
 import { useAuth } from '../../store/AuthContext';
 import QmsDepartmentAttachmentsSection from './QmsDepartmentAttachmentsSection';
-import { StageSection, StickyActionBar, findStageActor as flowFindStageActor } from './LinearFlow';
+import { StageSection, StickyActionBar, findStageActor as flowFindStageActor, InitiatorSubmissionView } from './LinearFlow';
 import { formatDate } from '../../utils/helpers';
 
 /**
@@ -498,6 +498,22 @@ const DeviationStagePanel = ({ record, onUpdated }) => {
             commonSlug="deviation"
             recordId={record.id}
             currentUser={currentUser}
+          />
+        </Box>
+      )}
+
+      {/* Round-L (2026-06-27): surface Initiator-captured fields at
+          Initiation + Peer Review. */}
+      {(status === 'DRAFT' || status === 'PENDING_REVIEW') && (
+        <Box sx={{ mb: 2 }}>
+          <InitiatorSubmissionView
+            record={record}
+            commonSlug="deviation"
+            extras={[
+              { label: 'Priority',         value: record.priority },
+              { label: 'Deviation Type',   value: record.deviationType },
+              { label: 'Occurred On',      value: record.occurredAt ? formatDate(record.occurredAt) : null },
+            ]}
           />
         </Box>
       )}

@@ -14,7 +14,7 @@ import { listDeptCommentsApi } from '../../api/qmsCommonApi';
 import { useAuth } from '../../store/AuthContext';
 import QmsCapaAssessmentsSection from './QmsCapaAssessmentsSection';
 import QmsDepartmentAttachmentsSection from './QmsDepartmentAttachmentsSection';
-import { StageSection, StickyActionBar, findStageActor as flowFindStageActor } from './LinearFlow';
+import { StageSection, StickyActionBar, findStageActor as flowFindStageActor, InitiatorSubmissionView } from './LinearFlow';
 import { formatDate } from '../../utils/helpers';
 
 /**
@@ -535,6 +535,23 @@ const CapaStagePanel = ({ record, onUpdated }) => {
             commonSlug="capa"
             recordId={record.id}
             currentUser={currentUser}
+          />
+        </Box>
+      )}
+
+      {/* Round-L (2026-06-27): surface the Initiator-captured fields at
+          Initiation and Peer Review so the Initiator can see what they
+          captured and the dept Reviewer can verify it. */}
+      {(status === 'DRAFT' || status === 'PENDING_REVIEW') && (
+        <Box sx={{ mb: 2 }}>
+          <InitiatorSubmissionView
+            record={record}
+            commonSlug="capa"
+            extras={[
+              { label: 'Priority',           value: record.priority },
+              { label: 'Source Record Type', value: record.sourceRecordType },
+              { label: 'Source Record No.',  value: record.sourceRecordNumber },
+            ]}
           />
         </Box>
       )}
