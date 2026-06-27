@@ -91,14 +91,20 @@ export const InitiatorSubmissionView = ({
 }) => {
   if (!record) return null;
   const dash = (v) => (v == null || v === '' ? '—' : v);
+  // Round-L (2026-06-27): hide the helper banner once the record has
+  // advanced past Peer Review — at HOD Assessment or later the
+  // instruction is stale and the past-section is just a reference.
+  const showHelperBanner = record?.status === 'DRAFT' || record?.status === 'PENDING_REVIEW';
   return (
     <>
-      <Alert severity="info" icon={false} sx={{ mb: 1.5, py: 0.6 }}>
-        <Typography variant="caption" sx={{ display: 'block' }}>
-          <strong>The fields below were captured by the Initiator on the Create dialog.</strong>
-          {' '}Verify them, then write your <em>Remark / Justification</em> below before forwarding.
-        </Typography>
-      </Alert>
+      {showHelperBanner && (
+        <Alert severity="info" icon={false} sx={{ mb: 1.5, py: 0.6 }}>
+          <Typography variant="caption" sx={{ display: 'block' }}>
+            <strong>The fields below were captured by the Initiator on the Create dialog.</strong>
+            {' '}Verify them, then write your <em>Remark / Justification</em> below before forwarding.
+          </Typography>
+        </Alert>
+      )}
       <Grid container spacing={1.2}>
         <Grid item xs={6}>
           <Typography variant="body2"><strong>Title:</strong> {dash(record.title)}</Typography>

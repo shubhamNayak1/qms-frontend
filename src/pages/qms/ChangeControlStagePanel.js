@@ -486,15 +486,22 @@ const FieldEditor = ({ name, form, setForm, xs = 12 }) => {
 // below).
 const RoDraftView = ({ record }) => {
   const dash = (v) => (v == null || v === '' ? '—' : v);
+  // Round-L (2026-06-27): the helper banner only makes sense while the
+  // record is at Initiation or Peer Review. Once it advances to HOD
+  // Assessment (or beyond) the instruction "write your Initial
+  // Assessment in the form lower down" is stale, so hide the banner.
+  const showHelperBanner = record?.status === 'DRAFT' || record?.status === 'PENDING_REVIEW';
   return (
     <>
-      <Alert severity="info" icon={false} sx={{ mb: 1.5, py: 0.6 }}>
-        <Typography variant="caption" sx={{ display: 'block' }}>
-          <strong>The fields below were captured by the Initiator on the Create dialog.</strong>
-          {' '}Review them, then write your <em>Initial Assessment</em> and
-          <em> Remark / Justification</em> in the form lower down before forwarding to QA.
-        </Typography>
-      </Alert>
+      {showHelperBanner && (
+        <Alert severity="info" icon={false} sx={{ mb: 1.5, py: 0.6 }}>
+          <Typography variant="caption" sx={{ display: 'block' }}>
+            <strong>The fields below were captured by the Initiator on the Create dialog.</strong>
+            {' '}Review them, then write your <em>Initial Assessment</em> and
+            <em> Remark / Justification</em> in the form lower down before forwarding to QA.
+          </Typography>
+        </Alert>
+      )}
       <Grid container spacing={1.2}>
         <Grid item xs={6}>
           <Typography variant="body2"><strong>Change Control Title:</strong> {dash(record.title)}</Typography>
