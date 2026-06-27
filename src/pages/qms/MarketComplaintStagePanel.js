@@ -426,10 +426,10 @@ const MarketComplaintStagePanel = ({ record, onUpdated }) => {
         </Alert>
       )}
 
-      {/* Round-L (2026-06-27): surface Initiator-captured fields at
-          Initiation + Peer Review. MC has no line items, so disable
-          that block in the shared view. */}
-      {(status === 'DRAFT' || status === 'PENDING_REVIEW') && (
+      {/* Round-L (2026-06-27): show captured fields only at Initiation —
+          at Peer Review the past Initiation section already renders them.
+          MC has no line items, so disable that block in the shared view. */}
+      {status === 'DRAFT' && (
         <Box sx={{ mb: 2 }}>
           <InitiatorSubmissionView
             record={record}
