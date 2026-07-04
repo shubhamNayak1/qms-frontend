@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Paper, Typography, Grid, TextField, MenuItem, Stack, Button,
   Alert, FormControlLabel, Switch, Tooltip, Chip, Box,
@@ -15,6 +15,7 @@ import {
 import { listDeptCommentsApi } from '../../api/qmsCommonApi';
 import { useAuth } from '../../store/AuthContext';
 import QmsDepartmentAttachmentsSection from './QmsDepartmentAttachmentsSection';
+import QmsDepartmentCommentsSection from './QmsDepartmentCommentsSection';
 import { StageSection, StickyActionBar, findStageActor as flowFindStageActor, InitiatorSubmissionView } from './LinearFlow';
 import { formatDate } from '../../utils/helpers';
 
@@ -311,15 +312,18 @@ const IncidentStagePanel = ({ record, onUpdated }) => {
     setError(null);
   }, [record?.id, status]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    if (status !== 'PENDING_DEPT_COMMENT' || !record?.id) {
-      setDeptComments([]);
-      return;
+  // Round-M (2026-06-27) follow-up: live-refresh dept list + also
+  // fetch at PENDING_QA_REVIEW so QA sees invites appear immediately.
+  const refreshDeptComments = useCallback(() => {
+    if (!record?.id) { setDeptComments([]); return; }
+    if (status !== 'PENDING_QA_REVIEW' && status !== 'PENDING_DEPT_COMMENT') {
+      setDeptComments([]); return;
     }
     listDeptCommentsApi('incident', record.id)
       .then(({ data }) => setDeptComments(data?.data || []))
       .catch(() => setDeptComments([]));
   }, [record?.id, status]);
+  useEffect(() => { refreshDeptComments(); }, [refreshDeptComments]);
 
   // Terminal DEVIATION_SPAWNED — render a banner instead of an active panel.
   if (status === 'DEVIATION_SPAWNED') {
@@ -608,6 +612,21 @@ const IncidentStagePanel = ({ record, onUpdated }) => {
             commonSlug="incident"
             recordId={record.id}
             currentUser={currentUser}
+          />
+        </Box>
+      )}
+
+      {/* Round-M (2026-06-27) follow-up: inline dept-comments accordion
+          at QA + Dept-Comment stages with live-refresh. */}
+      {(status === 'PENDING_QA_REVIEW' || status === 'PENDING_DEPT_COMMENT')
+        && record?.id && (
+        <Box sx={{ mb: 2 }}>
+          <QmsDepartmentCommentsSection
+            commonSlug="incident"
+            recordId={record.id}
+            currentUser={currentUser}
+            recordTargetDate={record?.targetCompletionDate}
+            onChange={refreshDeptComments}
           />
         </Box>
       )}

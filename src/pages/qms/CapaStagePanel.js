@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Paper, Typography, Grid, TextField, MenuItem, Stack, Button,
   Alert, FormControlLabel, Switch, Tooltip, Chip, Box,
@@ -14,6 +14,7 @@ import { listDeptCommentsApi } from '../../api/qmsCommonApi';
 import { useAuth } from '../../store/AuthContext';
 import QmsCapaAssessmentsSection from './QmsCapaAssessmentsSection';
 import QmsDepartmentAttachmentsSection from './QmsDepartmentAttachmentsSection';
+import QmsDepartmentCommentsSection from './QmsDepartmentCommentsSection';
 import { StageSection, StickyActionBar, findStageActor as flowFindStageActor, InitiatorSubmissionView } from './LinearFlow';
 import { formatDate } from '../../utils/helpers';
 
@@ -288,15 +289,20 @@ const CapaStagePanel = ({ record, onUpdated }) => {
     setError(null);
   }, [record?.id, status]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    if (status !== 'PENDING_DEPT_COMMENT' || !record?.id) {
-      setDeptComments([]);
-      return;
+  // Round-M (2026-06-27) tester CC-Point-1 · follow-up:
+  // Live-refresh the dept-comment list whenever QA invites / removes
+  // a department in the embedded accordion. Extended coverage to
+  // PENDING_QA_REVIEW as well so QA can invite depts from Phase 1.
+  const refreshDeptComments = useCallback(() => {
+    if (!record?.id) { setDeptComments([]); return; }
+    if (status !== 'PENDING_QA_REVIEW' && status !== 'PENDING_DEPT_COMMENT') {
+      setDeptComments([]); return;
     }
     listDeptCommentsApi('capa', record.id)
       .then(({ data }) => setDeptComments(data?.data || []))
       .catch(() => setDeptComments([]));
   }, [record?.id, status]);
+  useEffect(() => { refreshDeptComments(); }, [refreshDeptComments]);
 
   const isPostClosure = ['CLOSED', 'EFFECTIVENESS_PENDING',
                          'EFFECTIVENESS_REVIEW', 'EFFECTIVENESS_VERIFIED']
@@ -598,6 +604,25 @@ const CapaStagePanel = ({ record, onUpdated }) => {
             commonSlug="capa"
             recordId={record.id}
             currentUser={currentUser}
+          />
+        </Box>
+      )}
+
+      {/* Round-M (2026-06-27) tester CC-Point-1 · follow-up: dept-comments
+          accordion mounted inline at QA + Dept-Comment stages. Was hidden
+          from the drawer for all 5 linear-flow modules, so CAPA / Dev /
+          Inc / MC had no way to invite departments. Restoring here with
+          the live-refresh onChange hook so the QA panel updates the
+          moment a dept is invited or removed. */}
+      {(status === 'PENDING_QA_REVIEW' || status === 'PENDING_DEPT_COMMENT')
+        && record?.id && (
+        <Box sx={{ mb: 2 }}>
+          <QmsDepartmentCommentsSection
+            commonSlug="capa"
+            recordId={record.id}
+            currentUser={currentUser}
+            recordTargetDate={record?.targetCompletionDate}
+            onChange={refreshDeptComments}
           />
         </Box>
       )}

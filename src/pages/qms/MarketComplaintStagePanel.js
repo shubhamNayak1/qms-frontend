@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Typography, Grid, TextField, MenuItem, Stack, Button,
   Alert, FormControlLabel, Switch, Tooltip, Chip, Box,
@@ -11,6 +11,7 @@ import {
   closeComplaintApi, transitionComplaintApi,
 } from '../../api/qmsApi';
 import { listDeptCommentsApi } from '../../api/qmsCommonApi';
+import QmsDepartmentCommentsSection from './QmsDepartmentCommentsSection';
 import {
   StageSection, StickyActionBar, findStageActor as flowFindStageActor,
   InitiatorSubmissionView,
@@ -214,15 +215,19 @@ const MarketComplaintStagePanel = ({ record, onUpdated }) => {
     setError(null);
   }, [record?.id, status]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    if (status !== 'PENDING_DEPT_COMMENT' || !record?.id) {
-      setDeptComments([]);
-      return;
+  // Round-M (2026-06-27) follow-up: live-refresh + broaden fetch to
+  // PENDING_INVESTIGATION so QA sees fresh invites on the investigation
+  // hub without reopening the record.
+  const refreshDeptComments = useCallback(() => {
+    if (!record?.id) { setDeptComments([]); return; }
+    if (status !== 'PENDING_INVESTIGATION' && status !== 'PENDING_DEPT_COMMENT') {
+      setDeptComments([]); return;
     }
     listDeptCommentsApi('market-complaint', record.id)
       .then(({ data }) => setDeptComments(data?.data || []))
       .catch(() => setDeptComments([]));
   }, [record?.id, status]);
+  useEffect(() => { refreshDeptComments(); }, [refreshDeptComments]);
 
   if (!desc) return null;
 
@@ -455,6 +460,20 @@ const MarketComplaintStagePanel = ({ record, onUpdated }) => {
             )}
           </Stack>
         </Alert>
+      )}
+
+      {/* Round-M (2026-06-27) follow-up: inline dept-comments accordion
+          at QA Investigation + Dept-Comment stages with live-refresh. */}
+      {(status === 'PENDING_INVESTIGATION' || status === 'PENDING_DEPT_COMMENT')
+        && record?.id && (
+        <Box sx={{ mb: 2 }}>
+          <QmsDepartmentCommentsSection
+            commonSlug="market-complaint"
+            recordId={record.id}
+            recordTargetDate={record?.targetCompletionDate}
+            onChange={refreshDeptComments}
+          />
+        </Box>
       )}
 
       {/* Round-M (2026-06-27) tester CC-Point-1 · Issues 5+6. MC has no
