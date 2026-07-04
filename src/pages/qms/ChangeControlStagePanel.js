@@ -559,6 +559,130 @@ const RoDraftView = ({ record }) => {
   );
 };
 
+// Round-M (2026-06-27) tester CC-Point-1 · Issues 5+6: editable
+// version of RoDraftView rendered when the record is at DRAFT and
+// the Initiator (or a Resend recipient) needs to update the fields
+// they originally captured. Read-only metadata (Record No., Raised
+// By, Raised On, Department) stay static; the five Initiator-owned
+// fields (Title, Product/Material Name + Code, Change Type, Reason
+// for Change) become editable TextFields bound to the panel form
+// state. Line items render via QmsLineItemsSection in edit mode.
+const DraftEditView = ({ record, form, setForm }) => {
+  const dash = (v) => (v == null || v === '' ? '—' : v);
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const isResend = (record?.resendCount ?? 0) > 0;
+  return (
+    <>
+      <Alert severity={isResend ? 'warning' : 'info'} icon={false}
+             sx={{ mb: 1.5, py: 0.6 }}>
+        <Typography variant="caption" sx={{ display: 'block' }}>
+          {isResend
+            ? <><strong>Record was sent back for edits.</strong>{' '}
+                Update any of the initiator-captured fields below, then
+                click <em>Save Draft</em> to persist changes or
+                <em> Submit for Review</em> to forward the corrected
+                record.</>
+            : <><strong>Initiator draft — every field below is editable.</strong>{' '}
+                Save Draft to keep working; Submit for Review to forward
+                the record to a peer reviewer in your department.</>}
+        </Typography>
+      </Alert>
+
+      <Grid container spacing={1.4}>
+        <Grid item xs={6}>
+          <TextField
+            label="Change Control Title" required fullWidth size="small"
+            value={form.title ?? ''} onChange={set('title')}
+            inputProps={{ autoComplete: 'off' }} />
+        </Grid>
+        <Grid item xs={6}>
+          <Typography variant="body2" sx={{ pt: 1 }}>
+            <strong>Change Control No.:</strong> {dash(record.recordNumber)}
+          </Typography>
+        </Grid>
+
+        <Grid item xs={6}>
+          <Typography variant="body2" sx={{ pt: 0.6 }}>
+            <strong>Raised By:</strong> {dash(record.raisedByName || record.createdBy)}
+          </Typography>
+        </Grid>
+        <Grid item xs={6}>
+          <Typography variant="body2" sx={{ pt: 0.6 }}>
+            <strong>Raised On:</strong> {record.createdAt ? formatDate(record.createdAt) : '—'}
+          </Typography>
+        </Grid>
+
+        <Grid item xs={6}>
+          <Typography variant="body2" sx={{ pt: 0.6 }}>
+            <strong>Department:</strong> {dash(record.department)}
+          </Typography>
+        </Grid>
+        <Grid item xs={6}>
+          <TextField
+            label="Change Type" select required fullWidth size="small"
+            value={form.changeType ?? ''} onChange={set('changeType')}
+            SelectProps={{ native: true }}
+            inputProps={{ autoComplete: 'off' }}>
+            <option value=""></option>
+            {['Process','Equipment','Document','System','Supplier','Facility'].map(t =>
+              <option key={t} value={t}>{t}</option>
+            )}
+          </TextField>
+        </Grid>
+
+        <Grid item xs={6}>
+          <TextField
+            label="Product / Material Name" required fullWidth size="small"
+            value={form.productMaterial ?? ''} onChange={set('productMaterial')}
+            inputProps={{ autoComplete: 'off' }} />
+        </Grid>
+        <Grid item xs={6}>
+          <TextField
+            label="Product / Material Code" required fullWidth size="small"
+            value={form.productMaterialCode ?? ''} onChange={set('productMaterialCode')}
+            inputProps={{ autoComplete: 'off' }} />
+        </Grid>
+
+        <Grid item xs={12}>
+          <TextField
+            label="Reason for Change" fullWidth size="small"
+            multiline minRows={2}
+            value={form.changeReason ?? ''} onChange={set('changeReason')}
+            inputProps={{ autoComplete: 'off' }} />
+        </Grid>
+
+        {record.initialAttachmentDmsNumber && (
+          <Grid item xs={12}>
+            <Typography variant="body2">
+              <strong>Initial Attachment:</strong> {record.initialAttachmentDmsNumber}
+              {record.initialAttachmentDmsTitle && ` · ${record.initialAttachmentDmsTitle}`}
+              {record.initialAttachmentDmsVersion && ` v${record.initialAttachmentDmsVersion}`}
+            </Typography>
+          </Grid>
+        )}
+      </Grid>
+
+      {record?.id && (
+        <Box sx={{ mt: 1.8 }}>
+          <Typography variant="caption"
+            sx={{ display: 'block', fontWeight: 700, letterSpacing: 0.4,
+                  mb: 0.5, color: 'text.secondary' }}>
+            LINE ITEMS
+          </Typography>
+          <QmsLineItemsSection
+            commonSlug="change-control"
+            recordId={record.id}
+            // Round-M — editable at DRAFT so the initiator can adjust
+            // Existing System / Proposed System / Justification after a
+            // resend.
+            readOnly={false}
+          />
+        </Box>
+      )}
+    </>
+  );
+};
+
 // Round-L: peer-review gate has no dedicated record field — the
 // reviewer's remark is captured as the workflow transition comment
 // (rendered via stamp.comment as REMARK / JUSTIFICATION below the
@@ -734,6 +858,10 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
   const [eSignOpen, setESignOpen] = useState(false);
 
   const [deptComments, setDeptComments] = useState([]);
+  // Round-M (2026-06-27) tester CC-Point-1 · Issues 5+6: separate
+  // in-flight flag for the "Save Draft" action at the Initiation
+  // stage so it can spin independently of Submit-for-Review.
+  const [savingDraft, setSavingDraft] = useState(false);
   // lineItems state retired in Round-4 F1: the Draft StageSection now
   // mounts QmsLineItemsSection directly which fetches its own rows.
 
@@ -764,6 +892,17 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
     // (QA's) are now stored in separate columns so QA's Phase-2 textarea
     // doesn't pre-populate with the HOD's text.
     const fresh = {
+      // Round-M (2026-06-27) tester CC-Point-1 · Issues 5+6: after the
+      // Peer Reviewer / HOD sends the record back to DRAFT, the
+      // Initiator needs to edit the fields they originally captured on
+      // the Create dialog (Title, Product/Material, Change Type, Reason
+      // for Change). We seed these into the form state so the Draft
+      // edit view has controlled values.
+      title:                        record.title ?? '',
+      productMaterial:              record.productMaterial ?? '',
+      productMaterialCode:          record.productMaterialCode ?? '',
+      changeType:                   record.changeType ?? '',
+      changeReason:                 record.changeReason ?? '',
       initialAssessment:            record.initialAssessment ?? '',
       category:                     record.category ?? '',
       preRemark:                    record.preRemark ?? '',
@@ -884,6 +1023,16 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
     if (!record) return;
     setError(null);
 
+    // Round-M (2026-06-27) tester CC-Point-1 · Issues 5+6: "Save Draft"
+    // is a lightweight persist, not a workflow transition — it does
+    // not need the Remark / Justification field and does not need an
+    // e-signature. Go straight to doSubmit which will UPDATE the
+    // Initiator-editable fields and stop there.
+    if (action === 'saveDraft') {
+      doSubmit(action);
+      return;
+    }
+
     // Resend uses its own dedicated reason (gathered in the Resend dialog),
     // so the main panel's "Remark / Justification" can stay empty when the
     // reviewer is sending back without first filling other fields. Other
@@ -944,12 +1093,31 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
       }
     }
 
-    const flag = action === 'reject'  ? setRejecting
-              : action === 'resend'   ? setResending
-                                      : setSaving;
+    const flag = action === 'reject'    ? setRejecting
+              : action === 'resend'     ? setResending
+              : action === 'saveDraft'  ? setSavingDraft
+                                        : setSaving;
     flag(true);
     try {
-      if (effectiveFields.length > 0 && action !== 'reject' && action !== 'resend') {
+      // Round-M (2026-06-27) tester CC-Point-1 · Issues 5+6: persist
+      // the Initiator-editable fields whenever we act at DRAFT. Both
+      // "Save Draft" and "Submit for Review" need this write; without
+      // it Submit-for-Review would forward the *un-edited* record
+      // after a resend, silently losing the tester's fixes.
+      if (status === 'DRAFT'
+          && (action === 'submit' || action === 'saveDraft')) {
+        await updateChangeControlApi(record.id, {
+          title:               form.title ?? record.title,
+          priority:            record.priority,
+          productMaterial:     form.productMaterial ?? '',
+          productMaterialCode: form.productMaterialCode ?? '',
+          changeType:          form.changeType ?? '',
+          changeReason:        form.changeReason ?? '',
+        });
+      }
+
+      if (effectiveFields.length > 0 && action !== 'reject' && action !== 'resend'
+          && action !== 'saveDraft') {
         // Map UI keys back onto backend column names where needed
         const payload = {
           title:    record.title,
@@ -1018,6 +1186,14 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
         case 'submit':
           // Round-5 I1: DRAFT → PENDING_HOD via the dedicated submit endpoint.
           await submitChangeControlApi(record.id, effectiveComment);
+          break;
+        // Round-M (2026-06-27) tester CC-Point-1 · Issues 5+6:
+        // "Save Draft" persists Initiator edits without transitioning
+        // the record, so the Initiator can keep working after a
+        // resend without immediately forwarding to Peer Review.
+        case 'saveDraft':
+          // Payload write already happened above; nothing else to do
+          // here — no e-signature, no transition, no comment required.
           break;
         case 'approve':
           // Round-L (2026-06-27): when QA invited zero depts, the canonical
@@ -1213,14 +1389,16 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
           {effectiveHelper}
         </Typography>
 
-        {/* Round-L (2026-06-27): at the Initiation stage the Initiator
-            needs to see the fields they captured on the Create dialog
-            since there is no past-stage section yet. At Peer Review the
-            captured fields are already rendered in the (now past)
-            Initiation section above, so do NOT repeat them here. */}
+        {/* Round-M (2026-06-27) tester CC-Point-1 · Issues 5+6: at the
+            Initiation stage the Initiator can edit the fields they
+            originally captured (crucial after a Send-Back-to-Initiator).
+            Was previously RoDraftView (read-only) which blocked edits
+            after resend. At Peer Review the captured fields are already
+            rendered in the past Initiation section above, so we do NOT
+            re-render them here. */}
         {status === 'DRAFT' && (
           <Box sx={{ mb: 2 }}>
-            <RoDraftView record={record} />
+            <DraftEditView record={record} form={form} setForm={setForm} />
           </Box>
         )}
 
@@ -1503,6 +1681,25 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
           ? `${deptPending} department comment(s) still pending — forward is blocked.`
           : null}
       >
+        {/* Round-M (2026-06-27) tester CC-Point-1 · Issues 5+6:
+            "Save Draft" persists Initiator edits without forwarding
+            the record. Rendered only at DRAFT so it doesn't clutter
+            downstream stages. */}
+        {status === 'DRAFT' && (
+          <Tooltip title="Save Initiator edits without forwarding — record stays at Initiation">
+            <span>
+              <Button
+                variant="outlined" color="primary"
+                startIcon={<SaveIcon />}
+                onClick={() => submit('saveDraft')}
+                disabled={saving || savingDraft || rejecting || resending}
+              >
+                {savingDraft ? 'Saving…' : 'Save Draft'}
+              </Button>
+            </span>
+          </Tooltip>
+        )}
+
         <Tooltip title={blockForward
             ? `Cannot forward — ${deptPending} department comment(s) still pending`
             : `POST .../${desc.primary}?comment=…`}>
@@ -1512,7 +1709,7 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
               startIcon={desc.primary === 'close' ? <SaveIcon /> : <ForwardIcon />}
               color={desc.primary === 'close' ? 'success' : 'primary'}
               onClick={() => submit(desc.primary)}
-              disabled={saving || rejecting || resending || (!comment.trim() && !(status === 'PENDING_QA_REVIEW' && qaPhase === 1 && deptTotal > 0)) || blockForward}
+              disabled={saving || savingDraft || rejecting || resending || (!comment.trim() && !(status === 'PENDING_QA_REVIEW' && qaPhase === 1 && deptTotal > 0)) || blockForward}
             >
               {saving ? 'Saving…' : primaryLabel}
             </Button>
