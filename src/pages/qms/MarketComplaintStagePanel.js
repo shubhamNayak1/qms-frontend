@@ -7,7 +7,7 @@ import {
   Save as SaveIcon, ArrowForward as ForwardIcon, Cancel as RejectIcon,
 } from '@mui/icons-material';
 import {
-  updateComplaintApi, approveComplaintApi, rejectComplaintApi,
+  updateComplaintApi, approveComplaintApi, rejectComplaintApi, submitComplaintApi,
   closeComplaintApi, transitionComplaintApi,
 } from '../../api/qmsApi';
 import { listDeptCommentsApi } from '../../api/qmsCommonApi';
@@ -38,6 +38,16 @@ import { formatDate } from '../../utils/helpers';
  */
 
 const STAGE_DESCRIPTORS = {
+  // Round-M (2026-06-27) tester CC-Point-1 · Issues 5+6.
+  DRAFT: {
+    title: 'Initiation',
+    actor: 'Initiator',
+    helper: 'Review what you captured below. When ready, click Submit for Review to forward the complaint to a peer reviewer.',
+    fields: ['title','priority','customerName','productMaterial','batchNumber','complaintDescription'],
+    requiredFields: ['title'],
+    primary: 'submit',
+    primaryLabel: 'Submit for Review',
+  },
   // Round-L (2026-06-26): peer-review gate (see CAPA notes). For MC the
   // Initiator role is "Employee" — the dept Reviewer was previously the
   // one who submitted DRAFT → PENDING_HOD; now they get a dedicated
@@ -185,6 +195,8 @@ const MarketComplaintStagePanel = ({ record, onUpdated }) => {
   const [saving, setSaving]   = useState(false);
   const [rejecting, setRejecting] = useState(false);
   const [error, setError]     = useState(null);
+  // Round-M (2026-06-27) tester CC-Point-1 · Issues 5+6.
+  const [savingDraft, setSavingDraft] = useState(false);
 
   // Department-comment progress — pulled while at PENDING_DEPT_COMMENT so we
   // can block "Back to QA Investigation" until every requested dept has filled.
@@ -232,16 +244,29 @@ const MarketComplaintStagePanel = ({ record, onUpdated }) => {
     if (!record) return;
     setError(null);
 
-    if (!comment.trim()) {
+    // Round-M (2026-06-27) tester CC-Point-1 · Issues 5+6.
+    if (action !== 'saveDraft' && !comment.trim()) {
       setError('A comment is required for this action — it is recorded on the audit trail.');
       return;
     }
 
-    const flag = action === 'reject' ? setRejecting : setSaving;
+    const flag = action === 'reject'    ? setRejecting
+              : action === 'saveDraft'  ? setSavingDraft
+                                        : setSaving;
     flag(true);
     try {
-      // Step 1 — persist field updates if any.
-      if (desc.fields.length > 0 || status === 'PENDING_HEAD_QA') {
+      if (status === 'DRAFT' && (action === 'submit' || action === 'saveDraft')) {
+        await updateComplaintApi(record.id, {
+          title:                form.title                ?? record.title,
+          priority:             form.priority             ?? record.priority,
+          customerName:         form.customerName         ?? '',
+          productMaterial:      form.productMaterial      ?? '',
+          batchNumber:          form.batchNumber          ?? '',
+          complaintDescription: form.complaintDescription ?? '',
+        });
+      }
+      // Step 1 — persist field updates if any (non-DRAFT stages only).
+      if (status !== 'DRAFT' && (desc.fields.length > 0 || status === 'PENDING_HEAD_QA')) {
         const payload = {
           title:    record.title,
           priority: record.priority,
@@ -256,6 +281,12 @@ const MarketComplaintStagePanel = ({ record, onUpdated }) => {
 
       // Step 2 — workflow transition.
       switch (action) {
+        // Round-M — DRAFT actions.
+        case 'submit':
+          await submitComplaintApi(record.id, comment.trim());
+          break;
+        case 'saveDraft':
+          break;
         case 'approve':
           await approveComplaintApi(record.id, comment.trim());
           break;
@@ -426,27 +457,32 @@ const MarketComplaintStagePanel = ({ record, onUpdated }) => {
         </Alert>
       )}
 
-      {/* Round-L (2026-06-27): show captured fields only at Initiation —
-          at Peer Review the past Initiation section already renders them.
-          MC has no line items, so disable that block in the shared view. */}
+      {/* Round-M (2026-06-27) tester CC-Point-1 · Issues 5+6. MC has no
+          line items, so disable that block in the shared view. */}
       {status === 'DRAFT' && (
         <Box sx={{ mb: 2 }}>
           <InitiatorSubmissionView
             record={record}
             commonSlug="market-complaint"
             showLineItems={false}
-            extras={[
-              { label: 'Priority',          value: record.priority },
-              { label: 'Customer Name',     value: record.customerName },
-              { label: 'Product / Material', value: record.productMaterial },
-              { label: 'Batch No.',         value: record.batchNumber },
-              { label: 'Received On',       value: record.complaintReceivedDate ? formatDate(record.complaintReceivedDate) : null },
+            editable
+            form={form}
+            setForm={setForm}
+            isResend={(record?.resendCount ?? 0) > 0}
+            editableFields={[
+              { key: 'title',                label: 'Title',              type: 'text',     xs: 12, required: true },
+              { key: 'priority',             label: 'Priority',           type: 'select',   xs: 6,
+                options: ['LOW','MEDIUM','HIGH','CRITICAL'] },
+              { key: 'customerName',         label: 'Customer Name',      type: 'text',     xs: 6 },
+              { key: 'productMaterial',      label: 'Product / Material', type: 'text',     xs: 6 },
+              { key: 'batchNumber',          label: 'Batch No.',          type: 'text',     xs: 6 },
+              { key: 'complaintDescription', label: 'Complaint Description', type: 'textarea', xs: 12 },
             ]}
           />
         </Box>
       )}
 
-      {desc.fields.length > 0 && (
+      {status !== 'DRAFT' && desc.fields.length > 0 && (
         <Grid container spacing={2} sx={{ mb: 2 }}>
           {desc.fields.map((f) => (
             <FieldEditor key={f} name={f} form={form} setForm={setForm} />
@@ -471,6 +507,21 @@ const MarketComplaintStagePanel = ({ record, onUpdated }) => {
           ? `${deptPending} department comment(s) still pending — forward is blocked.`
           : null}
       >
+        {/* Round-M (2026-06-27) — Save Draft at DRAFT. */}
+        {status === 'DRAFT' && (
+          <Tooltip title="Save edits without forwarding — record stays at Initiation">
+            <span>
+              <Button
+                variant="outlined" color="primary" startIcon={<SaveIcon />}
+                onClick={() => submit('saveDraft')}
+                disabled={saving || savingDraft || rejecting}
+              >
+                {savingDraft ? 'Saving…' : 'Save Draft'}
+              </Button>
+            </span>
+          </Tooltip>
+        )}
+
         <Tooltip title={blockForward
             ? `Cannot advance — ${deptPending} department comment(s) still pending`
             : `POST .../${desc.primary}?comment=…`}>
@@ -480,7 +531,7 @@ const MarketComplaintStagePanel = ({ record, onUpdated }) => {
               startIcon={desc.primary === 'close' ? <SaveIcon /> : <ForwardIcon />}
               color={desc.primary === 'close' ? 'success' : 'primary'}
               onClick={() => submit(desc.primary)}
-              disabled={saving || rejecting || !comment.trim() || blockForward}
+              disabled={saving || savingDraft || rejecting || !comment.trim() || blockForward}
             >
               {saving ? 'Saving…' : desc.primaryLabel}
             </Button>

@@ -8,7 +8,7 @@ import {
 } from '@mui/icons-material';
 import {
   updateCapaApi, approveCapaApi, rejectCapaApi,
-  closeCapaApi, transitionCapaApi,
+  closeCapaApi, transitionCapaApi, submitCapaApi,
 } from '../../api/qmsApi';
 import { listDeptCommentsApi } from '../../api/qmsCommonApi';
 import { useAuth } from '../../store/AuthContext';
@@ -39,6 +39,19 @@ import { formatDate } from '../../utils/helpers';
  */
 
 const STAGE_DESCRIPTORS = {
+  // Round-M (2026-06-27) tester CC-Point-1 · Issues 5+6: DRAFT gains a
+  // descriptor so the panel renders when the record is bounced back to
+  // the Initiator. Fields listed here are the Initiator-editable ones;
+  // Save Draft persists them, Submit for Review forwards to PEER Review.
+  DRAFT: {
+    title: 'Initiation',
+    actor: 'Initiator',
+    helper: 'Review what you captured below. When ready, click Submit for Review to forward the record to a peer reviewer in your department.',
+    fields: ['title','priority','capaType','source','description'],
+    requiredFields: ['title'],
+    primary: 'submit',
+    primaryLabel: 'Submit for Review',
+  },
   // Round-L (2026-06-26): peer-review gate between DRAFT and PENDING_HOD.
   // A different user in the originating dept (is_dept_reviewer) verifies
   // the captured fields and forwards to HOD.
@@ -254,6 +267,8 @@ const CapaStagePanel = ({ record, onUpdated }) => {
   const [saving, setSaving]   = useState(false);
   const [rejecting, setRejecting] = useState(false);
   const [error, setError]     = useState(null);
+  // Round-M (2026-06-27) tester CC-Point-1 · Issues 5+6.
+  const [savingDraft, setSavingDraft] = useState(false);
 
   // Closure dialog state — Head QA picks frequency + count when closing.
   const [freq, setFreq]       = useState('QUARTERLY');
@@ -347,18 +362,42 @@ const CapaStagePanel = ({ record, onUpdated }) => {
     if (!record) return;
     setError(null);
 
-    if (!comment.trim()) {
+    // Round-M (2026-06-27) tester CC-Point-1 · Issues 5+6: at DRAFT
+    // "Save Draft" is a lightweight persist (no remark, no transition)
+    // and Submit-for-Review carries an audit-trail comment as usual.
+    // saveDraft short-circuits the required-remark check.
+    if (action !== 'saveDraft' && !comment.trim() && status !== 'DRAFT') {
       setError('A comment is required for this action — it is recorded on the audit trail.');
       return;
     }
+    if (status === 'DRAFT' && action === 'submit' && !comment.trim()) {
+      setError('Please enter a Remark / Justification for the audit trail before submitting.');
+      return;
+    }
 
-    const flag = action === 'reject' ? setRejecting : setSaving;
+    const flag = action === 'reject'    ? setRejecting
+              : action === 'saveDraft'  ? setSavingDraft
+                                        : setSaving;
     flag(true);
     try {
+      // Round-M — persist Initiator-editable fields at DRAFT for both
+      // Save Draft and Submit-for-Review so edits made after Send-Back
+      // are never silently forwarded un-saved.
+      if (status === 'DRAFT' && (action === 'submit' || action === 'saveDraft')) {
+        await updateCapaApi(record.id, {
+          title:       form.title       ?? record.title,
+          priority:    form.priority    ?? record.priority,
+          capaType:    form.capaType    ?? '',
+          source:      form.source      ?? '',
+          description: form.description ?? '',
+        });
+      }
+
       // Step 1 — persist field updates if any. For the closing moment we
       // also stamp assessment_frequency + assessment_count so the engine
       // seeds the assessment cycles when close fires.
-      if (desc.fields.length > 0 || isClosingMoment || status === 'PENDING_HEAD_QA') {
+      if (status !== 'DRAFT' &&
+          (desc.fields.length > 0 || isClosingMoment || status === 'PENDING_HEAD_QA')) {
         const payload = {
           title:    record.title,
           priority: record.priority,
@@ -376,6 +415,13 @@ const CapaStagePanel = ({ record, onUpdated }) => {
       }
 
       switch (action) {
+        // Round-M (2026-06-27) — DRAFT actions.
+        case 'submit':
+          await submitCapaApi(record.id, comment.trim());
+          break;
+        case 'saveDraft':
+          // Field payload already persisted above; nothing else to do.
+          break;
         case 'approve':
           // Closing moment: PENDING_VERIFICATION_REVIEW → CLOSED uses the
           // close endpoint so the engine seeds the assessment lifecycle.
@@ -556,24 +602,34 @@ const CapaStagePanel = ({ record, onUpdated }) => {
         </Box>
       )}
 
-      {/* Round-L (2026-06-27): show captured fields only at Initiation —
-          at Peer Review the past Initiation section already renders them
-          so we don't duplicate. */}
+      {/* Round-M (2026-06-27) tester CC-Point-1 · Issues 5+6: Initiator-
+          editable fields at DRAFT. At Peer Review the past Initiation
+          section already renders these read-only, so we skip there. */}
       {status === 'DRAFT' && (
         <Box sx={{ mb: 2 }}>
           <InitiatorSubmissionView
             record={record}
             commonSlug="capa"
-            extras={[
-              { label: 'Priority',           value: record.priority },
-              { label: 'Source Record Type', value: record.sourceRecordType },
-              { label: 'Source Record No.',  value: record.sourceRecordNumber },
+            editable
+            form={form}
+            setForm={setForm}
+            isResend={(record?.resendCount ?? 0) > 0}
+            editableFields={[
+              { key: 'title',       label: 'Title',       type: 'text',     xs: 12, required: true },
+              { key: 'priority',    label: 'Priority',    type: 'select',   xs: 6,
+                options: ['LOW','MEDIUM','HIGH','CRITICAL'] },
+              { key: 'capaType',    label: 'CAPA Type',   type: 'select',   xs: 6,
+                options: ['Corrective','Preventive','Both'] },
+              { key: 'source',      label: 'Source',      type: 'text',     xs: 12 },
+              { key: 'description', label: 'Description', type: 'textarea', xs: 12 },
             ]}
           />
         </Box>
       )}
 
-      {desc.fields.length > 0 && (
+      {/* Round-M (2026-06-27) — skip at DRAFT since InitiatorSubmissionView
+          already renders the editable Initiator fields above. */}
+      {status !== 'DRAFT' && desc.fields.length > 0 && (
         <Grid container spacing={2} sx={{ mb: 2 }}>
           {desc.fields.map((f) => (
             <FieldEditor key={f} name={f} form={form} setForm={setForm} />
@@ -625,6 +681,23 @@ const CapaStagePanel = ({ record, onUpdated }) => {
           ? `${deptPending} department comment(s) still pending — forward is blocked.`
           : null}
       >
+        {/* Round-M (2026-06-27) tester CC-Point-1 · Issues 5+6: Save
+            Draft button at DRAFT so Initiator edits persist without
+            forwarding. */}
+        {status === 'DRAFT' && (
+          <Tooltip title="Save edits without forwarding — record stays at Initiation">
+            <span>
+              <Button
+                variant="outlined" color="primary" startIcon={<SaveIcon />}
+                onClick={() => submit('saveDraft')}
+                disabled={saving || savingDraft || rejecting}
+              >
+                {savingDraft ? 'Saving…' : 'Save Draft'}
+              </Button>
+            </span>
+          </Tooltip>
+        )}
+
         <Tooltip title={blockForward
             ? `Cannot advance — ${deptPending} department comment(s) still pending`
             : `POST .../${desc.primary}?comment=…`}>
@@ -633,8 +706,11 @@ const CapaStagePanel = ({ record, onUpdated }) => {
               variant="contained"
               startIcon={isClosingMoment ? <SaveIcon /> : <ForwardIcon />}
               color={isClosingMoment ? 'success' : 'primary'}
-              onClick={() => submit('approve')}
-              disabled={saving || rejecting || !comment.trim() || blockForward}
+              // Round-M — dispatch to the descriptor's primary action so
+              // DRAFT calls 'submit' (submitCapaApi) and other stages
+              // keep calling 'approve'.
+              onClick={() => submit(desc.primary || 'approve')}
+              disabled={saving || savingDraft || rejecting || !comment.trim() || blockForward}
             >
               {saving ? 'Saving…' : (isClosingMoment ? 'Approve & Close CAPA' : desc.primaryLabel)}
             </Button>

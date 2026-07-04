@@ -8,7 +8,7 @@ import {
   CallSplit as SpawnIcon,
 } from '@mui/icons-material';
 import {
-  updateIncidentApi, approveIncidentApi, rejectIncidentApi,
+  updateIncidentApi, approveIncidentApi, rejectIncidentApi, submitIncidentApi,
   closeIncidentApi, transitionIncidentApi,
   spawnDeviationFromIncidentApi,
 } from '../../api/qmsApi';
@@ -42,6 +42,16 @@ import { formatDate } from '../../utils/helpers';
  */
 
 const STAGE_DESCRIPTORS = {
+  // Round-M (2026-06-27) tester CC-Point-1 · Issues 5+6.
+  DRAFT: {
+    title: 'Initiation',
+    actor: 'Initiator',
+    helper: 'Review what you captured below. When ready, click Submit for Review to forward the record to a peer reviewer.',
+    fields: ['title','priority','incidentSubType','incidentType','severity','location','description'],
+    requiredFields: ['title'],
+    primary: 'submit',
+    primaryLabel: 'Submit for Review',
+  },
   // Round-L (2026-06-26): peer-review gate (see CAPA notes).
   PENDING_REVIEW: {
     title: 'Peer Review',
@@ -281,6 +291,8 @@ const IncidentStagePanel = ({ record, onUpdated }) => {
   const [rejecting, setRejecting] = useState(false);
   const [spawning, setSpawning] = useState(false);
   const [error, setError]     = useState(null);
+  // Round-M (2026-06-27) tester CC-Point-1 · Issues 5+6.
+  const [savingDraft, setSavingDraft] = useState(false);
 
   const [deptComments, setDeptComments] = useState([]);
 
@@ -364,17 +376,31 @@ const IncidentStagePanel = ({ record, onUpdated }) => {
     if (!record) return;
     setError(null);
 
-    if (!comment.trim()) {
+    // Round-M (2026-06-27) tester CC-Point-1 · Issues 5+6.
+    if (action !== 'saveDraft' && !comment.trim()) {
       setError('A comment is required for this action — it is recorded on the audit trail.');
       return;
     }
 
-    const flag = action === 'reject' ? setRejecting
-                : action === 'spawn'  ? setSpawning
-                                       : setSaving;
+    const flag = action === 'reject'    ? setRejecting
+                : action === 'spawn'    ? setSpawning
+                : action === 'saveDraft'? setSavingDraft
+                                        : setSaving;
     flag(true);
     try {
-      if ((desc.fields.length > 0 || status === 'PENDING_HEAD_QA') && action !== 'spawn') {
+      if (status === 'DRAFT' && (action === 'submit' || action === 'saveDraft')) {
+        await updateIncidentApi(record.id, {
+          title:           form.title           ?? record.title,
+          priority:        form.priority        ?? record.priority,
+          incidentSubType: form.incidentSubType ?? '',
+          incidentType:    form.incidentType    ?? '',
+          severity:        form.severity        ?? '',
+          location:        form.location        ?? '',
+          description:     form.description     ?? '',
+        });
+      }
+      if (status !== 'DRAFT'
+          && (desc.fields.length > 0 || status === 'PENDING_HEAD_QA') && action !== 'spawn') {
         const payload = {
           title:    record.title,
           priority: record.priority,
@@ -388,6 +414,12 @@ const IncidentStagePanel = ({ record, onUpdated }) => {
       }
 
       switch (action) {
+        // Round-M — DRAFT actions.
+        case 'submit':
+          await submitIncidentApi(record.id, comment.trim());
+          break;
+        case 'saveDraft':
+          break;
         case 'approve':
           await approveIncidentApi(record.id, comment.trim());
           break;
@@ -580,23 +612,37 @@ const IncidentStagePanel = ({ record, onUpdated }) => {
         </Box>
       )}
 
-      {/* Round-L (2026-06-27): show captured fields only at Initiation —
-          at Peer Review the past Initiation section already renders them. */}
+      {/* Round-M (2026-06-27) tester CC-Point-1 · Issues 5+6. */}
       {status === 'DRAFT' && (
         <Box sx={{ mb: 2 }}>
           <InitiatorSubmissionView
             record={record}
             commonSlug="incident"
-            extras={[
-              { label: 'Priority',         value: record.priority },
-              { label: 'Incident Sub-Type', value: record.incidentSubType },
-              { label: 'Occurred On',      value: record.occurredAt ? formatDate(record.occurredAt) : null },
+            editable
+            form={form}
+            setForm={setForm}
+            isResend={(record?.resendCount ?? 0) > 0}
+            editableFields={[
+              { key: 'title',           label: 'Title',       type: 'text',     xs: 12, required: true },
+              { key: 'priority',        label: 'Priority',    type: 'select',   xs: 6,
+                options: ['LOW','MEDIUM','HIGH','CRITICAL'] },
+              { key: 'incidentSubType', label: 'Sub-Type',    type: 'select',   xs: 6,
+                options: ['LABORATORY','GENERAL'] },
+              { key: 'incidentType',    label: 'Incident Type', type: 'select', xs: 6,
+                options: ['Safety','Quality','Environmental','Equipment','Personnel'] },
+              { key: 'severity',        label: 'Severity',    type: 'select',   xs: 6,
+                options: ['Minor','Major','Critical'] },
+              { key: 'location',        label: 'Location',    type: 'text',     xs: 12 },
+              { key: 'description',     label: 'Description', type: 'textarea', xs: 12 },
             ]}
           />
         </Box>
       )}
 
-      {desc.fields.length > 0 && (
+      {/* Round-M (2026-06-27) — at DRAFT the Initiator-editable fields
+          are rendered by InitiatorSubmissionView above; don't duplicate
+          via FieldEditor here. */}
+      {status !== 'DRAFT' && desc.fields.length > 0 && (
         <Grid container spacing={2} sx={{ mb: 2 }}>
           {desc.fields.map((f) => (
             <FieldEditor key={f} name={f} form={form} setForm={setForm} record={record} />
@@ -621,6 +667,21 @@ const IncidentStagePanel = ({ record, onUpdated }) => {
           ? `${deptPending} department comment(s) still pending — forward is blocked.`
           : null}
       >
+        {/* Round-M (2026-06-27) — Save Draft at DRAFT. */}
+        {status === 'DRAFT' && (
+          <Tooltip title="Save edits without forwarding — record stays at Initiation">
+            <span>
+              <Button
+                variant="outlined" color="primary" startIcon={<SaveIcon />}
+                onClick={() => submit('saveDraft')}
+                disabled={saving || savingDraft || rejecting || spawning}
+              >
+                {savingDraft ? 'Saving…' : 'Save Draft'}
+              </Button>
+            </span>
+          </Tooltip>
+        )}
+
         <Tooltip title={blockForward
             ? `Cannot advance — ${deptPending} department comment(s) still pending`
             : `POST .../${desc.primary}?comment=…`}>
@@ -630,7 +691,7 @@ const IncidentStagePanel = ({ record, onUpdated }) => {
               startIcon={desc.primary === 'close' ? <SaveIcon /> : <ForwardIcon />}
               color={desc.primary === 'close' ? 'success' : 'primary'}
               onClick={() => submit(desc.primary)}
-              disabled={saving || rejecting || spawning || !comment.trim() || blockForward}
+              disabled={saving || savingDraft || rejecting || spawning || !comment.trim() || blockForward}
             >
               {saving ? 'Saving…' : desc.primaryLabel}
             </Button>

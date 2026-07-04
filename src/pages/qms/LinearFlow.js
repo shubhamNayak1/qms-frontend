@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  Box, Typography, Stack, Chip, Paper, Divider, Alert, Grid,
+  Box, Typography, Stack, Chip, Paper, Divider, Alert, Grid, TextField,
 } from '@mui/material';
 import {
   CheckCircle as PastIcon,
@@ -88,6 +88,21 @@ export const InitiatorSubmissionView = ({
   commonSlug,
   extras = [],
   showLineItems = true,
+  // Round-M (2026-06-27) tester CC-Point-1 · Issues 5+6: optional
+  // edit mode used by the four QMS modules that lack a per-module
+  // Draft editor of their own. When editable=true, the caller supplies
+  // `form` + `setForm` for controlled state and `editableFields`
+  // describing the schema. Fields not in the schema still render as
+  // read-only rows via the `extras` list.
+  //
+  // Schema entry shape:
+  //   { key, label, type: 'text'|'textarea'|'select'|'date',
+  //     options?: string[], xs?: number, required?: boolean }
+  editable = false,
+  form,
+  setForm,
+  editableFields = [],
+  isResend = false,
 }) => {
   if (!record) return null;
   const dash = (v) => (v == null || v === '' ? '—' : v);
@@ -95,9 +110,10 @@ export const InitiatorSubmissionView = ({
   // advanced past Peer Review — at HOD Assessment or later the
   // instruction is stale and the past-section is just a reference.
   const showHelperBanner = record?.status === 'DRAFT' || record?.status === 'PENDING_REVIEW';
+  const setField = (k) => (e) => setForm?.((f) => ({ ...f, [k]: e.target.value }));
   return (
     <>
-      {showHelperBanner && (
+      {showHelperBanner && !editable && (
         <Alert severity="info" icon={false} sx={{ mb: 1.5, py: 0.6 }}>
           <Typography variant="caption" sx={{ display: 'block' }}>
             <strong>The fields below were captured by the Initiator on the Create dialog.</strong>
@@ -105,34 +121,110 @@ export const InitiatorSubmissionView = ({
           </Typography>
         </Alert>
       )}
-      <Grid container spacing={1.2}>
-        <Grid item xs={6}>
-          <Typography variant="body2"><strong>Title:</strong> {dash(record.title)}</Typography>
-        </Grid>
-        <Grid item xs={6}>
-          <Typography variant="body2"><strong>Record No.:</strong> {dash(record.recordNumber)}</Typography>
-        </Grid>
-        <Grid item xs={6}>
-          <Typography variant="body2"><strong>Raised By:</strong> {dash(record.raisedByName || record.createdBy)}</Typography>
-        </Grid>
-        <Grid item xs={6}>
-          <Typography variant="body2"><strong>Raised On:</strong> {record.createdAt ? formatDate(record.createdAt) : '—'}</Typography>
-        </Grid>
-        <Grid item xs={6}>
-          <Typography variant="body2"><strong>Department:</strong> {dash(record.department)}</Typography>
-        </Grid>
-        {extras.filter(e => e && e.label).map((e, i) => (
-          <Grid item xs={6} key={`extra-${i}`}>
-            <Typography variant="body2"><strong>{e.label}:</strong> {dash(e.value)}</Typography>
+      {editable && (
+        <Alert severity={isResend ? 'warning' : 'info'} icon={false}
+               sx={{ mb: 1.5, py: 0.6 }}>
+          <Typography variant="caption" sx={{ display: 'block' }}>
+            {isResend
+              ? <><strong>Record was sent back for edits.</strong>{' '}
+                  Update the fields below, then click <em>Save Draft</em>{' '}
+                  to persist changes or <em>Submit for Review</em> to
+                  forward the corrected record.</>
+              : <><strong>Initiator draft — every field below is editable.</strong>{' '}
+                  Save Draft to keep working; Submit for Review to
+                  forward to a peer reviewer in your department.</>}
+          </Typography>
+        </Alert>
+      )}
+      {editable ? (
+        <Grid container spacing={1.4}>
+          {/* Always-read-only header row so the Initiator sees the
+              generated record number + who/when/where alongside the
+              editable inputs. */}
+          <Grid item xs={6}>
+            <Typography variant="body2" sx={{ pt: 0.4 }}>
+              <strong>Record No.:</strong> {dash(record.recordNumber)}
+            </Typography>
           </Grid>
-        ))}
-        {record.description && (
-          <Grid item xs={12}>
-            <Typography variant="body2"><strong>Description:</strong></Typography>
-            <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', pl: 1 }}>{record.description}</Typography>
+          <Grid item xs={6}>
+            <Typography variant="body2" sx={{ pt: 0.4 }}>
+              <strong>Raised By:</strong> {dash(record.raisedByName || record.createdBy)}
+            </Typography>
           </Grid>
-        )}
-      </Grid>
+          <Grid item xs={6}>
+            <Typography variant="body2" sx={{ pt: 0.4 }}>
+              <strong>Raised On:</strong> {record.createdAt ? formatDate(record.createdAt) : '—'}
+            </Typography>
+          </Grid>
+          <Grid item xs={6}>
+            <Typography variant="body2" sx={{ pt: 0.4 }}>
+              <strong>Department:</strong> {dash(record.department)}
+            </Typography>
+          </Grid>
+
+          {editableFields.map((f) => (
+            <Grid item xs={f.xs ?? 6} key={f.key}>
+              {f.type === 'select' ? (
+                <TextField
+                  label={f.label} select fullWidth size="small"
+                  required={!!f.required}
+                  value={form?.[f.key] ?? ''} onChange={setField(f.key)}
+                  SelectProps={{ native: true }}
+                  inputProps={{ autoComplete: 'off' }}>
+                  <option value=""></option>
+                  {(f.options || []).map((o) =>
+                    <option key={o} value={o}>{o}</option>)}
+                </TextField>
+              ) : f.type === 'date' ? (
+                <TextField
+                  label={f.label} type="date" fullWidth size="small"
+                  required={!!f.required}
+                  value={form?.[f.key] ?? ''} onChange={setField(f.key)}
+                  InputLabelProps={{ shrink: true }}
+                  helperText="DD/MM/YYYY"
+                  inputProps={{ autoComplete: 'off' }} />
+              ) : (
+                <TextField
+                  label={f.label} fullWidth size="small"
+                  required={!!f.required}
+                  multiline={f.type === 'textarea'}
+                  minRows={f.type === 'textarea' ? 2 : undefined}
+                  value={form?.[f.key] ?? ''} onChange={setField(f.key)}
+                  inputProps={{ autoComplete: 'off' }} />
+              )}
+            </Grid>
+          ))}
+        </Grid>
+      ) : (
+        <Grid container spacing={1.2}>
+          <Grid item xs={6}>
+            <Typography variant="body2"><strong>Title:</strong> {dash(record.title)}</Typography>
+          </Grid>
+          <Grid item xs={6}>
+            <Typography variant="body2"><strong>Record No.:</strong> {dash(record.recordNumber)}</Typography>
+          </Grid>
+          <Grid item xs={6}>
+            <Typography variant="body2"><strong>Raised By:</strong> {dash(record.raisedByName || record.createdBy)}</Typography>
+          </Grid>
+          <Grid item xs={6}>
+            <Typography variant="body2"><strong>Raised On:</strong> {record.createdAt ? formatDate(record.createdAt) : '—'}</Typography>
+          </Grid>
+          <Grid item xs={6}>
+            <Typography variant="body2"><strong>Department:</strong> {dash(record.department)}</Typography>
+          </Grid>
+          {extras.filter(e => e && e.label).map((e, i) => (
+            <Grid item xs={6} key={`extra-${i}`}>
+              <Typography variant="body2"><strong>{e.label}:</strong> {dash(e.value)}</Typography>
+            </Grid>
+          ))}
+          {record.description && (
+            <Grid item xs={12}>
+              <Typography variant="body2"><strong>Description:</strong></Typography>
+              <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', pl: 1 }}>{record.description}</Typography>
+            </Grid>
+          )}
+        </Grid>
+      )}
       {showLineItems && record?.id && (
         <Box sx={{ mt: 1.8 }}>
           <Typography variant="caption" sx={{ display: 'block', fontWeight: 700, letterSpacing: 0.4, mb: 0.5, color: 'text.secondary' }}>
@@ -141,7 +233,7 @@ export const InitiatorSubmissionView = ({
           <QmsLineItemsSection
             commonSlug={commonSlug}
             recordId={record.id}
-            readOnly
+            readOnly={!editable}
           />
         </Box>
       )}

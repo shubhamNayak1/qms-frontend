@@ -7,7 +7,7 @@ import {
   Save as SaveIcon, ArrowForward as ForwardIcon, Cancel as RejectIcon,
 } from '@mui/icons-material';
 import {
-  updateDeviationApi, approveDeviationApi, rejectDeviationApi,
+  updateDeviationApi, approveDeviationApi, rejectDeviationApi, submitDeviationApi,
   closeDeviationApi, transitionDeviationApi,
 } from '../../api/qmsApi';
 import { listDeptCommentsApi } from '../../api/qmsCommonApi';
@@ -35,6 +35,16 @@ import { formatDate } from '../../utils/helpers';
  */
 
 const STAGE_DESCRIPTORS = {
+  // Round-M (2026-06-27) tester CC-Point-1 · Issues 5+6.
+  DRAFT: {
+    title: 'Initiation',
+    actor: 'Initiator',
+    helper: 'Review what you captured below. When ready, click Submit for Review to forward the record to a peer reviewer.',
+    fields: ['title','priority','deviationType','productBatch','processArea','description'],
+    requiredFields: ['title'],
+    primary: 'submit',
+    primaryLabel: 'Submit for Review',
+  },
   // Round-L (2026-06-26): peer-review gate (see CAPA notes).
   PENDING_REVIEW: {
     title: 'Peer Review',
@@ -274,6 +284,8 @@ const DeviationStagePanel = ({ record, onUpdated }) => {
   const [comment, setComment] = useState('');
   const [saving, setSaving]   = useState(false);
   const [rejecting, setRejecting] = useState(false);
+  // Round-M (2026-06-27) tester CC-Point-1 · Issues 5+6.
+  const [savingDraft, setSavingDraft] = useState(false);
   const [error, setError]     = useState(null);
 
   const [deptComments, setDeptComments] = useState([]);
@@ -322,15 +334,30 @@ const DeviationStagePanel = ({ record, onUpdated }) => {
     if (!record) return;
     setError(null);
 
-    if (!comment.trim()) {
+    // Round-M (2026-06-27) tester CC-Point-1 · Issues 5+6: Save Draft
+    // skips the remark requirement; Submit-for-Review still needs one.
+    if (action !== 'saveDraft' && !comment.trim()) {
       setError('A comment is required for this action — it is recorded on the audit trail.');
       return;
     }
 
-    const flag = action === 'reject' ? setRejecting : setSaving;
+    const flag = action === 'reject'    ? setRejecting
+              : action === 'saveDraft'  ? setSavingDraft
+                                        : setSaving;
     flag(true);
     try {
-      if (desc.fields.length > 0 || status === 'PENDING_HEAD_QA') {
+      if (status === 'DRAFT' && (action === 'submit' || action === 'saveDraft')) {
+        await updateDeviationApi(record.id, {
+          title:         form.title         ?? record.title,
+          priority:      form.priority      ?? record.priority,
+          deviationType: form.deviationType ?? '',
+          productBatch:  form.productBatch  ?? '',
+          processArea:   form.processArea   ?? '',
+          description:   form.description   ?? '',
+        });
+      }
+
+      if (status !== 'DRAFT' && (desc.fields.length > 0 || status === 'PENDING_HEAD_QA')) {
         const payload = {
           title:    record.title,
           priority: record.priority,
@@ -344,6 +371,12 @@ const DeviationStagePanel = ({ record, onUpdated }) => {
       }
 
       switch (action) {
+        // Round-M — DRAFT actions.
+        case 'submit':
+          await submitDeviationApi(record.id, comment.trim());
+          break;
+        case 'saveDraft':
+          break;
         case 'approve':
           await approveDeviationApi(record.id, comment.trim());
           break;
@@ -519,23 +552,34 @@ const DeviationStagePanel = ({ record, onUpdated }) => {
         </Box>
       )}
 
-      {/* Round-L (2026-06-27): show captured fields only at Initiation —
-          at Peer Review the past Initiation section already renders them. */}
+      {/* Round-M (2026-06-27) tester CC-Point-1 · Issues 5+6: Initiator-
+          editable fields at DRAFT. Past Initiation section keeps the
+          read-only view via the past-stage renderer above. */}
       {status === 'DRAFT' && (
         <Box sx={{ mb: 2 }}>
           <InitiatorSubmissionView
             record={record}
             commonSlug="deviation"
-            extras={[
-              { label: 'Priority',         value: record.priority },
-              { label: 'Deviation Type',   value: record.deviationType },
-              { label: 'Occurred On',      value: record.occurredAt ? formatDate(record.occurredAt) : null },
+            editable
+            form={form}
+            setForm={setForm}
+            isResend={(record?.resendCount ?? 0) > 0}
+            editableFields={[
+              { key: 'title',         label: 'Title',           type: 'text',     xs: 12, required: true },
+              { key: 'priority',      label: 'Priority',        type: 'select',   xs: 6,
+                options: ['LOW','MEDIUM','HIGH','CRITICAL'] },
+              { key: 'deviationType', label: 'Deviation Type',  type: 'text',     xs: 6 },
+              { key: 'productBatch',  label: 'Product / Batch', type: 'text',     xs: 6 },
+              { key: 'processArea',   label: 'Process Area',    type: 'text',     xs: 6 },
+              { key: 'description',   label: 'Description',     type: 'textarea', xs: 12 },
             ]}
           />
         </Box>
       )}
 
-      {desc.fields.length > 0 && (
+      {/* Round-M (2026-06-27) — DRAFT edits rendered by
+          InitiatorSubmissionView above, not here. */}
+      {status !== 'DRAFT' && desc.fields.length > 0 && (
         <Grid container spacing={2} sx={{ mb: 2 }}>
           {desc.fields.map((f) => (
             <FieldEditor key={f} name={f} form={form} setForm={setForm} />
@@ -560,6 +604,21 @@ const DeviationStagePanel = ({ record, onUpdated }) => {
           ? `${deptPending} department comment(s) still pending — forward is blocked.`
           : null}
       >
+        {/* Round-M (2026-06-27) — Save Draft at DRAFT. */}
+        {status === 'DRAFT' && (
+          <Tooltip title="Save edits without forwarding — record stays at Initiation">
+            <span>
+              <Button
+                variant="outlined" color="primary" startIcon={<SaveIcon />}
+                onClick={() => submit('saveDraft')}
+                disabled={saving || savingDraft || rejecting}
+              >
+                {savingDraft ? 'Saving…' : 'Save Draft'}
+              </Button>
+            </span>
+          </Tooltip>
+        )}
+
         <Tooltip title={blockForward
             ? `Cannot advance — ${deptPending} department comment(s) still pending`
             : `POST .../${desc.primary}?comment=…`}>
@@ -569,7 +628,7 @@ const DeviationStagePanel = ({ record, onUpdated }) => {
               startIcon={desc.primary === 'close' ? <SaveIcon /> : <ForwardIcon />}
               color={desc.primary === 'close' ? 'success' : 'primary'}
               onClick={() => submit(desc.primary)}
-              disabled={saving || rejecting || !comment.trim() || blockForward}
+              disabled={saving || savingDraft || rejecting || !comment.trim() || blockForward}
             >
               {saving ? 'Saving…' : desc.primaryLabel}
             </Button>
