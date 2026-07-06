@@ -34,7 +34,12 @@ import { formatDateTime } from '../../utils/helpers';
  *                          May 2026 tester feedback). The server is still
  *                          authoritative.
  */
-const QmsDepartmentCommentsSection = ({ commonSlug, recordId, currentUser, recordTargetDate, onChange }) => {
+// Round-N (2026-07-04) tester CC-Point-2 · Issue 5: `frozen` prop
+// disables Request-comment and remove icons. Panels pass frozen=true
+// once the record has advanced past the QA invite stage so QA can no
+// longer add/remove departments after the record was routed for
+// comment.
+const QmsDepartmentCommentsSection = ({ commonSlug, recordId, currentUser, recordTargetDate, onChange, frozen = false }) => {
   const [rows, setRows]               = useState([]);
   const [departments, setDepartments] = useState([]);
   const [loading, setLoading]         = useState(false);
@@ -158,10 +163,9 @@ const QmsDepartmentCommentsSection = ({ commonSlug, recordId, currentUser, recor
   // Round-L (2026-06-27): show the remove icon on every PENDING row.
   // The backend gates which actors may actually delete (QA Reviewer /
   // QA Head / SUPER_ADMIN) — mirroring how canFill is just a heuristic.
-  // Hiding the icon based on optimistically-derived role flags led to
-  // testers not seeing it at all because the currentUser DTO doesn't
-  // expose isQaReviewer / isQaHead directly.
-  const canRemove = (row) => row.status === 'PENDING';
+  // Round-N (2026-07-04): freeze after the record moves past the QA
+  // invite stage so QA cannot swap the dept list mid-review.
+  const canRemove = (row) => !frozen && row.status === 'PENDING';
 
   const handleRemove = async (row) => {
     if (!window.confirm(`Remove ${row.departmentName} from the requested departments?`)) return;
@@ -184,9 +188,18 @@ const QmsDepartmentCommentsSection = ({ commonSlug, recordId, currentUser, recor
         <Tooltip title="Refresh"><IconButton size="small" onClick={fetch}>
           <RefreshIcon fontSize="inherit" />
         </IconButton></Tooltip>
-        <Button size="small" startIcon={<AddIcon />} onClick={() => setReqOpen(true)} sx={{ ml: 1 }}>
-          Request comment
-        </Button>
+        {/* Round-N (2026-07-04) tester CC-Point-2 · Issue 5: hide the
+            Request-comment button once the dept list is frozen (record
+            past the QA invite stage). */}
+        {!frozen && (
+          <Button size="small" startIcon={<AddIcon />} onClick={() => setReqOpen(true)} sx={{ ml: 1 }}>
+            Request comment
+          </Button>
+        )}
+        {frozen && (
+          <Chip size="small" label="Locked" variant="outlined" sx={{ ml: 1 }}
+                title="Department list is locked — QA has already routed the record for comment." />
+        )}
       </Box>
 
       {/* Plain-English explainer — testers were confusing this section's

@@ -472,6 +472,7 @@ const MarketComplaintStagePanel = ({ record, onUpdated }) => {
             recordId={record.id}
             recordTargetDate={record?.targetCompletionDate}
             onChange={refreshDeptComments}
+            frozen={status !== 'PENDING_INVESTIGATION'}
           />
         </Box>
       )}

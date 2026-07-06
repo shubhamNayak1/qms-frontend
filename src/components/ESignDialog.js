@@ -120,7 +120,19 @@ const ESignDialog = ({
           label="Password" type="password" required fullWidth autoFocus
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          inputProps={{ autoComplete: 'current-password' }}
+          /* Round-N (2026-07-04) tester CC-Point-2 · Issue 8: Chrome was
+             offering to save the password every time the user e-signed a
+             workflow transition. E-signature re-auth is a per-action
+             affirmation, not a "sign-in", so pretend this is a
+             new-password field. Combined with the form-level
+             autoComplete="off" and readOnly-on-focus hack below, Chrome
+             stops suggesting saved passwords and stops offering to
+             persist this one. */
+          inputProps={{
+            autoComplete: 'new-password',
+            'data-lpignore': 'true',    // hint for LastPass
+            'data-form-type': 'other',  // hint for 1Password
+          }}
         />
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>

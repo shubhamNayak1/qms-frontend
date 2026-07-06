@@ -568,6 +568,7 @@ const DeviationStagePanel = ({ record, onUpdated }) => {
             currentUser={currentUser}
             recordTargetDate={record?.targetCompletionDate}
             onChange={refreshDeptComments}
+            frozen={status !== 'PENDING_QA_REVIEW'}
           />
         </Box>
       )}

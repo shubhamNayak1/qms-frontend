@@ -1425,6 +1425,9 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
               currentUser={currentUser}
               recordTargetDate={record?.targetCompletionDate}
               onChange={refreshDeptComments}
+              /* Round-N (2026-07-04) Issue 5: freeze the dept list once
+                 the record has left QA's hands (past PENDING_QA_REVIEW). */
+              frozen={status !== 'PENDING_QA_REVIEW'}
             />
           </Box>
         )}
