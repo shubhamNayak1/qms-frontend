@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Box, Typography, Stack, Chip, Paper, Divider, Alert, Grid, TextField,
+  Dialog, DialogTitle, DialogContent, DialogActions, Button, MenuItem,
 } from '@mui/material';
 import {
   CheckCircle as PastIcon,
@@ -397,4 +398,90 @@ export const computeStageState = ({
   if (stageIdx < currentIdx) return 'past';
   if (stageIdx === currentIdx) return 'current';
   return 'future';
+};
+
+
+// ── ResendDialog ─────────────────────────────────────────────
+// Round-N (2026-07-04) tester CC-Point-2 · Issue 3: shared
+// "Send record back" dialog with a target-stage picker. Used by
+// every module's stage panel so the UX is uniform: pick which prior
+// stage to bounce the record to, add a reason, click Send Back.
+//
+// Props:
+//   open           : boolean
+//   onClose        : () => void
+//   record         : the current record — used to enumerate prior stages
+//                    from record.statusHistory.
+//   currentStatus  : the record's current status (excluded from picker)
+//   onSubmit(target, reason)
+//                  : called when the user confirms. Parent is responsible
+//                    for the actual API call.
+//   busy           : disables buttons while the parent is talking to the API.
+//   error          : optional string surfaced above the form.
+export const ResendDialog = ({
+  open, onClose, record, currentStatus, onSubmit, busy = false, error = null,
+}) => {
+  const [target, setTarget] = useState('DRAFT');
+  const [reason, setReason] = useState('');
+  useEffect(() => {
+    if (open) { setTarget('DRAFT'); setReason(''); }
+  }, [open]);
+
+  // Build the list of valid target statuses from the record's history.
+  // Excludes the current status + terminal / non-return states.
+  const options = useMemo(() => {
+    const excluded = new Set([currentStatus, 'REJECTED','CANCELLED','CLOSED',
+                              'REOPENED','DEVIATION_SPAWNED','EFFECTIVENESS_VERIFIED']);
+    const seen = new Set();
+    (record?.statusHistory || []).forEach((h) => {
+      if (h?.fromStatus) seen.add(h.fromStatus);
+    });
+    seen.add('DRAFT'); // Initiator is always a valid target.
+    return [...seen].filter((s) => !excluded.has(s));
+  }, [record?.statusHistory, currentStatus]);
+
+  const humanize = (s) =>
+    s === 'DRAFT' ? 'Initiator (Draft)'
+                  : s.replace(/^PENDING_/, '').replace(/_/g, ' ');
+
+  const handleConfirm = () => {
+    if (reason.trim().length < 5) return;
+    onSubmit(target || 'DRAFT', reason.trim());
+  };
+
+  return (
+    <Dialog open={open} onClose={busy ? undefined : onClose} maxWidth="xs" fullWidth>
+      <DialogTitle>Send record back?</DialogTitle>
+      <DialogContent>
+        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+        <TextField
+          label="Send back to" select fullWidth sx={{ mb: 2 }} required
+          value={target} onChange={(e) => setTarget(e.target.value)}
+          helperText="Pick which prior stage to bounce the record to. Initiator = DRAFT.">
+          {options.map((s) =>
+            <MenuItem key={s} value={s}>{humanize(s)}</MenuItem>)}
+        </TextField>
+        <Typography variant="body2" sx={{ mb: 2 }}>
+          The record&apos;s <code>status</code> will change to the picked stage.
+          {' '}This is different from <em>Reject</em> — Reject terminates the
+          record; Send Back keeps it alive for revision.
+        </Typography>
+        <TextField
+          label="Reason for send-back" required multiline rows={3} fullWidth autoFocus
+          value={reason} onChange={(e) => setReason(e.target.value)}
+          placeholder="Explain what needs to be revised. Appears on the audit trail and in the recipient's inbox."
+          helperText="Required — minimum 5 characters."
+          inputProps={{ autoComplete: 'off' }}
+        />
+      </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 2 }}>
+        <Button onClick={onClose} disabled={busy}>Cancel</Button>
+        <Button variant="contained" color="warning"
+                onClick={handleConfirm}
+                disabled={busy || reason.trim().length < 5}>
+          {busy ? 'Sending…' : 'Send Back'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
 };

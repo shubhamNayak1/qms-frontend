@@ -1009,6 +1009,10 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
   // so the user can resend without first scrolling up to fill the panel field.
   // (Round-2 C5: the resend silently no-op'd when the panel field was empty.)
   const [resendReason, setResendReason] = useState('');
+  // Round-N (2026-07-04) tester CC-Point-2 · Issue 3: user picks the
+  // target stage the record should be bounced back to. Defaults to
+  // DRAFT (Initiator) which is the historic behaviour.
+  const [resendTarget, setResendTarget] = useState('DRAFT');
   // Round-2 E3: e-sign gate before executing a workflow transition.
   // pendingAction holds the action key while the e-sign dialog is open;
   // on success doSubmit() runs the original network calls.
@@ -1418,15 +1422,16 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
           await rejectChangeControlApi(record.id, effectiveComment);
           break;
         case 'resend':
-          // Resend = ANY reviewer state → DRAFT via the generic transition
-          // endpoint. Backend WorkflowPosition gates who can do it from each
-          // source state. Round-2 widened this from HOD-only to all reviewer
-          // stages (D1 / F3 / H3).
+          // Round-N (2026-07-04) tester CC-Point-2 · Issue 3: send back
+          // to any prior stage chosen by the user (was DRAFT-only). The
+          // backend transition() now allows any status that appears in
+          // status_history + is non-terminal.
           await transitionChangeControlApi(record.id, {
-            targetStatus: 'DRAFT',
+            targetStatus: resendTarget || 'DRAFT',
             comment: effectiveComment,
           });
           setResendReason(''); // clear so a stale value doesn't leak into next round
+          setResendTarget('DRAFT');
           break;
         case 'transition':
           await transitionChangeControlApi(record.id, {
@@ -1921,17 +1926,25 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
           </span>
         </Tooltip>
 
-        {['PENDING_HOD','PENDING_QA_REVIEW','PENDING_RA_REVIEW','PENDING_SITE_HEAD',
-          'PENDING_CUSTOMER_COMMENT','PENDING_HEAD_QA','PENDING_VERIFICATION'].includes(status) && (
-          <Tooltip title="Send back to Initiator for revision — record returns to DRAFT, not REJECTED">
+        {/* Round-N (2026-07-04) tester CC-Point-2 · Issue 3: the "Send
+            Back" button is now available on every reviewer / dept-comment
+            stage (was previously missing on PENDING_DEPT_COMMENT +
+            PENDING_ATTACHMENTS). The dialog lets the user pick which
+            prior stage to bounce the record to; the historic
+            "Resend to Initiator" is still the default. */}
+        {['PENDING_HOD','PENDING_QA_REVIEW','PENDING_DEPT_COMMENT',
+          'PENDING_RA_REVIEW','PENDING_SITE_HEAD','PENDING_CUSTOMER_COMMENT',
+          'PENDING_HEAD_QA','PENDING_ATTACHMENTS','PENDING_VERIFICATION']
+          .includes(status) && (
+          <Tooltip title="Send the record back to an earlier stage (Initiator by default)">
             <span>
               <Button
                 variant="outlined" color="warning"
                 startIcon={<ResendIcon />}
-                onClick={() => setResendDialog(true)}
+                onClick={() => { setResendTarget('DRAFT'); setResendDialog(true); }}
                 disabled={saving || rejecting || resending}
               >
-                {resending ? 'Sending…' : 'Resend to Initiator'}
+                {resending ? 'Sending…' : 'Send Back'}
               </Button>
             </span>
           </Tooltip>
@@ -1964,21 +1977,46 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
           doesn't need to first fill the panel-level Remark to use it.
           Round-2 fix for C5: the silent fail when the panel remark was empty. */}
       <Dialog open={resendDialog} onClose={() => setResendDialog(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>Resend to Initiator?</DialogTitle>
+        <DialogTitle>Send record back?</DialogTitle>
         <DialogContent>
-          <Typography variant="body2" sx={{ mb: 1.5 }}>
-            This will send the record back to the Initiator (status returns to <code>DRAFT</code>)
-            so they can edit. <strong>The resend count will be incremented and the Initiator will receive a notification.</strong>
-          </Typography>
+          {/* Round-N (2026-07-04) tester CC-Point-2 · Issue 3: target-
+              stage picker. Options are drawn from the record's status
+              history so the user can bounce it back to any stage the
+              record has previously been in. Defaults to DRAFT (Initiator).
+              Terminal statuses (REJECTED, CANCELLED, CLOSED, etc.) are
+              stripped so the picker only offers legitimate returns. */}
+          <TextField
+            label="Send back to" select fullWidth sx={{ mb: 2 }} required
+            value={resendTarget} onChange={(e) => setResendTarget(e.target.value)}
+            helperText="Pick which prior stage to bounce the record to. Initiator = DRAFT.">
+            {(() => {
+              const excluded = new Set([status, 'REJECTED','CANCELLED','CLOSED',
+                                        'REOPENED','DEVIATION_SPAWNED','EFFECTIVENESS_VERIFIED']);
+              const seen = new Set();
+              (record?.statusHistory || []).forEach((h) => {
+                if (h?.fromStatus) seen.add(h.fromStatus);
+              });
+              seen.add('DRAFT'); // Initiator is always a valid target.
+              const options = [...seen].filter((s) => !excluded.has(s));
+              const humanize = (s) => s === 'DRAFT' ? 'Initiator (Draft)'
+                                    : s.replace(/^PENDING_/, '').replace(/_/g, ' ');
+              return options.map((s) =>
+                <MenuItem key={s} value={s}>{humanize(s)}</MenuItem>);
+            })()}
+          </TextField>
+
           <Typography variant="body2" sx={{ mb: 2 }}>
-            This is different from <em>Reject</em> — Reject terminates the record;
-            Resend keeps it alive for revision.
+            The record's <code>status</code> will change to the picked stage.
+            {' '}The current-stage actor's notification is cleared and the
+            {' '}stage's actor(s) receive an inbox notification.
+            {' '}This is different from <em>Reject</em> — Reject terminates
+            the record; Send Back keeps it alive for revision.
           </Typography>
           <TextField
-            label="Reason for resend" required multiline rows={3} fullWidth autoFocus
+            label="Reason for send-back" required multiline rows={3} fullWidth autoFocus
             value={resendReason}
             onChange={(e) => setResendReason(e.target.value)}
-            placeholder="Tell the Initiator what to fix. This appears in their inbox notification and is logged on the audit trail."
+            placeholder="Explain what needs to be revised. Appears in the recipient's inbox notification and is logged on the audit trail."
             error={resendDialog && resendReason.trim().length === 0 && resending === false && Boolean(error)}
             helperText="Required — minimum 5 characters."
             inputProps={{ autoComplete: 'off' }}
@@ -1991,7 +2029,7 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
           <Button variant="contained" color="warning"
                   onClick={async () => {
                     if (resendReason.trim().length < 5) {
-                      setError('Please enter at least 5 characters of reason for resend.');
+                      setError('Please enter at least 5 characters of reason for send-back.');
                       return;
                     }
                     setResendDialog(false);
