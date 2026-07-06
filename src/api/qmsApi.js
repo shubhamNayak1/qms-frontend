@@ -223,6 +223,15 @@ export const getChangeControlsApi = (params) =>
 export const getChangeControlByIdApi = (id) =>
   apiClient.get(`/api/v1/qms/change-controls/${id}`);
 
+// Round-N (2026-07-04) tester CC-Point-2 · new "Report" ask.
+// Downloads the printable CC form as a PDF blob. Callers should
+// pipe the blob to a saveAs() so the browser triggers a download.
+export const downloadChangeControlReportPdfApi = (id) =>
+  apiClient.get(`/api/v1/qms/change-controls/${id}/report.pdf`, {
+    responseType: 'blob',
+    headers: { Accept: 'application/pdf' },
+  });
+
 // ChangeControlRequest: { title*, priority*, description, assignedToId, department, dueDate,
 //   changeType, changeReason, riskLevel, riskAssessment, implementationPlan,
 //   implementationDate, validationRequired, validationDetails,

@@ -13,6 +13,8 @@ import {
   Refresh as RefreshIcon,
   Warning as WarnIcon,
   ExpandMore as ExpandMoreIcon,
+  // Round-N (2026-07-04) tester CC-Point-2 · new "Report" ask.
+  PictureAsPdf as PictureAsPdfIcon,
 } from '@mui/icons-material';
 import {
   getCapaByIdApi, submitCapaApi, approveCapaApi, rejectCapaApi,
@@ -25,6 +27,8 @@ import {
   closeComplaintApi, cancelComplaintApi, reopenComplaintApi, transitionComplaintApi,
   getChangeControlByIdApi, submitChangeControlApi, approveChangeControlApi, rejectChangeControlApi,
   closeChangeControlApi, cancelChangeControlApi, reopenChangeControlApi, transitionChangeControlApi,
+  // Round-N (2026-07-04) tester CC-Point-2 · new "Report" ask.
+  downloadChangeControlReportPdfApi,
 } from '../../api/qmsApi';
 import { listRecordAttachmentsApi } from '../../api/qmsCommonApi';
 import {
@@ -391,6 +395,31 @@ const RecordDetailDrawer = ({ open, onClose, recordId, moduleKey, onUpdated }) =
   const [error, setError]     = useState(null);
   // Round-4 G1 (=R7): attachment count for the small chip in the header.
   const [attachmentCount, setAttachmentCount] = useState(0);
+  // Round-N (2026-07-04) tester CC-Point-2 · new "Report" ask —
+  // in-flight flag for the Download-PDF button spinner.
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+
+  const handleDownloadPdf = async () => {
+    if (!record?.id) return;
+    setDownloadingPdf(true);
+    try {
+      const res = await downloadChangeControlReportPdfApi(record.id);
+      const blob = new Blob([res.data], { type: 'application/pdf' });
+      const url  = window.URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `CC-Report-${record.recordNumber || record.id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err.response?.data?.message
+        || 'Failed to generate the Change Control PDF report.');
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
 
   // Workflow action dialog state
   const [wfOpen, setWfOpen]           = useState(false);
@@ -521,9 +550,21 @@ const RecordDetailDrawer = ({ open, onClose, recordId, moduleKey, onUpdated }) =
           </Box>
           <Box sx={{ display: 'flex', gap: 0.5 }}>
             <Tooltip title="Refresh"><IconButton size="small" onClick={fetchRecord} disabled={loading}><RefreshIcon fontSize="small" /></IconButton></Tooltip>
-            {/* Round-5 H1: Print / Save as PDF removed entirely.
-                A proper server-side report endpoint (Round-2 E2 plan) would
-                replace this if/when we ship a real CC dossier print. */}
+            {/* Round-N (2026-07-04) — server-side PDF report for Change
+                Control. Only visible on CC records; server generates the
+                Vinfro-style multi-page form. Deliverable for the tester's
+                new "Report" ask. */}
+            {moduleKey === 'changeControl' && record?.id && (
+              <Tooltip title="Download Change Control PDF report">
+                <span>
+                  <IconButton size="small" onClick={handleDownloadPdf}
+                              disabled={downloadingPdf}>
+                    <PictureAsPdfIcon fontSize="small"
+                      color={downloadingPdf ? 'disabled' : 'error'} />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            )}
             <Tooltip title="Close"><IconButton size="small" onClick={onClose}><CloseIcon fontSize="small" /></IconButton></Tooltip>
           </Box>
         </Box>
