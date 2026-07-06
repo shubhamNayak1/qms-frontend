@@ -43,6 +43,27 @@ export const fillDeptCommentApi = (recordType, recordId, commentRowId, payload) 
 export const deleteDeptCommentApi = (recordType, recordId, commentRowId) =>
   apiClient.delete(`${root(recordType, recordId)}/department-comments/${commentRowId}`);
 
+// ── Round-N (2026-07-04) tester CC-Point-2 · Issue 6 ────────────
+// Department Action Items — each dept-comment row can carry many
+// discrete action items with independent target dates + statuses.
+const actionRoot = (recordType, recordId, commentRowId) =>
+  `${root(recordType, recordId)}/department-comments/${commentRowId}/action-items`;
+
+export const listDeptActionItemsApi = (recordType, recordId, commentRowId) =>
+  apiClient.get(actionRoot(recordType, recordId, commentRowId));
+
+// payload: { description, targetDate? }
+export const createDeptActionItemApi = (recordType, recordId, commentRowId, payload) =>
+  apiClient.post(actionRoot(recordType, recordId, commentRowId), payload);
+
+// payload: { description?, targetDate?, status? } — status:
+// 'PENDING' | 'IN_PROGRESS' | 'COMPLETED'
+export const updateDeptActionItemApi = (recordType, recordId, commentRowId, itemId, payload) =>
+  apiClient.put(`${actionRoot(recordType, recordId, commentRowId)}/${itemId}`, payload);
+
+export const deleteDeptActionItemApi = (recordType, recordId, commentRowId, itemId) =>
+  apiClient.delete(`${actionRoot(recordType, recordId, commentRowId)}/${itemId}`);
+
 // ── Department attachments (per-dept file upload + Head QA approval) ──
 //
 // Mirrors department-comments but for binary files. Backs the

@@ -11,6 +11,9 @@ import {
 import {
   listDeptCommentsApi, requestDeptCommentApi, fillDeptCommentApi,
   deleteDeptCommentApi,
+  // Round-N (2026-07-04) tester CC-Point-2 · Issue 6.
+  listDeptActionItemsApi, createDeptActionItemApi,
+  updateDeptActionItemApi, deleteDeptActionItemApi,
 } from '../../api/qmsCommonApi';
 import { listDepartmentsApi } from '../../api/orgApi';
 import { formatDateTime } from '../../utils/helpers';
@@ -34,6 +37,198 @@ import { formatDateTime } from '../../utils/helpers';
  *                          May 2026 tester feedback). The server is still
  *                          authoritative.
  */
+// Round-N (2026-07-04) tester CC-Point-2 · Issue 6: per-row inline
+// panel that lists / adds / edits / deletes the discrete action items
+// attached to a dept-comment row. Only the dept's HOD sees the
+// add / edit / delete controls; the backend authorizes.
+const STATUS_COLOR = { PENDING: 'warning', IN_PROGRESS: 'info', COMPLETED: 'success' };
+
+const daysUntil = (yyyyMmDd) => {
+  if (!yyyyMmDd) return null;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const dt = new Date(yyyyMmDd + 'T00:00:00');
+  return Math.round((dt - today) / (24 * 3600 * 1000));
+};
+
+const ActionItemsList = ({ commonSlug, recordId, deptCommentId, canEdit, recordTargetDate }) => {
+  const [items, setItems]   = useState([]);
+  const [error, setError]   = useState(null);
+  const [editing, setEditing] = useState(null); // null = closed; {} = new; row = edit
+  const [form, setForm]     = useState({ description: '', targetDate: '', status: 'PENDING' });
+  const [saving, setSaving] = useState(false);
+
+  const fetch = useCallback(async () => {
+    try {
+      const { data } = await listDeptActionItemsApi(commonSlug, recordId, deptCommentId);
+      setItems(data?.data || []);
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to load action items.');
+    }
+  }, [commonSlug, recordId, deptCommentId]);
+
+  useEffect(() => { fetch(); }, [fetch]);
+
+  const openNew = () => {
+    setEditing({});
+    setForm({ description: '', targetDate: '', status: 'PENDING' });
+    setError(null);
+  };
+  const openEdit = (row) => {
+    setEditing(row);
+    setForm({
+      description: row.description || '',
+      targetDate:  row.targetDate  || '',
+      status:      row.status      || 'PENDING',
+    });
+    setError(null);
+  };
+
+  const save = async () => {
+    if (!form.description.trim()) { setError('Description is required.'); return; }
+    setSaving(true); setError(null);
+    try {
+      const payload = {
+        description: form.description.trim(),
+        targetDate:  form.targetDate || null,
+        status:      form.status,
+      };
+      if (editing && editing.id) {
+        await updateDeptActionItemApi(commonSlug, recordId, deptCommentId, editing.id, payload);
+      } else {
+        await createDeptActionItemApi(commonSlug, recordId, deptCommentId, payload);
+      }
+      setEditing(null);
+      await fetch();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to save action item.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async (row) => {
+    if (!window.confirm(`Remove action item "${row.description.slice(0, 40)}"?`)) return;
+    try {
+      await deleteDeptActionItemApi(commonSlug, recordId, deptCommentId, row.id);
+      await fetch();
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to remove action item.');
+    }
+  };
+
+  return (
+    <Box sx={{
+        mt: 1, pt: 1, borderTop: '1px dashed', borderColor: 'divider',
+      }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mb: 0.5 }}>
+        <Typography variant="caption" sx={{
+            fontWeight: 700, letterSpacing: 0.4, color: 'text.secondary', flex: 1,
+          }}>
+          ACTION ITEMS ({items.length})
+        </Typography>
+        {canEdit && (
+          <Button size="small" startIcon={<AddIcon />} onClick={openNew}>
+            Add
+          </Button>
+        )}
+      </Box>
+      {error && <Alert severity="error" sx={{ mb: 1 }}>{error}</Alert>}
+      {items.length === 0 ? (
+        <Typography variant="caption" color="text.secondary">
+          No action items yet. {canEdit && 'Use "Add" to capture the first one.'}
+        </Typography>
+      ) : (
+        <Stack spacing={0.6}>
+          {items.map((it) => {
+            const daysLeft = daysUntil(it.targetDate);
+            const overdue = daysLeft != null && daysLeft < 0 && it.status !== 'COMPLETED';
+            const dueSoon = daysLeft != null && daysLeft >= 0 && daysLeft <= 7 && it.status !== 'COMPLETED';
+            return (
+              <Box key={it.id} sx={{
+                  p: 0.8, border: '1px solid', borderColor: 'divider', borderRadius: 1,
+                  bgcolor: overdue ? 'error.50' : dueSoon ? 'warning.50' : 'background.paper',
+                }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.6 }}>
+                  <Typography variant="body2" sx={{ flex: 1, whiteSpace: 'pre-wrap' }}>
+                    {it.description}
+                  </Typography>
+                  <Chip size="small" color={STATUS_COLOR[it.status] || 'default'}
+                        label={(it.status || 'PENDING').replace('_', ' ')} />
+                  {canEdit && (
+                    <>
+                      <Tooltip title="Edit"><IconButton size="small" onClick={() => openEdit(it)}>
+                        <EditIcon fontSize="inherit" />
+                      </IconButton></Tooltip>
+                      <Tooltip title="Remove"><IconButton size="small" color="error" onClick={() => remove(it)}>
+                        <DeleteIcon fontSize="inherit" />
+                      </IconButton></Tooltip>
+                    </>
+                  )}
+                </Box>
+                {(it.targetDate || it.completedByName) && (
+                  <Stack direction="row" spacing={0.6} sx={{ mt: 0.4 }} flexWrap="wrap">
+                    {it.targetDate && (
+                      <Chip size="small" variant="outlined"
+                            color={overdue ? 'error' : dueSoon ? 'warning' : 'default'}
+                            label={`Target ${it.targetDate}${daysLeft != null
+                              ? ` · ${daysLeft < 0 ? `${Math.abs(daysLeft)}d overdue`
+                                    : daysLeft === 0 ? 'due today'
+                                    : `${daysLeft}d left`}` : ''}`} />
+                    )}
+                    {it.completedByName && (
+                      <Chip size="small" variant="outlined" color="success"
+                            label={`Done · ${it.completedByName}`} />
+                    )}
+                  </Stack>
+                )}
+              </Box>
+            );
+          })}
+        </Stack>
+      )}
+
+      {/* Add / Edit dialog */}
+      <Dialog open={!!editing} onClose={() => setEditing(null)} maxWidth="xs" fullWidth
+              PaperProps={{ component: 'form', autoComplete: 'off',
+                            onSubmit: (e) => { e.preventDefault(); save(); } }}>
+        <DialogTitle>{editing?.id ? 'Edit action item' : 'Add action item'}</DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
+          {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+          <TextField label="Description" required multiline rows={2} fullWidth
+                     value={form.description}
+                     onChange={(e) => setForm({ ...form, description: e.target.value })}
+                     inputProps={{ autoComplete: 'off' }} sx={{ mb: 2 }} />
+          <TextField label="Target Date" type="date" fullWidth
+                     InputLabelProps={{ shrink: true }}
+                     value={form.targetDate}
+                     onChange={(e) => setForm({ ...form, targetDate: e.target.value })}
+                     inputProps={{ autoComplete: 'off',
+                                    max: recordTargetDate || undefined,
+                                    min: new Date().toISOString().slice(0, 10) }}
+                     helperText={recordTargetDate
+                       ? `DD/MM/YYYY · must be ≤ record target ${recordTargetDate}`
+                       : 'DD/MM/YYYY'}
+                     sx={{ mb: 2 }} />
+          {editing && editing.id && (
+            <TextField label="Status" select fullWidth
+                       value={form.status}
+                       onChange={(e) => setForm({ ...form, status: e.target.value })}>
+              {['PENDING', 'IN_PROGRESS', 'COMPLETED'].map((s) =>
+                <MenuItem key={s} value={s}>{s.replace('_', ' ')}</MenuItem>)}
+            </TextField>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setEditing(null)} disabled={saving}>Cancel</Button>
+          <Button type="submit" variant="contained" disabled={saving}>
+            {saving ? 'Saving…' : 'Save'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </Box>
+  );
+};
+
 // Round-N (2026-07-04) tester CC-Point-2 · Issue 5: `frozen` prop
 // disables Request-comment and remove icons. Panels pass frozen=true
 // once the record has advanced past the QA invite stage so QA can no
@@ -292,6 +487,17 @@ const QmsDepartmentCommentsSection = ({ commonSlug, recordId, currentUser, recor
                   )}
                 </Stack>
               )}
+
+              {/* Round-N (2026-07-04) tester CC-Point-2 · Issue 6:
+                  multi-action-item panel per dept row. Dept HOD adds
+                  discrete items with independent target dates. */}
+              <ActionItemsList
+                commonSlug={commonSlug}
+                recordId={recordId}
+                deptCommentId={r.id}
+                canEdit={canFill(r)}
+                recordTargetDate={recordTargetDate}
+              />
             </Box>
           ))}
         </Stack>
