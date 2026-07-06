@@ -87,8 +87,25 @@ const STAGE_DESCRIPTORS = {
   PENDING_HOD: {
     title: 'HOD Assessment',
     actor: 'Head of Department',
-    helper: 'Review every field the Initiator captured below, then write your Initial Assessment. Three outcomes: forward to QA, send back to Initiator for revision, or reject.',
-    fields: ['initialAssessment'],
+    helper: 'Review every field the Initiator captured below, then tick the impact checkboxes and write your Initial Assessment. Three outcomes: forward to QA, send back to Initiator for revision, or reject.',
+    // Round-N (2026-07-04) tester CC-Point-2 · Issues 1 + 2: new
+    // 7-checkbox Impact panel + Any-Other comment + Initial Risk
+    // Assessment toggle + narrative. Each entry maps to a case in
+    // FieldEditor below.
+    fields: [
+      '__impactHeader',
+      'impactOnQualification',
+      'impactOnDocumentation',
+      'impactOnValidation',
+      'impactOnMaterialSource',
+      'impactRegulatoryAspects',
+      'impactOnArtworkPack',
+      'impactOther',
+      'impactOtherComment',
+      'initialRiskAssessmentRequired',
+      'initialRiskAssessment',
+      'initialAssessment',
+    ],
     requiredFields: ['initialAssessment'],
     primary: 'approve',
     // Round-3 R10: HOD button reads "Review & forward to QA" — HOD is
@@ -195,6 +212,9 @@ const FIELD_LABELS = {
   approvalComments: 'Approval Comments',
   verificationActionTaken: 'Action Taken / Documents Closed',
   verificationEffectiveOn: 'Effective / Implemented On',
+  // Round-N (2026-07-04) tester CC-Point-2 · Issues 1 + 2.
+  impactOtherComment: 'Any-Other Impact Comment',
+  initialRiskAssessment: 'Initial Risk Assessment Narrative',
 };
 
 // Round-4 L2: InitiatorContext (the Alert-style "captured by initiator"
@@ -336,7 +356,84 @@ const FieldEditor = ({ name, form, setForm, xs = 12 }) => {
   const set = (val) => setForm((p) => ({ ...p, [name]: val }));
   const v = form[name] ?? '';
 
+  // Round-N (2026-07-04) tester CC-Point-2 · Issues 1 + 2 — HOD Impact
+  // panel section header + 7 impact checkboxes + conditional comment +
+  // Initial Risk Assessment toggle + conditional narrative.
+  const IMPACT_LABELS = {
+    impactOnQualification:   'Impact on Qualification',
+    impactOnDocumentation:   'Impact on Documentation',
+    impactOnValidation:      'Impact on Validation',
+    impactOnMaterialSource:  'Impact on Material Source',
+    impactRegulatoryAspects: 'Regulatory Aspects',
+    impactOnArtworkPack:     'Change in Artwork / Pack Size / Pack Specification',
+    impactOther:             'Any Other',
+  };
+
   switch (name) {
+    case '__impactHeader':
+      return (
+        <Grid item xs={12} key="__impactHeader">
+          <Typography variant="caption" sx={{
+              display: 'block', fontWeight: 700, letterSpacing: 0.4,
+              color: 'text.secondary', mt: 0.5, mb: 0.4,
+            }}>
+            IMPACT ASSESSMENT
+          </Typography>
+          <Typography variant="caption" color="text.secondary"
+                      sx={{ display: 'block', mb: 0.5 }}>
+            Tick every area the proposed change affects. Ticking
+            <em> Any Other</em> reveals a free-text comment box below.
+          </Typography>
+        </Grid>
+      );
+    case 'impactOnQualification':
+    case 'impactOnDocumentation':
+    case 'impactOnValidation':
+    case 'impactOnMaterialSource':
+    case 'impactRegulatoryAspects':
+    case 'impactOnArtworkPack':
+    case 'impactOther':
+      return (
+        <Grid item xs={6} key={name}>
+          <FormControlLabel
+            control={<Switch size="small"
+                             checked={!!form[name]}
+                             onChange={(e) => set(e.target.checked)} />}
+            label={<Typography variant="body2">{IMPACT_LABELS[name]}</Typography>}
+          />
+        </Grid>
+      );
+    case 'impactOtherComment':
+      return form.impactOther ? (
+        <Grid item xs={12} key="impactOtherComment">
+          <TextField
+            label='Comment for "Any Other" impact'
+            required multiline rows={2} fullWidth value={v}
+            onChange={(e) => set(e.target.value)}
+            placeholder="Describe the other impact area."
+            inputProps={{ autoComplete: 'off' }} />
+        </Grid>
+      ) : null;
+    case 'initialRiskAssessmentRequired':
+      return (
+        <Grid item xs={12} key="initialRiskAssessmentRequired">
+          <FormControlLabel
+            control={<Switch checked={!!form[name]}
+                             onChange={(e) => set(e.target.checked)} />}
+            label="Initial Risk Assessment Required"
+          />
+        </Grid>
+      );
+    case 'initialRiskAssessment':
+      return form.initialRiskAssessmentRequired ? (
+        <Grid item xs={12} key="initialRiskAssessment">
+          <TextField
+            label="Initial Risk Assessment" required multiline rows={3}
+            fullWidth value={v} onChange={(e) => set(e.target.value)}
+            placeholder="HOD's preliminary risk assessment of the proposed change."
+            inputProps={{ autoComplete: 'off' }} />
+        </Grid>
+      ) : null;
     case 'initialAssessment':
       return (
         <Grid item xs={xs}>
@@ -692,11 +789,72 @@ const DraftEditView = ({ record, form, setForm }) => {
 // eslint-disable-next-line no-unused-vars
 const RoReviewView = ({ record }) => null;
 
-const RoHodView = ({ record }) => (
-  record.initialAssessment
-    ? <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{record.initialAssessment}</Typography>
-    : <Typography variant="caption" color="text.secondary">No initial assessment narrative.</Typography>
-);
+// Round-N (2026-07-04) tester CC-Point-2 · Issues 1 + 2: past-state
+// HOD view now surfaces the ticked Impact areas, the Any-Other
+// comment, the Initial Risk Assessment toggle, and the narrative
+// alongside the original Initial Assessment.
+const RoHodView = ({ record }) => {
+  const impactChips = [
+    ['impactOnQualification',   'Qualification'],
+    ['impactOnDocumentation',   'Documentation'],
+    ['impactOnValidation',      'Validation'],
+    ['impactOnMaterialSource',  'Material Source'],
+    ['impactRegulatoryAspects', 'Regulatory'],
+    ['impactOnArtworkPack',     'Artwork / Pack'],
+    ['impactOther',             'Any Other'],
+  ].filter(([k]) => !!record[k]);
+  return (
+    <>
+      {impactChips.length > 0 && (
+        <Box sx={{ mb: 1 }}>
+          <Typography variant="caption" sx={{
+              display: 'block', fontWeight: 700, letterSpacing: 0.4,
+              color: 'text.secondary', mb: 0.5,
+            }}>
+            IMPACT ASSESSMENT
+          </Typography>
+          <Stack direction="row" spacing={0.6} flexWrap="wrap" useFlexGap>
+            {impactChips.map(([k, label]) =>
+              <Chip key={k} size="small" color="warning" variant="outlined" label={label} />)}
+          </Stack>
+          {record.impactOther && record.impactOtherComment && (
+            <Typography variant="body2" sx={{ mt: 0.6, whiteSpace: 'pre-wrap' }}>
+              <strong>Any Other:</strong> {record.impactOtherComment}
+            </Typography>
+          )}
+        </Box>
+      )}
+      {record.initialRiskAssessmentRequired && record.initialRiskAssessment && (
+        <Box sx={{ mb: 1 }}>
+          <Typography variant="caption" sx={{
+              display: 'block', fontWeight: 700, letterSpacing: 0.4,
+              color: 'text.secondary', mb: 0.3,
+            }}>
+            INITIAL RISK ASSESSMENT
+          </Typography>
+          <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+            {record.initialRiskAssessment}
+          </Typography>
+        </Box>
+      )}
+      {record.initialAssessment
+        ? (
+          <Box>
+            <Typography variant="caption" sx={{
+                display: 'block', fontWeight: 700, letterSpacing: 0.4,
+                color: 'text.secondary', mb: 0.3,
+              }}>
+              INITIAL ASSESSMENT
+            </Typography>
+            <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
+              {record.initialAssessment}
+            </Typography>
+          </Box>
+        )
+        : <Typography variant="caption" color="text.secondary">No initial assessment narrative.</Typography>}
+    </>
+  );
+};
 
 const RoQaPhase1View = ({ record }) => (
   <Grid container spacing={1}>
@@ -904,6 +1062,17 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
       changeType:                   record.changeType ?? '',
       changeReason:                 record.changeReason ?? '',
       initialAssessment:            record.initialAssessment ?? '',
+      // Round-N (2026-07-04) tester CC-Point-2 · Issues 1 + 2.
+      impactOnQualification:        !!record.impactOnQualification,
+      impactOnDocumentation:        !!record.impactOnDocumentation,
+      impactOnValidation:           !!record.impactOnValidation,
+      impactOnMaterialSource:       !!record.impactOnMaterialSource,
+      impactRegulatoryAspects:      !!record.impactRegulatoryAspects,
+      impactOnArtworkPack:          !!record.impactOnArtworkPack,
+      impactOther:                  !!record.impactOther,
+      impactOtherComment:           record.impactOtherComment ?? '',
+      initialRiskAssessmentRequired:!!record.initialRiskAssessmentRequired,
+      initialRiskAssessment:        record.initialRiskAssessment ?? '',
       category:                     record.category ?? '',
       preRemark:                    record.preRemark ?? '',
       qaEvalRemark:                 record.comments ?? '',
@@ -1086,6 +1255,21 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
         setError('Risk Assessment is set to Required — please write the assessment narrative before forwarding.');
         return;
       }
+      // Round-N (2026-07-04) tester CC-Point-2 · Issues 1 + 2 — HOD
+      // conditional validation. The Any-Other comment box only exists
+      // when the checkbox is ticked; when it IS ticked the comment is
+      // mandatory. Same rule for the Initial Risk Assessment narrative.
+      if (status === 'PENDING_HOD'
+          && form.impactOther && !form.impactOtherComment?.trim()) {
+        setError('You ticked "Any Other" — please write the comment explaining what other impact area is affected.');
+        return;
+      }
+      if (status === 'PENDING_HOD'
+          && form.initialRiskAssessmentRequired
+          && !form.initialRiskAssessment?.trim()) {
+        setError('Initial Risk Assessment is set to Required — please write the narrative before forwarding.');
+        return;
+      }
       if (missing.length > 0) {
         const labels = missing.map((f) => FIELD_LABELS[f] || f).join(', ');
         setError(`Please fill the required field(s) before forwarding: ${labels}.`);
@@ -1127,6 +1311,24 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
           // Round-2 F1: HOD writes to initial_assessment (separate column).
           // riskAssessment is reserved for QA's Phase-2 narrative.
           payload.initialAssessment = form.initialAssessment;
+          // Round-N (2026-07-04) tester CC-Point-2 · Issues 1 + 2:
+          // persist the 7 Impact checkboxes + Any-Other comment + the
+          // Initial Risk Assessment toggle and narrative. Booleans
+          // coerced to true/false so nulls never reach the backend.
+          payload.impactOnQualification   = !!form.impactOnQualification;
+          payload.impactOnDocumentation   = !!form.impactOnDocumentation;
+          payload.impactOnValidation      = !!form.impactOnValidation;
+          payload.impactOnMaterialSource  = !!form.impactOnMaterialSource;
+          payload.impactRegulatoryAspects = !!form.impactRegulatoryAspects;
+          payload.impactOnArtworkPack     = !!form.impactOnArtworkPack;
+          payload.impactOther             = !!form.impactOther;
+          payload.impactOtherComment      = form.impactOther
+                                              ? (form.impactOtherComment || null)
+                                              : null;
+          payload.initialRiskAssessmentRequired = !!form.initialRiskAssessmentRequired;
+          payload.initialRiskAssessment   = form.initialRiskAssessmentRequired
+                                              ? (form.initialRiskAssessment || null)
+                                              : null;
         }
         if (status === 'PENDING_QA_REVIEW' && qaPhase === 1) {
           payload.category   = form.category;
