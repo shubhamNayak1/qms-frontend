@@ -188,8 +188,21 @@ const PerRecordReports = ({ onError, onDownloaded }) => {
       window.URL.revokeObjectURL(url);
       onDownloaded?.(record);
     } catch (err) {
-      onError?.(err.response?.data?.message
-        || 'Failed to generate the report PDF.');
+      // Round-N follow-up: axios responseType='blob' means the error
+      // body is also a Blob; parse it as text/JSON so the caller sees
+      // the actual root cause instead of the generic fallback.
+      let msg = 'Failed to generate the report PDF.';
+      const data = err?.response?.data;
+      if (data instanceof Blob) {
+        try {
+          const text = await data.text();
+          const parsed = JSON.parse(text);
+          msg = parsed.message || parsed.error || msg;
+        } catch { /* leave default */ }
+      } else if (data?.message) {
+        msg = data.message;
+      }
+      onError?.(msg);
     } finally {
       setBusy(false);
     }

@@ -414,8 +414,22 @@ const RecordDetailDrawer = ({ open, onClose, recordId, moduleKey, onUpdated }) =
       a.remove();
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      setError(err.response?.data?.message
-        || 'Failed to generate the Change Control PDF report.');
+      // Round-N follow-up: when the axios responseType is 'blob' the
+      // error body is also a Blob, so err.response.data.message is
+      // undefined. Read the blob as text and try to extract the JSON
+      // error message so the user sees the actual root cause.
+      let msg = 'Failed to generate the Change Control PDF report.';
+      const data = err?.response?.data;
+      if (data instanceof Blob) {
+        try {
+          const text = await data.text();
+          const parsed = JSON.parse(text);
+          msg = parsed.message || parsed.error || msg;
+        } catch { /* leave default */ }
+      } else if (data?.message) {
+        msg = data.message;
+      }
+      setError(msg);
     } finally {
       setDownloadingPdf(false);
     }
