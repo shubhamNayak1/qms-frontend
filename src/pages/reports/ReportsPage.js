@@ -3,7 +3,7 @@ import {
   Box, Button, Chip, CircularProgress, IconButton,
   MenuItem, Select, Tooltip, Typography, Alert,
   ToggleButton, ToggleButtonGroup, FormControl, InputLabel,
-  Snackbar,
+  Snackbar, Paper, Autocomplete, TextField,
 } from '@mui/material';
 import {
   Add            as AddIcon,
@@ -14,6 +14,9 @@ import {
   BlockOutlined  as DisableIcon,
   PlayCircle     as EnableIcon,
   HourglassTop   as PendingIcon,
+  // Round-N (2026-07-04) tester CC-Point-2 · Reports section — per-
+  // record PDF forms.
+  PictureAsPdf   as PictureAsPdfIcon,
 } from '@mui/icons-material';
 import PageHeader  from '../../components/PageHeader';
 import DataTable   from '../../components/DataTable';
@@ -28,6 +31,11 @@ import {
 import CreateReportWizard   from './CreateReportWizard';
 import ReportHistoryDialog  from './ReportHistoryDialog';
 import ReportInsightsDialog from './ReportInsightsDialog';
+// Round-N (2026-07-04) tester CC-Point-2 · Reports section — per-record PDF.
+import {
+  getChangeControlsApi,
+  downloadChangeControlReportPdfApi,
+} from '../../api/qmsApi';
 
 // ── Constants ──────────────────────────────────────────────────────────────
 const MODULE_OPTIONS = [
@@ -119,6 +127,141 @@ const ModuleChip = ({ module }) => {
       variant="outlined"
       sx={{ fontSize: '0.7rem', fontWeight: 600 }}
     />
+  );
+};
+
+// Round-N (2026-07-04) tester CC-Point-2 · new "Report" ask.
+// Per-record PDF form download. Currently supports Change Control;
+// designed so other modules can be added when their PDF exporters
+// land server-side.
+const PER_RECORD_MODULES = [
+  { value: 'CHANGE_CONTROL', label: 'Change Control' },
+  // future: CAPA, Deviation, Incident, Market Complaint
+];
+
+const PerRecordReports = ({ onError, onDownloaded }) => {
+  const [module, setModule] = useState('CHANGE_CONTROL');
+  const [options, setOptions] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [record, setRecord]   = useState(null);
+  const [busy, setBusy]       = useState(false);
+  const [query, setQuery]     = useState('');
+
+  // Fetch a small candidate list. Debounce lightly via useEffect deps.
+  useEffect(() => {
+    let cancelled = false;
+    async function fetch() {
+      if (module !== 'CHANGE_CONTROL') { setOptions([]); return; }
+      setLoading(true);
+      try {
+        const { data } = await getChangeControlsApi({
+          size: 25,
+          page: 0,
+          search: query || undefined,
+        });
+        if (!cancelled) {
+          setOptions(data?.data?.content || data?.content || []);
+        }
+      } catch {
+        if (!cancelled) setOptions([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    fetch();
+    return () => { cancelled = true; };
+  }, [module, query]);
+
+  const handleDownload = async () => {
+    if (!record?.id) return;
+    setBusy(true);
+    try {
+      const res = await downloadChangeControlReportPdfApi(record.id);
+      const blob = new Blob([res.data], { type: 'application/pdf' });
+      const url  = window.URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `CC-Report-${record.recordNumber || record.id}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      onDownloaded?.(record);
+    } catch (err) {
+      onError?.(err.response?.data?.message
+        || 'Failed to generate the report PDF.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.2, mb: 1.5 }}>
+        <PictureAsPdfIcon color="error" fontSize="small" />
+        <Box sx={{ flex: 1 }}>
+          <Typography variant="subtitle2" fontWeight={700} lineHeight={1.2}>
+            Per-Record Reports (PDF)
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            Download a printable single-record form. Pick a module, search
+            for the record, then click Download.
+          </Typography>
+        </Box>
+      </Box>
+
+      <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
+        <FormControl size="small" sx={{ minWidth: 200 }}>
+          <InputLabel>Module</InputLabel>
+          <Select
+            label="Module"
+            value={module}
+            onChange={(e) => { setModule(e.target.value); setRecord(null); }}
+          >
+            {PER_RECORD_MODULES.map((m) => (
+              <MenuItem key={m.value} value={m.value}>{m.label}</MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+
+        <Autocomplete
+          size="small"
+          sx={{ flex: 1, minWidth: 320 }}
+          options={options}
+          loading={loading}
+          value={record}
+          onChange={(_e, v) => setRecord(v)}
+          onInputChange={(_e, v) => setQuery(v)}
+          getOptionLabel={(o) => o ? `${o.recordNumber || `#${o.id}`} — ${o.title || ''}` : ''}
+          isOptionEqualToValue={(a, b) => a.id === b.id}
+          renderInput={(params) => (
+            <TextField
+              {...params}
+              placeholder="Search by record number or title"
+              label="Record"
+              InputProps={{
+                ...params.InputProps,
+                endAdornment: (
+                  <>
+                    {loading && <CircularProgress size={14} />}
+                    {params.InputProps.endAdornment}
+                  </>
+                ),
+              }}
+            />
+          )}
+        />
+
+        <Button
+          variant="contained" color="error"
+          startIcon={busy ? <CircularProgress size={16} color="inherit" /> : <DownloadIcon />}
+          disabled={!record || busy}
+          onClick={handleDownload}
+        >
+          {busy ? 'Preparing…' : 'Download PDF'}
+        </Button>
+      </Box>
+    </Paper>
   );
 };
 
@@ -440,6 +583,16 @@ const ReportsPage = () => {
             New Report
           </Button>
         }
+      />
+
+      {/* Round-N (2026-07-04) tester CC-Point-2 · new "Report" ask —
+          per-record printable PDF forms live here alongside the existing
+          aggregate reports. Currently offers Change Control; other
+          modules join when their PDF exporters ship. */}
+      <PerRecordReports
+        onError={(msg) => showToast(msg, 'error')}
+        onDownloaded={(r) => showToast(
+          `Downloaded PDF for ${r?.recordNumber || 'record'}`, 'success')}
       />
 
       {/* ── Filter bar ── */}
