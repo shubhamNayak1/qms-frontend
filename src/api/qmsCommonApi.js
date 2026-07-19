@@ -82,10 +82,31 @@ export const requestDeptAttachmentApi = (recordType, recordId, departmentId) =>
   apiClient.post(`${root(recordType, recordId)}/department-attachments`, { departmentId });
 
 // Department uploads / updates its attachment row.
-// payload: { attachmentRef, attachmentNote? } — attachmentRef is the DMS
-// document id (preferred) or any free-text reference.
+// payload: { attachmentRef, attachmentNote?, actionItemId? } — actionItemId
+// links the attachment to the specific action plan it satisfies (Batch C
+// RED-5). Backend enforces the overdue-guard when actionItemId is present
+// and creates a fresh row instead of overwriting when the target row is
+// already filled — so multiple attachments per action plan Just Work.
 export const uploadDeptAttachmentApi = (recordType, recordId, rowId, payload) =>
   apiClient.put(`${root(recordType, recordId)}/department-attachments/${rowId}`, payload);
+
+// Batch C RED-5 (2026-07-19)
+// Fetch the action items belonging to a specific department on this
+// record — populates the "pick an action plan" dropdown in the upload
+// dialog. Returns { id, description, targetDate, extensionDate, ... }.
+export const listActionItemsForDeptApi = (recordType, recordId, departmentId) =>
+  apiClient.get(
+    `${root(recordType, recordId)}/department-attachments/action-items`,
+    { params: { departmentId } },
+  );
+
+// Record / overwrite a dept-declared extension on an overdue action item.
+// payload: { extensionDate (YYYY-MM-DD), extensionReason? }
+export const recordActionItemExtensionApi = (recordType, recordId, itemId, payload) =>
+  apiClient.post(
+    `${root(recordType, recordId)}/department-action-items/${itemId}/extension`,
+    payload,
+  );
 
 // Head QA decides on a row.
 // payload: { approve: boolean, comment }

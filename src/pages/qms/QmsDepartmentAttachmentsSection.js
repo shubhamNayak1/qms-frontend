@@ -12,6 +12,7 @@ import {
 import {
   listDeptAttachmentsApi, requestDeptAttachmentApi, uploadDeptAttachmentApi,
   decideDeptAttachmentApi, deleteDeptAttachmentApi,
+  listActionItemsForDeptApi, recordActionItemExtensionApi,
 } from '../../api/qmsCommonApi';
 import { listDepartmentsApi } from '../../api/orgApi';
 import { getDocumentsApi } from '../../api/dmsApi';
@@ -68,6 +69,13 @@ const QmsDepartmentAttachmentsSection = ({ commonSlug, recordId, currentUser }) 
   const [dmsQuery, setDmsQuery]       = useState('');
   const [dmsList, setDmsList]         = useState([]);
   const [dmsLoading, setDmsLoading]   = useState(false);
+
+  // Batch C RED-5 — action-item picker + overdue extension
+  const [actionItems, setActionItems] = useState([]);      // items for uploadRow.departmentId
+  const [pickedItem, setPickedItem]   = useState(null);
+  const [extDate, setExtDate]         = useState('');
+  const [extReason, setExtReason]     = useState('');
+  const [extSaving, setExtSaving]     = useState(false);
 
   // Decision dialog (Head QA)
   const [decideRow, setDecideRow]   = useState(null);
@@ -142,6 +150,26 @@ const QmsDepartmentAttachmentsSection = ({ commonSlug, recordId, currentUser }) 
         version: row.dmsDocumentVersion,
       });
     }
+    // Batch C RED-5 — fetch this dept's action items so the user can pick
+    // which action plan the upload satisfies. Pre-select if the row already
+    // has an action_item_id (auto-spawned by the workflow engine).
+    setActionItems([]); setPickedItem(null); setExtDate(''); setExtReason('');
+    listActionItemsForDeptApi(commonSlug, recordId, row.departmentId)
+      .then(({ data }) => {
+        const items = data?.data || [];
+        setActionItems(items);
+        if (row.actionItemId) {
+          setPickedItem(items.find(i => i.id === row.actionItemId) || null);
+        }
+      })
+      .catch(() => setActionItems([]));
+  };
+
+  const isItemOverdue = (item) => {
+    if (!item) return false;
+    const deadline = item.extensionDate || item.targetDate;
+    if (!deadline) return false;
+    return new Date(deadline) < new Date(new Date().toDateString());
   };
 
   const handleUpload = async () => {
@@ -151,18 +179,37 @@ const QmsDepartmentAttachmentsSection = ({ commonSlug, recordId, currentUser }) 
       setUploadError('Pick a DMS document or type a reference.');
       return;
     }
+    // Batch C RED-5 — an action plan must be picked if any exist. Overdue
+    // items must have an extension recorded first (or picked date > today).
+    if (actionItems.length > 0 && !pickedItem) {
+      setUploadError('Pick the action plan this attachment satisfies.');
+      return;
+    }
+    if (isItemOverdue(pickedItem) && !extDate) {
+      setUploadError('Action plan is overdue — record an extension date first.');
+      return;
+    }
     setUploadSaving(true); setUploadError(null);
     try {
+      // Extension first — separate call so the audit trail records both.
+      if (isItemOverdue(pickedItem) && extDate) {
+        setExtSaving(true);
+        await recordActionItemExtensionApi(
+          commonSlug, recordId, pickedItem.id,
+          { extensionDate: extDate, extensionReason: extReason || null });
+        setExtSaving(false);
+      }
       await uploadDeptAttachmentApi(commonSlug, recordId, uploadRow.id, {
         attachmentRef: ref,
         attachmentNote: uploadNote.trim() || null,
+        actionItemId: pickedItem ? pickedItem.id : null,
       });
       setUploadRow(null);
       fetch();
     } catch (err) {
       setUploadError(err.response?.data?.message || 'Failed to save attachment.');
     } finally {
-      setUploadSaving(false);
+      setUploadSaving(false); setExtSaving(false);
     }
   };
 
@@ -380,6 +427,51 @@ const QmsDepartmentAttachmentsSection = ({ commonSlug, recordId, currentUser }) 
             type a free-text reference (file path, external link) instead.
           </Alert>
 
+          {/* Batch C RED-5 — action-plan picker + inline overdue extension. */}
+          {actionItems.length > 0 && (
+            <>
+              <Autocomplete
+                options={actionItems}
+                value={pickedItem}
+                getOptionLabel={(o) => o
+                  ? `${o.description}${o.targetDate ? '  ·  target ' + o.targetDate : ''}`
+                  : ''}
+                isOptionEqualToValue={(a, b) => a?.id === b?.id}
+                onChange={(_, val) => { setPickedItem(val); setExtDate(''); setExtReason(''); }}
+                renderInput={(params) => (
+                  <TextField {...params} label="Action Plan / Activity" required
+                             placeholder="Pick the action plan this attachment satisfies"
+                             fullWidth sx={{ mb: 2 }}
+                             helperText={pickedItem
+                               ? (pickedItem.extensionDate
+                                    ? `Extension to ${pickedItem.extensionDate} in effect.`
+                                    : (pickedItem.targetDate
+                                        ? `Target date ${pickedItem.targetDate}.`
+                                        : 'No target date set.'))
+                               : 'Only action plans belonging to your dept show up here.'} />
+                )}
+              />
+              {isItemOverdue(pickedItem) && (
+                <Alert severity="warning" sx={{ mb: 2 }}>
+                  <Typography variant="body2" sx={{ mb: 1 }}>
+                    <strong>This action plan is overdue.</strong> Record an
+                    extension date before uploading.
+                  </Typography>
+                  <TextField label="New target date" type="date" required
+                             value={extDate}
+                             onChange={(e) => setExtDate(e.target.value)}
+                             InputLabelProps={{ shrink: true }}
+                             inputProps={{ min: new Date().toISOString().slice(0, 10),
+                                           autoComplete: 'off' }}
+                             fullWidth sx={{ mb: 1 }} />
+                  <TextField label="Reason (optional)" value={extReason}
+                             onChange={(e) => setExtReason(e.target.value)}
+                             fullWidth inputProps={{ autoComplete: 'off' }} />
+                </Alert>
+              )}
+            </>
+          )}
+
           <Autocomplete
             options={dmsList}
             value={pickedDoc}
@@ -417,7 +509,10 @@ const QmsDepartmentAttachmentsSection = ({ commonSlug, recordId, currentUser }) 
         <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button onClick={() => setUploadRow(null)} disabled={uploadSaving}>Cancel</Button>
           <Button type="submit" variant="contained"
-                  disabled={uploadSaving || (!pickedDoc && !freeRef.trim())}>
+                  disabled={uploadSaving || extSaving
+                           || (!pickedDoc && !freeRef.trim())
+                           || (actionItems.length > 0 && !pickedItem)
+                           || (isItemOverdue(pickedItem) && !extDate)}>
             {uploadSaving ? 'Saving…' : 'Submit attachment'}
           </Button>
         </DialogActions>
