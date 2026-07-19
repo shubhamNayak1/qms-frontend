@@ -137,7 +137,8 @@ const STAGE_DESCRIPTORS = {
     // Round-2 H2: Regulatory Assessment Required + Submission Reference
     // are RA's exclusive turf — moved out of QA Phase 2.
     helper: 'Capture the regulatory submission decision and supporting reference.',
-    fields: ['regulatorySubmissionRequired', 'regulatorySubmissionReference'],
+    // Batch B S3 (2026-07-19): country / territory added per reference doc.
+    fields: ['regulatorySubmissionRequired', 'regulatorySubmissionReference', 'regulatorySubmissionCountry'],
     requiredFields: [],
     primary: 'approve',
     primaryLabel: 'Approve & forward',
@@ -205,7 +206,8 @@ const FIELD_LABELS = {
   initialAssessment: 'Initial Assessment',
   category: 'Change Control Type',
   preRemark: 'Pre-Remark',
-  qaEvalRemark: 'QA Evaluation Remark',
+  qaEvalRemark: 'Post Remark / Justification',
+  qaEvaluationRemark: 'QA Evaluation Remark',
   comments: 'Comments / Concurrence',
   customerRepresentative: 'Customer Representative',
   customerComment: 'Customer Comments',
@@ -451,7 +453,7 @@ const FieldEditor = ({ name, form, setForm, xs = 12 }) => {
         <Grid item xs={6}>
           <TextField label="Risk Level" select required fullWidth value={v}
                      onChange={(e) => set(e.target.value)}
-                     helperText="Critical / Major / Minor — drives the auto-target-date on QA Head approval.">
+                     helperText="Critical = 365 · Major = 180 · Minor = 90 days — auto-set as target date on QA Head approval.">
             {['', 'Critical', 'Major', 'Minor'].map((c) => (
               <MenuItem key={c || '__'} value={c}>{c || <em>— select —</em>}</MenuItem>
             ))}
@@ -479,7 +481,17 @@ const FieldEditor = ({ name, form, setForm, xs = 12 }) => {
         <Grid item xs={6}>
           <TextField label="Submission Reference / Dossier" fullWidth value={v}
                      onChange={(e) => set(e.target.value)}
-                     placeholder="Dossier number, country, etc."
+                     placeholder="Dossier number"
+                     inputProps={{ autoComplete: 'off' }} />
+        </Grid>
+      ) : null;
+    // Batch B S3 (2026-07-19)
+    case 'regulatorySubmissionCountry':
+      return form.regulatorySubmissionRequired ? (
+        <Grid item xs={6}>
+          <TextField label="Any Specify Country" fullWidth value={v}
+                     onChange={(e) => set(e.target.value)}
+                     placeholder="Country / territory (comma-separate multiple)"
                      inputProps={{ autoComplete: 'off' }} />
         </Grid>
       ) : null;
@@ -1089,6 +1101,12 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
       customerCommunicationRequired:!!record.customerCommunicationRequired,
       regulatorySubmissionRequired: !!record.regulatorySubmissionRequired,
       regulatorySubmissionReference:record.regulatorySubmissionReference ?? '',
+      // Batch B S3 — RA country / territory
+      regulatorySubmissionCountry:  record.regulatorySubmissionCountry ?? '',
+      // Batch B S4 — QA Phase-2 evaluation remark (distinct from Post-Remark
+      // which stays in comments). Currently reused as qaEvalRemark for UI
+      // seeding via record.comments; new field is a fresh input on submit.
+      qaEvaluationRemark:           record.qaEvaluationRemark ?? '',
       customerRepresentative:       record.customerRepresentative ?? '',
       customerComment:              record.customerComment ?? '',
       comments:                     record.comments ?? '',
@@ -1141,8 +1159,12 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
   //              dept feedback in hand.
   const qaPhase1Fields = ['category', 'preRemark'];
   const qaPhase1Required = ['category', 'preRemark'];
+  // Batch B S4 (2026-07-19): reference doc treats "Post Remark" and
+  // "QA Evaluation Remark" as two separate inputs. The existing UI field
+  // qaEvalRemark carries the Post-Remark (stored on cc.comments); the new
+  // qaEvaluationRemark carries the summary verdict.
   const qaPhase2Fields = [
-    'qaEvalRemark',
+    'qaEvalRemark', 'qaEvaluationRemark',
     'riskAssessmentRequired', 'riskAssessment',
     'siteHeadRequired', 'customerCommunicationRequired',
     'customerRepresentative',
@@ -1360,6 +1382,8 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
           // Round-5 H4: same Phase-2 payload applies at PENDING_DEPT_COMMENT
           // once all depts are done.
           payload.comments                     = form.qaEvalRemark;
+          // Batch B S4 — separate QA Evaluation Remark column.
+          payload.qaEvaluationRemark           = form.qaEvaluationRemark || null;
           payload.riskAssessment               = form.riskAssessmentRequired ? form.riskAssessment : null;
           payload.siteHeadRequired             = !!form.siteHeadRequired;
           payload.customerCommunicationRequired= !!form.customerCommunicationRequired;
@@ -1374,6 +1398,10 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
           payload.regulatorySubmissionRequired = !!form.regulatorySubmissionRequired;
           payload.regulatorySubmissionReference = form.regulatorySubmissionRequired
                                                     ? (form.regulatorySubmissionReference || null)
+                                                    : null;
+          // Batch B S3 (2026-07-19): free-text country only when submission is on.
+          payload.regulatorySubmissionCountry   = form.regulatorySubmissionRequired
+                                                    ? (form.regulatorySubmissionCountry || null)
                                                     : null;
         }
         if (status === 'PENDING_SITE_HEAD' || status === 'PENDING_CUSTOMER_COMMENT'
@@ -1685,10 +1713,22 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
               if (f === 'qaEvalRemark') {
                 return (
                   <Grid key={f} item xs={12}>
-                    <TextField label="QA Evaluation Remark" required multiline rows={3} fullWidth
+                    <TextField label="Post Remark / Justification" required multiline rows={3} fullWidth
                                value={form.qaEvalRemark ?? ''}
                                onChange={(e) => setForm(prev => ({ ...prev, qaEvalRemark: e.target.value }))}
-                               placeholder="QA's evaluation of the department feedback + next steps."
+                               placeholder="QA's narrative on the department feedback + next steps."
+                               inputProps={{ autoComplete: 'off' }} />
+                  </Grid>
+                );
+              }
+              // Batch B S4 (2026-07-19)
+              if (f === 'qaEvaluationRemark') {
+                return (
+                  <Grid key={f} item xs={12}>
+                    <TextField label="QA Evaluation Remark" multiline rows={2} fullWidth
+                               value={form.qaEvaluationRemark ?? ''}
+                               onChange={(e) => setForm(prev => ({ ...prev, qaEvaluationRemark: e.target.value }))}
+                               placeholder="Summary verdict — acceptable / needs rework / hold."
                                inputProps={{ autoComplete: 'off' }} />
                   </Grid>
                 );
