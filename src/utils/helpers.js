@@ -100,6 +100,50 @@ export const formatDateTimeAmPm = (dateStr) => {
   return `${dd}/${mm}/${yyyy} : ${hh}:${mins} ${period}`;
 };
 
+/**
+ * Turn a raw HTTP User-Agent string into a compact label the Audit Trail
+ * table can show without wrapping — "Chrome 148 on macOS", "Safari 17 on
+ * iOS", "Edge 128 on Windows". The full UA stays available to the caller
+ * for a tooltip or export; this function only produces the display.
+ *
+ * We check browsers in a specific order because the strings overlap:
+ * Edge / Opera / Chrome / Safari all contain "Safari"; Edge contains
+ * "Chrome"; so pick the most-specific match first.
+ */
+export const formatUserAgent = (ua) => {
+  if (!ua || typeof ua !== 'string') return '—';
+  const s = ua;
+
+  let browser = null;
+  const pick = (name, ...patterns) => {
+    if (browser) return;
+    for (const p of patterns) {
+      const m = s.match(p);
+      if (m) { browser = { name, version: m[1] ? m[1].split('.')[0] : '' }; return; }
+    }
+  };
+  pick('Edge',    /Edg(?:e|A|iOS)?\/(\d+)/);
+  pick('Opera',   /OPR\/(\d+)/, /Opera\/(\d+)/);
+  pick('Brave',   /Brave\/(\d+)/);
+  pick('Firefox', /Firefox\/(\d+)/, /FxiOS\/(\d+)/);
+  pick('Chrome',  /Chrome\/(\d+)/, /CriOS\/(\d+)/);
+  pick('Safari',  /Version\/(\d+)[\d.]* Safari/);
+
+  let os = null;
+  if      (/Windows NT/.test(s))                       os = 'Windows';
+  else if (/iPhone|iPad|iPod/.test(s))                 os = 'iOS';
+  else if (/Android/.test(s))                          os = 'Android';
+  else if (/Mac OS X|Macintosh/.test(s))               os = 'macOS';
+  else if (/Linux/.test(s))                            os = 'Linux';
+
+  if (!browser && !os) {
+    // Fallback — first 40 chars so the table doesn't wrap on an unknown UA.
+    return s.length > 40 ? `${s.slice(0, 37)}…` : s;
+  }
+  const b = browser ? `${browser.name}${browser.version ? ' ' + browser.version : ''}` : 'Browser';
+  return os ? `${b} on ${os}` : b;
+};
+
 export const getStatusColor = (status) => {
   const map = {
     ACTIVE: 'success',

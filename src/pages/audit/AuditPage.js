@@ -28,7 +28,7 @@ import {
 } from '@mui/icons-material';
 import PageHeader  from '../../components/PageHeader';
 import ErrorAlert  from '../../components/ErrorAlert';
-import { formatDate } from '../../utils/helpers';
+import { formatDate, formatUserAgent } from '../../utils/helpers';
 import { ROUTES }  from '../../utils/constants';
 import {
   searchAuditLogsApi,
@@ -1033,9 +1033,17 @@ const AuditPage = () => {
                             </Typography>
                           </TableCell>
                           <TableCell sx={{ whiteSpace: 'nowrap' }}>
-                            <Typography variant="caption" color="text.secondary">
-                              {row.userAgent !== '-' ? row.userAgent : '—'}
-                            </Typography>
+                            <Tooltip
+                              title={row.userAgent !== '-' ? row.userAgent : ''}
+                              placement="top"
+                              arrow
+                              disableHoverListener={row.userAgent === '-'}>
+                              <Typography variant="caption" color="text.secondary">
+                                {row.userAgent !== '-'
+                                  ? formatUserAgent(row.userAgent)
+                                  : '—'}
+                              </Typography>
+                            </Tooltip>
                           </TableCell>
                         </TableRow>
 
