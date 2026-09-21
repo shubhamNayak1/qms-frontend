@@ -642,7 +642,11 @@ const AuditPage = () => {
     });
   };
 
-  const TRAIL_COL_SPAN = 11;
+  // 2026-09-21 — Session column hidden from the UI (kept in the API
+  // response for compliance / detail view). #, Timestamp, User, Role,
+  // Action, Module, Description, IP, Browser, and the expand-toggle
+  // column = 10 columns.
+  const TRAIL_COL_SPAN = 10;
 
   return (
     <Box>
@@ -951,7 +955,7 @@ const AuditPage = () => {
                 <TableHead>
                   <TableRow>
                     <TableCell sx={{ bgcolor: 'grey.50', width: 36, p: 0.5 }} />
-                    {['#', 'Timestamp', 'User', 'Role', 'Action', 'Module', 'Description', 'IP Address', 'Session', 'Browser'].map((h) => (
+                    {['#', 'Timestamp', 'User', 'Role', 'Action', 'Module', 'Description', 'IP Address', 'Browser'].map((h) => (
                       <TableCell key={h} sx={{ fontWeight: 600, bgcolor: 'grey.50', whiteSpace: 'nowrap' }}>{h}</TableCell>
                     ))}
                   </TableRow>
@@ -1026,11 +1030,6 @@ const AuditPage = () => {
                           </TableCell>
                           <TableCell>
                             <Typography variant="caption" fontFamily="monospace" color="text.secondary">{row.ipAddress}</Typography>
-                          </TableCell>
-                          <TableCell>
-                            <Typography variant="caption" fontFamily="monospace" color="text.secondary">
-                              {row.sessionId !== '-' ? row.sessionId : '—'}
-                            </Typography>
                           </TableCell>
                           <TableCell sx={{ whiteSpace: 'nowrap' }}>
                             <Tooltip
