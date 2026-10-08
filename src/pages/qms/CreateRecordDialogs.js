@@ -219,7 +219,17 @@ const BaseDialog = ({ open, onClose, title, initialForm, onSubmit, children, ski
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+    <Dialog
+      open={open}
+      // Pharma-grade behaviour: never dismiss a half-filled Initiate dialog
+      // on an accidental backdrop click or Escape key. The user must press
+      // Cancel explicitly, which gives us a single, auditable exit point.
+      onClose={(_e, reason) => {
+        if (reason === 'backdropClick' || reason === 'escapeKeyDown') return;
+        onClose();
+      }}
+      disableEscapeKeyDown
+      maxWidth="md" fullWidth>
       <DialogTitle sx={{ fontWeight: 700 }}>{title}</DialogTitle>
       <DialogContent sx={{ pt: 2 }}>
         {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
@@ -1121,7 +1131,14 @@ export const CreateChangeControlDialog = ({ open, onClose, onCreated }) => {
       </BaseDialog>
 
       {/* Save confirmation pop-up — appears on top of the Create dialog */}
-      <Dialog open={confirmOpen} onClose={() => setConfirmOpen(false)} maxWidth="xs" fullWidth>
+      <Dialog
+        open={confirmOpen}
+        onClose={(_e, reason) => {
+          if (reason === 'backdropClick' || reason === 'escapeKeyDown') return;
+          setConfirmOpen(false);
+        }}
+        disableEscapeKeyDown
+        maxWidth="xs" fullWidth>
         <DialogTitle>Save Change Control?</DialogTitle>
         <DialogContent>
           <Typography variant="body2">

@@ -1987,7 +1987,13 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
       {/* Resend confirmation — has its own Reason field so the reviewer
           doesn't need to first fill the panel-level Remark to use it.
           Round-2 fix for C5: the silent fail when the panel remark was empty. */}
-      <Dialog open={resendDialog} onClose={() => setResendDialog(false)} maxWidth="xs" fullWidth>
+      <Dialog open={resendDialog}
+              onClose={(_e, reason) => {
+                if (reason === 'backdropClick' || reason === 'escapeKeyDown') return;
+                setResendDialog(false);
+              }}
+              disableEscapeKeyDown
+              maxWidth="xs" fullWidth>
         <DialogTitle>Send record back?</DialogTitle>
         <DialogContent>
           {/* Round-N (2026-07-04) tester CC-Point-2 · Issue 3: target-

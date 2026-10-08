@@ -190,7 +190,13 @@ const QmsLineItemsSection = ({ commonSlug, recordId, readOnly = false }) => {
       )}
 
       {/* Add / Edit dialog */}
-      <Dialog open={!!editing} onClose={() => setEditing(null)} maxWidth="sm" fullWidth
+      <Dialog open={!!editing}
+              onClose={(_e, reason) => {
+                if (reason === 'backdropClick' || reason === 'escapeKeyDown') return;
+                setEditing(null);
+              }}
+              disableEscapeKeyDown
+              maxWidth="sm" fullWidth
               PaperProps={{ component: 'form', autoComplete: 'off',
                             onSubmit: (e) => { e.preventDefault(); handleSave(); } }}>
         <DialogTitle>{editing?.id ? `Edit line item #${editing.srNo}` : 'Add line item'}</DialogTitle>
