@@ -17,6 +17,7 @@ import {
   InitiatorSubmissionView,
 } from './LinearFlow';
 import { formatDate } from '../../utils/helpers';
+import RichTextField from '../../components/RichTextField';
 
 /**
  * MarketComplaintStagePanel — stage-aware editable form for Market Complaint.
@@ -118,19 +119,13 @@ const FieldEditor = ({ name, form, setForm }) => {
     case 'impactAssessment':
       return (
         <Grid item xs={12}>
-          <TextField label="Impact Assessment" multiline rows={3} fullWidth value={v}
-                     onChange={(e) => set(e.target.value)}
-                     placeholder="What's the impact of this complaint? Affected batches, regulatory exposure, customer impact, etc."
-                     inputProps={{ autoComplete: 'off' }} />
+          <RichTextField label="Impact Assessment" value={v} onChange={set} placeholder="What's the impact of this complaint? Affected batches, regulatory exposure, customer impact, etc." />
         </Grid>
       );
     case 'investigationFindings':
       return (
         <Grid item xs={12}>
-          <TextField label="Investigation Findings" multiline rows={4} fullWidth value={v}
-                     onChange={(e) => set(e.target.value)}
-                     placeholder="Root cause, evidence, lab results, observations…"
-                     inputProps={{ autoComplete: 'off' }} />
+          <RichTextField label="Investigation Findings" value={v} onChange={set} placeholder="Root cause, evidence, lab results, observations…" />
         </Grid>
       );
     case 'capaRequired':
@@ -155,10 +150,7 @@ const FieldEditor = ({ name, form, setForm }) => {
     case 'customerResponse':
       return (
         <Grid item xs={12}>
-          <TextField label="Customer Response / Feedback" multiline rows={3} fullWidth value={v}
-                     onChange={(e) => set(e.target.value)}
-                     placeholder="Pasted from the printed dossier the customer signed off on."
-                     inputProps={{ autoComplete: 'off' }} />
+          <RichTextField label="Customer Response / Feedback" value={v} onChange={set} placeholder="Pasted from the printed dossier the customer signed off on." />
         </Grid>
       );
     case 'customerSatisfied':
@@ -175,10 +167,7 @@ const FieldEditor = ({ name, form, setForm }) => {
     case 'resolutionDetails':
       return (
         <Grid item xs={12}>
-          <TextField label="Resolution Details" multiline rows={3} fullWidth value={v}
-                     onChange={(e) => set(e.target.value)}
-                     placeholder="Final resolution narrative recorded on the printed cover sheet."
-                     inputProps={{ autoComplete: 'off' }} />
+          <RichTextField label="Resolution Details" value={v} onChange={set} placeholder="Final resolution narrative recorded on the printed cover sheet." />
         </Grid>
       );
     default:

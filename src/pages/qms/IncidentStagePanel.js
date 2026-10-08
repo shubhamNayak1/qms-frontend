@@ -18,6 +18,7 @@ import QmsDepartmentAttachmentsSection from './QmsDepartmentAttachmentsSection';
 import QmsDepartmentCommentsSection from './QmsDepartmentCommentsSection';
 import { StageSection, StickyActionBar, findStageActor as flowFindStageActor, InitiatorSubmissionView } from './LinearFlow';
 import { formatDate } from '../../utils/helpers';
+import RichTextField from '../../components/RichTextField';
 
 /**
  * IncidentStagePanel — stage-aware editable form for Incident.
@@ -190,19 +191,13 @@ const FieldEditor = ({ name, form, setForm, record }) => {
     case 'investigationDetails':
       return (
         <Grid item xs={12}>
-          <TextField label="Investigation Details" multiline rows={3} fullWidth value={v}
-                     onChange={(e) => set(e.target.value)}
-                     placeholder="Initial + detailed investigation notes…"
-                     inputProps={{ autoComplete: 'off' }} />
+          <RichTextField label="Investigation Details" value={v} onChange={set} placeholder="Initial + detailed investigation notes…" />
         </Grid>
       );
     case 'riskAssessment':
       return (
         <Grid item xs={12}>
-          <TextField label="Risk Assessment" multiline rows={3} fullWidth value={v}
-                     onChange={(e) => set(e.target.value)}
-                     placeholder="Capture the risk assessment narrative…"
-                     inputProps={{ autoComplete: 'off' }} />
+          <RichTextField label="Risk Assessment" value={v} onChange={set} placeholder="Capture the risk assessment narrative…" />
         </Grid>
       );
     case 'capaRequired':
@@ -251,19 +246,13 @@ const FieldEditor = ({ name, form, setForm, record }) => {
     case 'comments':
       return (
         <Grid item xs={12}>
-          <TextField label="Comments / Concurrence" multiline rows={3} fullWidth value={v}
-                     onChange={(e) => set(e.target.value)}
-                     placeholder="Recorded on the audit trail."
-                     inputProps={{ autoComplete: 'off' }} />
+          <RichTextField label="Comments / Concurrence" value={v} onChange={set} placeholder="Recorded on the audit trail." />
         </Grid>
       );
     case 'approvalComments':
       return (
         <Grid item xs={12}>
-          <TextField label="Approval Narrative" multiline rows={3} fullWidth value={v}
-                     onChange={(e) => set(e.target.value)}
-                     placeholder="Allow continue or stop activity? Final approval narrative."
-                     inputProps={{ autoComplete: 'off' }} />
+          <RichTextField label="Approval Narrative" value={v} onChange={set} placeholder="Allow continue or stop activity? Final approval narrative." />
         </Grid>
       );
     case 'verificationNarrative':

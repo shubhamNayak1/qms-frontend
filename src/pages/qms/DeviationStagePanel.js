@@ -16,6 +16,7 @@ import { useAuth } from '../../store/AuthContext';
 import QmsDepartmentAttachmentsSection from './QmsDepartmentAttachmentsSection';
 import { StageSection, StickyActionBar, findStageActor as flowFindStageActor, InitiatorSubmissionView } from './LinearFlow';
 import { formatDate } from '../../utils/helpers';
+import RichTextField from '../../components/RichTextField';
 
 /**
  * DeviationStagePanel — stage-aware editable form for Deviation.
@@ -154,19 +155,13 @@ const FieldEditor = ({ name, form, setForm }) => {
     case 'riskAssessment':
       return (
         <Grid item xs={12}>
-          <TextField label="Risk Assessment" multiline rows={3} fullWidth value={v}
-                     onChange={(e) => set(e.target.value)}
-                     placeholder="Capture the risk assessment narrative…"
-                     inputProps={{ autoComplete: 'off' }} />
+          <RichTextField label="Risk Assessment" value={v} onChange={set} placeholder="Capture the risk assessment narrative…" />
         </Grid>
       );
     case 'impactAssessment':
       return (
         <Grid item xs={12}>
-          <TextField label="Impact Assessment" multiline rows={3} fullWidth value={v}
-                     onChange={(e) => set(e.target.value)}
-                     placeholder="Affected batches, regulatory exposure, customer impact…"
-                     inputProps={{ autoComplete: 'off' }} />
+          <RichTextField label="Impact Assessment" value={v} onChange={set} placeholder="Affected batches, regulatory exposure, customer impact…" />
         </Grid>
       );
     case 'capaRequired':
@@ -236,28 +231,19 @@ const FieldEditor = ({ name, form, setForm }) => {
     case 'customerComment':
       return (
         <Grid item xs={12}>
-          <TextField label="Customer Response / Feedback" multiline rows={3} fullWidth value={v}
-                     onChange={(e) => set(e.target.value)}
-                     placeholder="What the customer said about the deviation…"
-                     inputProps={{ autoComplete: 'off' }} />
+          <RichTextField label="Customer Response / Feedback" value={v} onChange={set} placeholder="What the customer said about the deviation…" />
         </Grid>
       );
     case 'comments':
       return (
         <Grid item xs={12}>
-          <TextField label="Comments / Concurrence" multiline rows={3} fullWidth value={v}
-                     onChange={(e) => set(e.target.value)}
-                     placeholder="Recorded on the audit trail."
-                     inputProps={{ autoComplete: 'off' }} />
+          <RichTextField label="Comments / Concurrence" value={v} onChange={set} placeholder="Recorded on the audit trail." />
         </Grid>
       );
     case 'approvalComments':
       return (
         <Grid item xs={12}>
-          <TextField label="Approval Narrative" multiline rows={3} fullWidth value={v}
-                     onChange={(e) => set(e.target.value)}
-                     placeholder="Final approval narrative recorded on the printed cover sheet."
-                     inputProps={{ autoComplete: 'off' }} />
+          <RichTextField label="Approval Narrative" value={v} onChange={set} placeholder="Final approval narrative recorded on the printed cover sheet." />
         </Grid>
       );
     case 'investigationSummary':

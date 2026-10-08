@@ -23,6 +23,7 @@ import { formatDate } from '../../utils/helpers';
 import {
   StageSection, StickyActionBar, findStageActor as flowFindStageActor,
 } from './LinearFlow';
+import RichTextField from '../../components/RichTextField';
 // formatDateTime previously used by Activity History (removed in Round-3 R18).
 
 /**
@@ -439,10 +440,7 @@ const FieldEditor = ({ name, form, setForm, xs = 12 }) => {
     case 'initialAssessment':
       return (
         <Grid item xs={xs}>
-          <TextField label="Initial Assessment" required multiline rows={3} fullWidth value={v}
-                     onChange={(e) => set(e.target.value)}
-                     placeholder="HOD's initial assessment of the proposed change…"
-                     inputProps={{ autoComplete: 'off' }} />
+          <RichTextField label="Initial Assessment" required value={v} onChange={set} placeholder="HOD's initial assessment of the proposed change…" />
         </Grid>
       );
     case 'category':
@@ -498,10 +496,7 @@ const FieldEditor = ({ name, form, setForm, xs = 12 }) => {
     case 'comments':
       return (
         <Grid item xs={12}>
-          <TextField label="Concurrence / Remark" multiline rows={3} fullWidth value={v}
-                     onChange={(e) => set(e.target.value)}
-                     placeholder="Recorded on the audit trail."
-                     inputProps={{ autoComplete: 'off' }} />
+          <RichTextField label="Concurrence / Remark" value={v} onChange={set} placeholder="Recorded on the audit trail." />
         </Grid>
       );
     case 'customerRepresentative':
@@ -516,27 +511,19 @@ const FieldEditor = ({ name, form, setForm, xs = 12 }) => {
     case 'customerComment':
       return (
         <Grid item xs={12}>
-          <TextField label="Customer Comments" multiline rows={3} fullWidth value={v}
-                     onChange={(e) => set(e.target.value)}
-                     placeholder="Customer's feedback on the proposed change"
-                     inputProps={{ autoComplete: 'off' }} />
+          <RichTextField label="Customer Comments" value={v} onChange={set} placeholder="Customer's feedback on the proposed change" />
         </Grid>
       );
     case 'approvalComments':
       return (
         <Grid item xs={12}>
-          <TextField label="Approval Comments" required multiline rows={3} fullWidth value={v}
-                     onChange={(e) => set(e.target.value)}
-                     placeholder="Final approval narrative recorded on the printed CC form."
-                     inputProps={{ autoComplete: 'off' }} />
+          <RichTextField label="Approval Comments" required value={v} onChange={set} placeholder="Final approval narrative recorded on the printed CC form." />
         </Grid>
       );
     case 'verificationActionTaken':
       return (
         <Grid item xs={12}>
-          <TextField label="Action Taken / Documents Closed" required multiline rows={3} fullWidth value={v}
-                     onChange={(e) => set(e.target.value)}
-                     inputProps={{ autoComplete: 'off' }} />
+          <RichTextField label="Action Taken / Documents Closed" required value={v} onChange={set} />
         </Grid>
       );
     case 'verificationEffectiveOn':
@@ -571,9 +558,7 @@ const FieldEditor = ({ name, form, setForm, xs = 12 }) => {
     case 'verificationOtherComments':
       return (
         <Grid item xs={12}>
-          <TextField label="Other Comments" multiline rows={2} fullWidth value={v}
-                     onChange={(e) => set(e.target.value)}
-                     inputProps={{ autoComplete: 'off' }} />
+          <RichTextField label="Other Comments" value={v} onChange={set} />
         </Grid>
       );
     default:
@@ -1702,22 +1687,20 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
               if (f === 'preRemark') {
                 return (
                   <Grid key={f} item xs={12}>
-                    <TextField label="Pre-Remark" required multiline rows={3} fullWidth
-                               value={form.preRemark ?? ''}
-                               onChange={(e) => setForm(prev => ({ ...prev, preRemark: e.target.value }))}
-                               placeholder="QA's pre-dept-comment narrative — visible to invited dept HODs."
-                               inputProps={{ autoComplete: 'off' }} />
+                    <RichTextField label="Pre-Remark" required
+                                   value={form.preRemark ?? ''}
+                                   onChange={(v) => setForm(prev => ({ ...prev, preRemark: v }))}
+                                   placeholder="QA's pre-dept-comment narrative — visible to invited dept HODs." />
                   </Grid>
                 );
               }
               if (f === 'qaEvalRemark') {
                 return (
                   <Grid key={f} item xs={12}>
-                    <TextField label="Post Remark / Justification" required multiline rows={3} fullWidth
-                               value={form.qaEvalRemark ?? ''}
-                               onChange={(e) => setForm(prev => ({ ...prev, qaEvalRemark: e.target.value }))}
-                               placeholder="QA's narrative on the department feedback + next steps."
-                               inputProps={{ autoComplete: 'off' }} />
+                    <RichTextField label="Post Remark / Justification" required
+                                   value={form.qaEvalRemark ?? ''}
+                                   onChange={(v) => setForm(prev => ({ ...prev, qaEvalRemark: v }))}
+                                   placeholder="QA's narrative on the department feedback + next steps." />
                   </Grid>
                 );
               }
@@ -1725,11 +1708,10 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
               if (f === 'qaEvaluationRemark') {
                 return (
                   <Grid key={f} item xs={12}>
-                    <TextField label="QA Evaluation Remark" multiline rows={2} fullWidth
-                               value={form.qaEvaluationRemark ?? ''}
-                               onChange={(e) => setForm(prev => ({ ...prev, qaEvaluationRemark: e.target.value }))}
-                               placeholder="Summary verdict — acceptable / needs rework / hold."
-                               inputProps={{ autoComplete: 'off' }} />
+                    <RichTextField label="QA Evaluation Remark"
+                                   value={form.qaEvaluationRemark ?? ''}
+                                   onChange={(v) => setForm(prev => ({ ...prev, qaEvaluationRemark: v }))}
+                                   placeholder="Summary verdict — acceptable / needs rework / hold." />
                   </Grid>
                 );
               }
@@ -1748,10 +1730,9 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
               if (f === 'riskAssessment') {
                 return form.riskAssessmentRequired ? (
                   <Grid key={f} item xs={12}>
-                    <TextField label="Risk Assessment Narrative" required multiline rows={3} fullWidth
-                               value={form.riskAssessment ?? ''}
-                               onChange={(e) => setForm(prev => ({ ...prev, riskAssessment: e.target.value }))}
-                               inputProps={{ autoComplete: 'off' }} />
+                    <RichTextField label="Risk Assessment Narrative" required
+                                   value={form.riskAssessment ?? ''}
+                                   onChange={(v) => setForm(prev => ({ ...prev, riskAssessment: v }))} />
                   </Grid>
                 ) : null;
               }

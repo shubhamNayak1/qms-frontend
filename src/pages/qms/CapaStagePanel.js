@@ -17,6 +17,7 @@ import QmsDepartmentAttachmentsSection from './QmsDepartmentAttachmentsSection';
 import QmsDepartmentCommentsSection from './QmsDepartmentCommentsSection';
 import { StageSection, StickyActionBar, findStageActor as flowFindStageActor, InitiatorSubmissionView } from './LinearFlow';
 import { formatDate } from '../../utils/helpers';
+import RichTextField from '../../components/RichTextField';
 
 /**
  * CapaStagePanel — stage-aware editable form for CAPA.
@@ -157,28 +158,19 @@ const FieldEditor = ({ name, form, setForm }) => {
     case 'rootCause':
       return (
         <Grid item xs={12}>
-          <TextField label="Root Cause Analysis" multiline rows={3} fullWidth value={v}
-                     onChange={(e) => set(e.target.value)}
-                     placeholder="Why this happened — root cause analysis."
-                     inputProps={{ autoComplete: 'off' }} />
+          <RichTextField label="Root Cause Analysis" value={v} onChange={set} placeholder="Why this happened — root cause analysis." />
         </Grid>
       );
     case 'correctiveAction':
       return (
         <Grid item xs={12}>
-          <TextField label="Initial Remedial Action" multiline rows={3} fullWidth value={v}
-                     onChange={(e) => set(e.target.value)}
-                     placeholder="The corrective action being proposed by the HOD."
-                     inputProps={{ autoComplete: 'off' }} />
+          <RichTextField label="Initial Remedial Action" value={v} onChange={set} placeholder="The corrective action being proposed by the HOD." />
         </Grid>
       );
     case 'preventiveAction':
       return (
         <Grid item xs={12}>
-          <TextField label="Preventive Action" multiline rows={3} fullWidth value={v}
-                     onChange={(e) => set(e.target.value)}
-                     placeholder="What will be done to prevent recurrence."
-                     inputProps={{ autoComplete: 'off' }} />
+          <RichTextField label="Preventive Action" value={v} onChange={set} placeholder="What will be done to prevent recurrence." />
         </Grid>
       );
     case 'siteHeadRequired':
@@ -193,27 +185,19 @@ const FieldEditor = ({ name, form, setForm }) => {
     case 'comments':
       return (
         <Grid item xs={12}>
-          <TextField label="Comments / Concurrence" multiline rows={3} fullWidth value={v}
-                     onChange={(e) => set(e.target.value)}
-                     placeholder="Recorded on the audit trail."
-                     inputProps={{ autoComplete: 'off' }} />
+          <RichTextField label="Comments / Concurrence" value={v} onChange={set} placeholder="Recorded on the audit trail." />
         </Grid>
       );
     case 'approvalComments':
       return (
         <Grid item xs={12}>
-          <TextField label="Approval Narrative" multiline rows={3} fullWidth value={v}
-                     onChange={(e) => set(e.target.value)}
-                     placeholder="Final approval narrative recorded on the printed cover sheet."
-                     inputProps={{ autoComplete: 'off' }} />
+          <RichTextField label="Approval Narrative" value={v} onChange={set} placeholder="Final approval narrative recorded on the printed cover sheet." />
         </Grid>
       );
     case 'verificationActionTaken':
       return (
         <Grid item xs={12}>
-          <TextField label="Action Taken / Documents Closed" multiline rows={3} fullWidth value={v}
-                     onChange={(e) => set(e.target.value)}
-                     inputProps={{ autoComplete: 'off' }} />
+          <RichTextField label="Action Taken / Documents Closed" value={v} onChange={set} />
         </Grid>
       );
     case 'verificationEffectiveOn':
@@ -238,9 +222,7 @@ const FieldEditor = ({ name, form, setForm }) => {
     case 'verificationOtherComments':
       return (
         <Grid item xs={12}>
-          <TextField label="Other Comments" multiline rows={2} fullWidth value={v}
-                     onChange={(e) => set(e.target.value)}
-                     inputProps={{ autoComplete: 'off' }} />
+          <RichTextField label="Other Comments" value={v} onChange={set} />
         </Grid>
       );
     case 'verificationReviewComment':
