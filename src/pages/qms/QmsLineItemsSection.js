@@ -231,11 +231,10 @@ const QmsLineItemsSection = ({ commonSlug, recordId, readOnly = false }) => {
                 workflow now (PENDING_VERIFICATION + line-item-specific
                 verification fields), not on the line items themselves. */}
             <Grid item xs={12}>
-              <TextField label="Remark" multiline rows={2} fullWidth
-                         value={form.remark}
-                         onChange={(e) => setForm({ ...form, remark: e.target.value })}
-                         helperText="Captured to the audit_log on save."
-                         inputProps={{ autoComplete: 'off' }} />
+              <RichTextField label="Remark"
+                             value={form.remark}
+                             onChange={(v) => setForm({ ...form, remark: v })}
+                             helperText="Captured to the audit_log on save." />
             </Grid>
           </Grid>
         </DialogContent>

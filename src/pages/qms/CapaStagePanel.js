@@ -16,7 +16,7 @@ import QmsCapaAssessmentsSection from './QmsCapaAssessmentsSection';
 import QmsDepartmentAttachmentsSection from './QmsDepartmentAttachmentsSection';
 import QmsDepartmentCommentsSection from './QmsDepartmentCommentsSection';
 import { StageSection, StickyActionBar, findStageActor as flowFindStageActor, InitiatorSubmissionView } from './LinearFlow';
-import { formatDate } from '../../utils/helpers';
+import { formatDate, stripHtmlForRequired } from '../../utils/helpers';
 import RichTextField from '../../components/RichTextField';
 
 /**
@@ -352,11 +352,11 @@ const CapaStagePanel = ({ record, onUpdated }) => {
     // "Save Draft" is a lightweight persist (no remark, no transition)
     // and Submit-for-Review carries an audit-trail comment as usual.
     // saveDraft short-circuits the required-remark check.
-    if (action !== 'saveDraft' && !comment.trim() && status !== 'DRAFT') {
+    if (action !== 'saveDraft' && !stripHtmlForRequired(comment) && status !== 'DRAFT') {
       setError('A comment is required for this action — it is recorded on the audit trail.');
       return;
     }
-    if (status === 'DRAFT' && action === 'submit' && !comment.trim()) {
+    if (status === 'DRAFT' && action === 'submit' && !stripHtmlForRequired(comment)) {
       setError('Please enter a Remark / Justification for the audit trail before submitting.');
       return;
     }
@@ -670,17 +670,15 @@ const CapaStagePanel = ({ record, onUpdated }) => {
         </Grid>
       )}
 
-      <TextField
-        // Round-4 G5 (=Round-3 R26): at Head QA the field IS the Approval Comment.
-        label={status === 'PENDING_HEAD_QA' ? 'Approval Comment' : 'Remark / Justification'}
-        required multiline rows={2} fullWidth
-        value={comment} onChange={(e) => setComment(e.target.value)}
-        placeholder={status === 'PENDING_HEAD_QA'
-          ? 'Final approval narrative — captured as the record\'s Approval Comment and on the audit trail.'
-          : 'Recorded on the audit trail as the actor\'s remark for this transition.'}
-        sx={{ mb: 1.5 }}
-        inputProps={{ autoComplete: 'off' }}
-      />
+      {/* Round-4 G5 (=Round-3 R26): at Head QA the field IS the Approval Comment. */}
+      <Box sx={{ mb: 1.5 }}>
+        <RichTextField
+          label={status === 'PENDING_HEAD_QA' ? 'Approval Comment' : 'Remark / Justification'} required
+          value={comment} onChange={setComment}
+          placeholder={status === 'PENDING_HEAD_QA'
+            ? 'Final approval narrative — captured as the record\'s Approval Comment and on the audit trail.'
+            : 'Recorded on the audit trail as the actor\'s remark for this transition.'} />
+      </Box>
 
       <StickyActionBar
         helperText={blockForward
@@ -716,7 +714,7 @@ const CapaStagePanel = ({ record, onUpdated }) => {
               // DRAFT calls 'submit' (submitCapaApi) and other stages
               // keep calling 'approve'.
               onClick={() => submit(desc.primary || 'approve')}
-              disabled={saving || savingDraft || rejecting || !comment.trim() || blockForward}
+              disabled={saving || savingDraft || rejecting || !stripHtmlForRequired(comment) || blockForward}
             >
               {saving ? 'Saving…' : (isClosingMoment ? 'Approve & Close CAPA' : desc.primaryLabel)}
             </Button>
@@ -725,7 +723,7 @@ const CapaStagePanel = ({ record, onUpdated }) => {
 
         {desc.secondary && (
           <Button variant="outlined" onClick={() => submit('transition')}
-                  disabled={saving || rejecting || !comment.trim()}>
+                  disabled={saving || rejecting || !stripHtmlForRequired(comment)}>
             {desc.secondary.label}
           </Button>
         )}
@@ -735,7 +733,7 @@ const CapaStagePanel = ({ record, onUpdated }) => {
             <span>
               <Button variant="outlined" color="warning"
                       onClick={() => submit('resend')}
-                      disabled={saving || rejecting || !comment.trim()}>
+                      disabled={saving || rejecting || !stripHtmlForRequired(comment)}>
                 Resend to Initiator
               </Button>
             </span>
@@ -748,7 +746,7 @@ const CapaStagePanel = ({ record, onUpdated }) => {
               variant="outlined" color="error"
               startIcon={<RejectIcon />}
               onClick={() => submit('reject')}
-              disabled={saving || rejecting || !comment.trim()}
+              disabled={saving || rejecting || !stripHtmlForRequired(comment)}
             >
               {rejecting ? 'Rejecting…' : 'Reject'}
             </Button>

@@ -16,7 +16,7 @@ import {
   StageSection, StickyActionBar, findStageActor as flowFindStageActor,
   InitiatorSubmissionView,
 } from './LinearFlow';
-import { formatDate } from '../../utils/helpers';
+import { formatDate, stripHtmlForRequired } from '../../utils/helpers';
 import RichTextField from '../../components/RichTextField';
 
 /**
@@ -239,7 +239,7 @@ const MarketComplaintStagePanel = ({ record, onUpdated }) => {
     setError(null);
 
     // Round-M (2026-06-27) tester CC-Point-1 · Issues 5+6.
-    if (action !== 'saveDraft' && !comment.trim()) {
+    if (action !== 'saveDraft' && !stripHtmlForRequired(comment)) {
       setError('A comment is required for this action — it is recorded on the audit trail.');
       return;
     }
@@ -499,17 +499,15 @@ const MarketComplaintStagePanel = ({ record, onUpdated }) => {
         </Grid>
       )}
 
-      <TextField
-        // Round-4 G5 (=Round-3 R26): at Head QA the field IS the Approval Comment.
-        label={status === 'PENDING_HEAD_QA' ? 'Approval Comment' : 'Remark / Justification'}
-        required multiline rows={2} fullWidth
-        value={comment} onChange={(e) => setComment(e.target.value)}
-        placeholder={status === 'PENDING_HEAD_QA'
-          ? 'Final approval narrative — captured as the record\'s Approval Comment and on the audit trail.'
-          : 'Recorded on the audit trail as the actor\'s remark for this transition.'}
-        sx={{ mb: 1.5 }}
-        inputProps={{ autoComplete: 'off' }}
-      />
+      {/* Round-4 G5 (=Round-3 R26): at Head QA the field IS the Approval Comment. */}
+      <Box sx={{ mb: 1.5 }}>
+        <RichTextField
+          label={status === 'PENDING_HEAD_QA' ? 'Approval Comment' : 'Remark / Justification'} required
+          value={comment} onChange={setComment}
+          placeholder={status === 'PENDING_HEAD_QA'
+            ? 'Final approval narrative — captured as the record\'s Approval Comment and on the audit trail.'
+            : 'Recorded on the audit trail as the actor\'s remark for this transition.'} />
+      </Box>
 
       <StickyActionBar
         helperText={blockForward
@@ -540,7 +538,7 @@ const MarketComplaintStagePanel = ({ record, onUpdated }) => {
               startIcon={desc.primary === 'close' ? <SaveIcon /> : <ForwardIcon />}
               color={desc.primary === 'close' ? 'success' : 'primary'}
               onClick={() => submit(desc.primary)}
-              disabled={saving || savingDraft || rejecting || !comment.trim() || blockForward}
+              disabled={saving || savingDraft || rejecting || !stripHtmlForRequired(comment) || blockForward}
             >
               {saving ? 'Saving…' : desc.primaryLabel}
             </Button>
@@ -549,7 +547,7 @@ const MarketComplaintStagePanel = ({ record, onUpdated }) => {
 
         {desc.secondary && (
           <Button variant="outlined" onClick={() => submit('transition')}
-                  disabled={saving || rejecting || !comment.trim()}>
+                  disabled={saving || rejecting || !stripHtmlForRequired(comment)}>
             {desc.secondary.label}
           </Button>
         )}
@@ -559,7 +557,7 @@ const MarketComplaintStagePanel = ({ record, onUpdated }) => {
             <span>
               <Button variant="outlined" color="warning"
                       onClick={() => submit('resend')}
-                      disabled={saving || rejecting || !comment.trim()}>
+                      disabled={saving || rejecting || !stripHtmlForRequired(comment)}>
                 Resend to Initiator
               </Button>
             </span>
@@ -572,7 +570,7 @@ const MarketComplaintStagePanel = ({ record, onUpdated }) => {
               variant="outlined" color="error"
               startIcon={<RejectIcon />}
               onClick={() => submit('reject')}
-              disabled={saving || rejecting || !comment.trim()}
+              disabled={saving || rejecting || !stripHtmlForRequired(comment)}
             >
               {rejecting ? 'Rejecting…' : 'Reject'}
             </Button>

@@ -19,7 +19,7 @@ import QmsDepartmentAttachmentsSection from './QmsDepartmentAttachmentsSection';
 import QmsDepartmentCommentsSection from './QmsDepartmentCommentsSection';
 import QmsLineItemsSection from './QmsLineItemsSection';
 import { useAuth } from '../../store/AuthContext';
-import { formatDate } from '../../utils/helpers';
+import { formatDate, stripHtmlForRequired } from '../../utils/helpers';
 import {
   StageSection, StickyActionBar, findStageActor as flowFindStageActor,
 } from './LinearFlow';
@@ -1766,14 +1766,12 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
         )}
 
         {/* Remark / Justification (relabels per stage) */}
-        <TextField
-          label={remarkLabel} required={!isQaPhase1WithDepts}
-          multiline rows={2} fullWidth
-          value={comment} onChange={(e) => setComment(e.target.value)}
-          placeholder={remarkPlaceholder}
-          sx={{ mb: 1.5 }}
-          inputProps={{ autoComplete: 'off' }}
-        />
+        <Box sx={{ mb: 1.5 }}>
+          <RichTextField
+            label={remarkLabel} required={!isQaPhase1WithDepts}
+            value={comment} onChange={setComment}
+            placeholder={remarkPlaceholder} />
+        </Box>
 
         {/* Round-3 R15 — Stage attachments BELOW Remark / Justification. */}
         {record?.id && (
@@ -1932,7 +1930,7 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
               startIcon={desc.primary === 'close' ? <SaveIcon /> : <ForwardIcon />}
               color={desc.primary === 'close' ? 'success' : 'primary'}
               onClick={() => submit(desc.primary)}
-              disabled={saving || savingDraft || rejecting || resending || (!comment.trim() && !(status === 'PENDING_QA_REVIEW' && qaPhase === 1 && deptTotal > 0)) || blockForward}
+              disabled={saving || savingDraft || rejecting || resending || (!stripHtmlForRequired(comment) && !(status === 'PENDING_QA_REVIEW' && qaPhase === 1 && deptTotal > 0)) || blockForward}
             >
               {saving ? 'Saving…' : primaryLabel}
             </Button>
@@ -1965,7 +1963,7 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
 
         {desc.secondary && (
           <Button variant="outlined" onClick={() => submit('transition')}
-                  disabled={saving || rejecting || resending || !comment.trim()}>
+                  disabled={saving || rejecting || resending || !stripHtmlForRequired(comment)}>
             {desc.secondary.label}
           </Button>
         )}
@@ -1977,7 +1975,7 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
                 variant="outlined" color="error"
                 startIcon={<RejectIcon />}
                 onClick={() => submit('reject')}
-                disabled={saving || rejecting || resending || !comment.trim()}
+                disabled={saving || rejecting || resending || !stripHtmlForRequired(comment)}
               >
                 {rejecting ? 'Rejecting…' : 'Reject'}
               </Button>
@@ -2025,15 +2023,12 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
             {' '}This is different from <em>Reject</em> — Reject terminates
             the record; Send Back keeps it alive for revision.
           </Typography>
-          <TextField
-            label="Reason for send-back" required multiline rows={3} fullWidth autoFocus
-            value={resendReason}
-            onChange={(e) => setResendReason(e.target.value)}
+          <RichTextField
+            label="Reason for send-back" required
+            value={resendReason} onChange={setResendReason}
             placeholder="Explain what needs to be revised. Appears in the recipient's inbox notification and is logged on the audit trail."
-            error={resendDialog && resendReason.trim().length === 0 && resending === false && Boolean(error)}
-            helperText="Required — minimum 5 characters."
-            inputProps={{ autoComplete: 'off' }}
-          />
+            error={resendDialog && !stripHtmlForRequired(resendReason) && resending === false && Boolean(error) ? ' ' : undefined}
+            helperText="Required — minimum 5 characters." />
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button onClick={() => { setResendDialog(false); setResendReason(''); }} disabled={resending}>
@@ -2041,14 +2036,14 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
           </Button>
           <Button variant="contained" color="warning"
                   onClick={async () => {
-                    if (resendReason.trim().length < 5) {
+                    if (stripHtmlForRequired(resendReason).length < 5) {
                       setError('Please enter at least 5 characters of reason for send-back.');
                       return;
                     }
                     setResendDialog(false);
                     await submit('resend');
                   }}
-                  disabled={resending || resendReason.trim().length < 5}>
+                  disabled={resending || stripHtmlForRequired(resendReason).length < 5}>
             {resending ? 'Sending…' : 'Yes, Resend'}
           </Button>
         </DialogActions>

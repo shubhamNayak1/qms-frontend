@@ -144,6 +144,15 @@ export const formatUserAgent = (ua) => {
   return os ? `${b} on ${os}` : b;
 };
 
+/**
+ * RichTextField stores HTML. An "empty" Quill editor emits "<p><br></p>",
+ * so a plain .trim() cannot detect truly empty inputs. This helper strips
+ * tags and NBSPs, then trims — use it for required-field validation,
+ * button-disabled guards and any "is this empty?" check on rich-text values.
+ */
+export const stripHtmlForRequired = (s) =>
+  String(s || '').replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
+
 export const getStatusColor = (status) => {
   const map = {
     ACTIVE: 'success',
