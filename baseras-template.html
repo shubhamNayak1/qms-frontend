@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Baseras Tech — Packages Poster</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #d8e4f5;
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    display: flex;
+    justify-content: center;
+    padding: 24px;
+    min-height: 100vh;
+  }
+
+  /* Poster canvas — fixed size, looks like an image */
+  .poster {
+    width: 1200px;
+    height: 760px;
+    background: linear-gradient(180deg, #e9f1ff 0%, #f4f9ff 60%, #eaf4ff 100%);
+    border-radius: 22px;
+    box-shadow: 0 24px 60px rgba(20, 40, 80, 0.22);
+    padding: 26px 30px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* Decorative corners */
+  .poster::before,
+  .poster::after {
+    content: "";
+    position: absolute;
+    width: 140px; height: 140px;
+    background: radial-gradient(circle, #ffd66b 0%, transparent 70%);
+    opacity: 0.7;
+    border-radius: 50%;
+  }
+  .poster::before { top: -40px; left: -40px; }
+  .poster::after  { bottom: -40px; right: -40px; background: radial-gradient(circle, #b9d6ff 0%, transparent 70%); }
+
+  /* Title bar */
+  .title-bar {
+    background: #fff;
+    border: 2px solid #c8d6ee;
+    border-radius: 16px;
+    padding: 14px 30px;
+    text-align: center;
+    margin: 0 auto 8px;
+    width: fit-content;
+    box-shadow: 0 6px 18px rgba(20,40,80,0.08);
+    position: relative;
+    z-index: 2;
+  }
+  .title-bar h1 {
+    font-size: 30px;
+    color: #0e1a4e;
+    letter-spacing: 1px;
+    font-weight: 800;
+  }
+  .title-bar h1 .bolt { color: #f4b400; }
+
+  .offer-banner {
+    text-align: center;
+    margin: 10px auto 18px;
+    background: linear-gradient(90deg, #ff5a5f, #ff8b3d);
+    color: #fff;
+    padding: 8px 24px;
+    border-radius: 999px;
+    width: fit-content;
+    font-weight: 700;
+    font-size: 15px;
+    letter-spacing: 0.6px;
+    box-shadow: 0 8px 22px rgba(255,90,95,0.3);
+    position: relative;
+    z-index: 2;
+  }
+  .offer-banner small { font-weight: 500; opacity: 0.9; }
+
+  /* Cards row */
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 16px;
+    position: relative;
+    z-index: 2;
+  }
+  .card {
+    background: #fff;
+    border-radius: 18px;
+    padding: 18px 18px 16px;
+    border: 2px solid;
+    position: relative;
+    box-shadow: 0 10px 24px rgba(20,40,80,0.08);
+  }
+  .card.basic   { border-color: #3aa3ff; background: linear-gradient(180deg, #eaf4ff 0%, #fff 60%); }
+  .card.premium { border-color: #34c47c; background: linear-gradient(180deg, #e8f9ee 0%, #fff 60%); }
+  .card.pro     { border-color: #9b6bff; background: linear-gradient(180deg, #f1eaff 0%, #fff 60%); }
+
+  .ribbon {
+    position: absolute;
+    top: 12px;
+    right: -38px;
+    transform: rotate(36deg);
+    background: #ff5a5f;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 800;
+    padding: 4px 44px;
+    letter-spacing: 0.6px;
+    box-shadow: 0 4px 10px rgba(255,90,95,0.4);
+  }
+
+  .pill {
+    display: inline-block;
+    color: #fff;
+    font-weight: 800;
+    font-size: 14px;
+    padding: 6px 18px;
+    border-radius: 999px;
+    letter-spacing: 0.6px;
+  }
+  .basic .pill   { background: #3aa3ff; }
+  .premium .pill { background: #34c47c; }
+  .pro .pill     { background: #9b6bff; }
+
+  .price-block {
+    margin: 10px 0 6px;
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .price-old {
+    color: #8090a8;
+    font-size: 16px;
+    text-decoration: line-through;
+  }
+  .price-new {
+    font-size: 30px;
+    font-weight: 900;
+    color: #0e1a4e;
+  }
+  .save {
+    background: #fff1f1;
+    color: #e23b3f;
+    font-size: 11px;
+    font-weight: 800;
+    padding: 3px 8px;
+    border-radius: 6px;
+  }
+  .tagline {
+    font-size: 13px;
+    color: #5c6b80;
+    margin-bottom: 8px;
+    font-weight: 500;
+  }
+
+  ul {
+    list-style: none;
+    font-size: 12.8px;
+    color: #2a3a52;
+  }
+  ul li {
+    padding: 4px 0 4px 22px;
+    position: relative;
+    line-height: 1.35;
+  }
+  ul li::before {
+    content: "✓";
+    position: absolute; left: 0; top: 4px;
+    width: 16px; height: 16px;
+    background: #e7f5ff; color: #3aa3ff;
+    border-radius: 50%;
+    text-align: center; line-height: 16px;
+    font-size: 10px; font-weight: 800;
+  }
+  .premium ul li::before { background: #e6f9ee; color: #34c47c; }
+  .pro ul li::before     { background: #efe6ff; color: #9b6bff; }
+
+  /* Why choose us strip */
+  .why-strip {
+    background: #fff;
+    border-radius: 16px;
+    padding: 12px 20px;
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    box-shadow: 0 8px 22px rgba(20,40,80,0.08);
+    border: 1px solid #e3ebf7;
+    position: relative;
+    z-index: 2;
+  }
+  .why-strip .why-title {
+    font-weight: 800;
+    color: #0e1a4e;
+    font-size: 14px;
+    letter-spacing: 0.6px;
+    border-right: 2px dashed #d3def0;
+    padding-right: 18px;
+    margin-right: 6px;
+  }
+  .why-item {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12.5px; color: #2a3a52; font-weight: 600;
+  }
+  .why-item .ico {
+    width: 30px; height: 30px;
+    background: #eaf3ff; color: #3aa3ff;
+    border-radius: 8px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 14px;
+  }
+
+  /* Footer message */
+  .footer-msg {
+    margin-top: 14px;
+    background: #eaf3ff;
+    border: 1.5px dashed #8fbcff;
+    border-radius: 14px;
+    padding: 10px 18px;
+    text-align: center;
+    color: #0e1a4e;
+    font-size: 14px;
+    font-weight: 600;
+    position: relative;
+    z-index: 2;
+  }
+  .footer-msg .brand {
+    color: #1f6feb;
+    font-weight: 800;
+  }
+  .footer-msg .contact {
+    margin-top: 4px;
+    font-size: 12.5px;
+    color: #44557a;
+    font-weight: 500;
+  }
+</style>
+</head>
+<body>
+
+<div class="poster">
+
+  <div class="title-bar">
+    <h1>⚡ <span class="bolt">BASERAS TECH</span> — WEBSITE DEVELOPMENT PACKAGES ⚡</h1>
+  </div>
+
+  <div class="offer-banner">
+    🎉 LAUNCH OFFER • FLAT 5% OFF FOR NEW CLIENTS &nbsp;<small>(limited time)</small>
+  </div>
+
+  <div class="cards">
+
+    <!-- BASIC -->
+    <div class="card basic">
+      <div class="ribbon">5% OFF</div>
+      <span class="pill">🚀 BASIC WEBSITE</span>
+      <div class="price-block">
+        <span class="price-old">₹5,000</span>
+        <span class="price-new">₹4,750</span>
+        <span class="save">Save ₹250</span>
+      </div>
+      <p class="tagline">Perfect for starting your online presence.</p>
+      <ul>
+        <li>5 Pages (Home, About, Projects, Services, Contact)</li>
+        <li>Sections: Hero, Why Us, Projects, Services, CTA</li>
+        <li>About Page with full info + 2 images</li>
+        <li>Projects Page (6+ projects with images)</li>
+        <li>Services Page (6+ services with images)</li>
+        <li>WhatsApp & Call Integration</li>
+        <li>Fast & Responsive Design</li>
+        <li>Built using React</li>
+      </ul>
+    </div>
+
+    <!-- PREMIUM -->
+    <div class="card premium">
+      <div class="ribbon">5% OFF</div>
+      <span class="pill">⭐ PREMIUM WEBSITE</span>
+      <div class="price-block">
+        <span class="price-old">₹8,000</span>
+        <span class="price-new">₹7,600</span>
+        <span class="save">Save ₹400</span>
+      </div>
+      <p class="tagline">Best for growing businesses.</p>
+      <ul>
+        <li>7+ Public Pages + 5+ Admin Pages</li>
+        <li>Advanced Home Page with more sections</li>
+        <li>Dynamic About Page (Team manageable)</li>
+        <li>Dynamic Services (Add/Edit/Delete)</li>
+        <li>Dynamic Projects (Add/Edit/Delete)</li>
+        <li>ROI Calculator / Custom Tools</li>
+        <li>Admin Panel for full control</li>
+        <li>Backend using Firebase</li>
+      </ul>
+    </div>
+
+    <!-- PRO -->
+    <div class="card pro">
+      <div class="ribbon">5% OFF</div>
+      <span class="pill">💼 PRO WEBSITE</span>
+      <div class="price-block">
+        <span class="price-old">₹12,000</span>
+        <span class="price-new">₹11,400</span>
+        <span class="save">Save ₹600</span>
+      </div>
+      <p class="tagline">Complete business solution.</p>
+      <ul>
+        <li>All Premium Features Included</li>
+        <li>Job / Career Page (Users can apply)</li>
+        <li>Admin can manage job listings</li>
+        <li>Sub-services in Services Page</li>
+        <li>Contact Queries Management (Admin)</li>
+        <li>Advanced UI/UX Design</li>
+        <li>Image Upload from Admin Panel</li>
+        <li>Fully Dynamic — No coding needed</li>
+      </ul>
+    </div>
+
+  </div>
+
+  <div class="why-strip">
+    <div class="why-title">💡 WHY CHOOSE US?</div>
+    <div class="why-item"><span class="ico">🎨</span> Modern & Professional Design</div>
+    <div class="why-item"><span class="ico">📱</span> Mobile-Friendly & Fast</div>
+    <div class="why-item"><span class="ico">🔍</span> SEO-Friendly Structure</div>
+    <div class="why-item"><span class="ico">🎧</span> Full Support After Delivery</div>
+  </div>
+
+  <div class="footer-msg">
+    Agar aap chaho to main aapko <span class="brand">FREE DEMO</span> bhi dikha sakta hoon 😊 — Let me know which package suits your needs!
+    <div class="contact">🌐 baserastech.com &nbsp;•&nbsp; 💬 WhatsApp / Call us anytime</div>
+  </div>
+
+</div>
+
+</body>
+</html>

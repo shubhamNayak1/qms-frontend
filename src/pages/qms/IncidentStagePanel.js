@@ -235,12 +235,10 @@ const FieldEditor = ({ name, form, setForm, record }) => {
             subType === 'LABORATORY' && record?.retestingRequired === false;
       return showAbnormality ? (
         <Grid item xs={12}>
-          <TextField label="Abnormality in Proposed Remedial Action"
-                     multiline rows={3} fullWidth value={v}
-                     onChange={(e) => set(e.target.value)}
-                     placeholder="How will the lab handle the abnormality without retesting?"
-                     helperText="Captured on the Lab + No-Retest path only."
-                     inputProps={{ autoComplete: 'off' }} />
+          <RichTextField label="Abnormality in Proposed Remedial Action"
+                         value={v} onChange={set}
+                         placeholder="How will the lab handle the abnormality without retesting?"
+                         helperText="Captured on the Lab + No-Retest path only." />
         </Grid>
       ) : null;
     case 'comments':
@@ -258,11 +256,9 @@ const FieldEditor = ({ name, form, setForm, record }) => {
     case 'verificationNarrative':
       return (
         <Grid item xs={12}>
-          <TextField
-            label="Verification Narrative" required multiline rows={4} fullWidth
-            value={v} onChange={(e) => set(e.target.value)}
-            placeholder="What was verified, how, with which evidence references."
-            inputProps={{ autoComplete: 'off' }} />
+          <RichTextField label="Verification Narrative" required
+                         value={v} onChange={set}
+                         placeholder="What was verified, how, with which evidence references." />
         </Grid>
       );
     default:

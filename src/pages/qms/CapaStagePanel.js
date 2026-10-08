@@ -228,11 +228,9 @@ const FieldEditor = ({ name, form, setForm }) => {
     case 'verificationReviewComment':
       return (
         <Grid item xs={12}>
-          <TextField
-            label="QA Review of Verification" required multiline rows={3} fullWidth
-            value={v} onChange={(e) => set(e.target.value)}
-            placeholder="Was the verification adequate? Any gaps to address before closure?"
-            inputProps={{ autoComplete: 'off' }} />
+          <RichTextField label="QA Review of Verification" required
+                         value={v} onChange={set}
+                         placeholder="Was the verification adequate? Any gaps to address before closure?" />
         </Grid>
       );
     default:

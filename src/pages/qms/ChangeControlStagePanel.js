@@ -409,12 +409,9 @@ const FieldEditor = ({ name, form, setForm, xs = 12 }) => {
     case 'impactOtherComment':
       return form.impactOther ? (
         <Grid item xs={12} key="impactOtherComment">
-          <TextField
-            label='Comment for "Any Other" impact'
-            required multiline rows={2} fullWidth value={v}
-            onChange={(e) => set(e.target.value)}
-            placeholder="Describe the other impact area."
-            inputProps={{ autoComplete: 'off' }} />
+          <RichTextField label='Comment for "Any Other" impact' required
+                         value={v} onChange={set}
+                         placeholder="Describe the other impact area." />
         </Grid>
       ) : null;
     case 'initialRiskAssessmentRequired':
@@ -430,11 +427,9 @@ const FieldEditor = ({ name, form, setForm, xs = 12 }) => {
     case 'initialRiskAssessment':
       return form.initialRiskAssessmentRequired ? (
         <Grid item xs={12} key="initialRiskAssessment">
-          <TextField
-            label="Initial Risk Assessment" required multiline rows={3}
-            fullWidth value={v} onChange={(e) => set(e.target.value)}
-            placeholder="HOD's preliminary risk assessment of the proposed change."
-            inputProps={{ autoComplete: 'off' }} />
+          <RichTextField label="Initial Risk Assessment" required
+                         value={v} onChange={set}
+                         placeholder="HOD's preliminary risk assessment of the proposed change." />
         </Grid>
       ) : null;
     case 'initialAssessment':
@@ -549,10 +544,9 @@ const FieldEditor = ({ name, form, setForm, xs = 12 }) => {
     case 'verificationRegCommunication':
       return (
         <Grid item xs={12}>
-          <TextField label="Communication to Reg. Department" multiline rows={2} fullWidth value={v}
-                     onChange={(e) => set(e.target.value)}
-                     placeholder="Date + document submission details"
-                     inputProps={{ autoComplete: 'off' }} />
+          <RichTextField label="Communication to Reg. Department"
+                         value={v} onChange={set}
+                         placeholder="Date + document submission details" />
         </Grid>
       );
     case 'verificationOtherComments':
@@ -738,11 +732,9 @@ const DraftEditView = ({ record, form, setForm }) => {
         </Grid>
 
         <Grid item xs={12}>
-          <TextField
-            label="Reason for Change" fullWidth size="small"
-            multiline minRows={2}
-            value={form.changeReason ?? ''} onChange={set('changeReason')}
-            inputProps={{ autoComplete: 'off' }} />
+          <RichTextField label="Reason for Change"
+                         value={form.changeReason ?? ''}
+                         onChange={(v) => setForm((f) => ({ ...f, changeReason: v }))} />
         </Grid>
 
         {record.initialAttachmentDmsNumber && (

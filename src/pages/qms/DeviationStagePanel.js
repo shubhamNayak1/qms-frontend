@@ -249,11 +249,9 @@ const FieldEditor = ({ name, form, setForm }) => {
     case 'investigationSummary':
       return (
         <Grid item xs={12}>
-          <TextField
-            label="Investigation Summary" required multiline rows={5} fullWidth
-            value={v} onChange={(e) => set(e.target.value)}
-            placeholder="Closure cover-sheet narrative — root cause, actions taken, evidence references."
-            inputProps={{ autoComplete: 'off' }} />
+          <RichTextField label="Investigation Summary" required
+                         value={v} onChange={set}
+                         placeholder="Closure cover-sheet narrative — root cause, actions taken, evidence references." />
         </Grid>
       );
     default:
