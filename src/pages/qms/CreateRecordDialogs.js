@@ -426,8 +426,11 @@ const CapaDialogBody = ({ p, form, setForm, isExisting, user }) => {
        options={['Audit', 'Customer', 'Internal', 'Regulatory', 'Incident',
                  'Deviation', 'Change Control', 'Market Complaint']} />
     <DeptField form={form} setForm={setForm} required locked={isExisting} />
-    <F {...p} label="Reason / Preliminary Investigation" name="description"
-       multiline xs={12} />
+    <Grid item xs={12}>
+      <RichTextField label="Reason / Preliminary Investigation"
+                     value={form.description || ''}
+                     onChange={(v) => setForm((prev) => ({ ...prev, description: v }))} />
+    </Grid>
 
     <Grid item xs={12}>
       <Alert severity="info" sx={{ mt: 1 }}>
@@ -564,7 +567,11 @@ export const CreateDeviationDialog = ({ open, onClose, onCreated }) => {
           <F {...p} label="Process Area" name="processArea" />
           <F {...p} label="Due Date" name="dueDate" type="date" />
           <SW {...p} label="Regulatory Reportable" name="regulatoryReportable" />
-          <F {...p} label="Description" name="description" multiline xs={12} />
+          <Grid item xs={12}>
+            <RichTextField label="Description"
+                           value={form.description || ''}
+                           onChange={(v) => setForm((prev) => ({ ...prev, description: v }))} />
+          </Grid>
 
           <Grid item xs={12}>
             <Alert severity="info" sx={{ mt: 1 }}>
@@ -649,8 +656,16 @@ export const CreateIncidentDialog = ({ open, onClose, onCreated }) => {
           <SW {...p} label="Injury Involved" name="injuryInvolved" />
 
           <SectionLabel>Details</SectionLabel>
-          <F {...p} label="Immediate Action Taken" name="immediateAction" multiline xs={12} />
-          <F {...p} label="Description" name="description" multiline xs={12} />
+          <Grid item xs={12}>
+            <RichTextField label="Immediate Action Taken"
+                           value={form.immediateAction || ''}
+                           onChange={(v) => setForm((prev) => ({ ...prev, immediateAction: v }))} />
+          </Grid>
+          <Grid item xs={12}>
+            <RichTextField label="Description"
+                           value={form.description || ''}
+                           onChange={(v) => setForm((prev) => ({ ...prev, description: v }))} />
+          </Grid>
 
           <Grid item xs={12}>
             <Alert severity="info" sx={{ mt: 1 }}>
@@ -1234,8 +1249,11 @@ export const CreateComplaintDialog = ({ open, onClose, onCreated }) => {
           <SW {...p} label="Sample Returned" name="sampleReturned" />
 
           <SectionLabel>Reason / Description</SectionLabel>
-          <F {...p} label="Detailed reason for the complaint"
-             name="description" multiline xs={12} />
+          <Grid item xs={12}>
+            <RichTextField label="Detailed reason for the complaint"
+                           value={form.description || ''}
+                           onChange={(v) => setForm((prev) => ({ ...prev, description: v }))} />
+          </Grid>
 
           <Grid item xs={12}>
             <Alert severity="info" sx={{ mt: 1 }}>
