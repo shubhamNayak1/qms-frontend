@@ -55,7 +55,34 @@ const WelcomePage = () => {
         color: '#FFFFFF',
       }}
     >
-      {/* Subtle brand chip above the headline — mirrors the look used on the PPT deck. */}
+      {/* Shared keyframes live on this root box so every child reaches them. */}
+      <Box
+        sx={{
+          position: 'absolute', width: 0, height: 0, overflow: 'hidden',
+          '@keyframes wq-rise': {
+            from: { opacity: 0, transform: 'translateY(22px)' },
+            to:   { opacity: 1, transform: 'translateY(0)' },
+          },
+          '@keyframes wq-fade-in': {
+            from: { opacity: 0 },
+            to:   { opacity: 1 },
+          },
+          '@keyframes wq-shimmer': {
+            '0%':   { backgroundPosition: '-200% 0' },
+            '100%': { backgroundPosition: '200% 0' },
+          },
+          '@keyframes wq-pulse': {
+            '0%, 100%': { opacity: 0.65 },
+            '50%':      { opacity: 1 },
+          },
+          '@keyframes wq-underline-draw': {
+            from: { transform: 'scaleX(0)' },
+            to:   { transform: 'scaleX(1)' },
+          },
+        }}
+      />
+
+      {/* Brand chip above the headline — subtle entrance from above. */}
       <Box
         sx={{
           px: 1.75, py: 0.5, mb: 3,
@@ -67,31 +94,75 @@ const WelcomePage = () => {
           fontWeight: 700,
           textTransform: 'uppercase',
           color: '#E3F2FD',
+          opacity: 0,
+          animation: 'wq-fade-in 600ms ease-out 100ms forwards',
         }}
       >
-        Baseras Tech LLP
+        Baseras Tech Pvt Ltd
       </Box>
 
-      <Typography
+      {/* Headline — each word rises in sequence; the brand word "Baserastech"
+          gets a slow shimmer sweep + an animated underline draw to feel alive
+          without being noisy. */}
+      <Box
         component="h1"
         sx={{
+          m: 0, p: 0,
           fontWeight: 700,
           textAlign: 'center',
           lineHeight: 1.15,
-          // Fluid between phones and desktops.
           fontSize: { xs: 36, sm: 54, md: 72 },
           letterSpacing: '-0.5px',
           mb: 2,
-          // Soft fade-in on first mount.
-          animation: 'wq-fade-in 700ms ease-out',
-          '@keyframes wq-fade-in': {
-            from: { opacity: 0, transform: 'translateY(8px)' },
-            to:   { opacity: 1, transform: 'translateY(0)' },
+          display: 'flex',
+          flexWrap: 'wrap',
+          justifyContent: 'center',
+          gap: { xs: '0.25em', sm: '0.3em' },
+          '& > span': {
+            display: 'inline-block',
+            opacity: 0,
+            // Shared timing. Each word overrides animationDelay below.
+            animation: 'wq-rise 700ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards',
           },
         }}
       >
-        Welcome to Baserastech QMS
-      </Typography>
+        <Box component="span" sx={{ animationDelay: '150ms' }}>Welcome</Box>
+        <Box component="span" sx={{ animationDelay: '300ms' }}>to</Box>
+        <Box
+          component="span"
+          sx={{
+            animationDelay: '450ms',
+            // Brand word: shimmer sweep + hand-drawn underline.
+            position: 'relative',
+            background:
+              'linear-gradient(90deg, #FFFFFF 0%, #FFFFFF 42%, #FFEE58 50%, #FFFFFF 58%, #FFFFFF 100%)',
+            backgroundSize: '200% 100%',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+            color: 'transparent',
+            // Shimmer kicks in after the rise lands.
+            animation:
+              'wq-rise 700ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards, ' +
+              'wq-shimmer 3800ms linear 1200ms infinite',
+            '&::after': {
+              content: '""',
+              position: 'absolute',
+              left: 0, right: 0, bottom: '-0.08em',
+              height: '3px',
+              borderRadius: '3px',
+              background:
+                'linear-gradient(90deg, rgba(255,238,88,0) 0%, #FFEE58 50%, rgba(255,238,88,0) 100%)',
+              transform: 'scaleX(0)',
+              transformOrigin: 'left center',
+              animation: 'wq-underline-draw 800ms cubic-bezier(0.2, 0.8, 0.2, 1) 1100ms forwards',
+            },
+          }}
+        >
+          Baserastech
+        </Box>
+        <Box component="span" sx={{ animationDelay: '600ms' }}>QMS</Box>
+      </Box>
 
       <Typography
         sx={{
@@ -100,7 +171,8 @@ const WelcomePage = () => {
           mb: 6,
           textAlign: 'center',
           maxWidth: 620,
-          animation: 'wq-fade-in 900ms ease-out',
+          opacity: 0,
+          animation: 'wq-fade-in 900ms ease-out 1200ms forwards',
         }}
       >
         Quality Management Software for regulated manufacturing — Change Control,
@@ -113,12 +185,11 @@ const WelcomePage = () => {
           fontSize: 13,
           letterSpacing: '0.08em',
           textTransform: 'uppercase',
-          // Gentle pulse to signal interactivity without being noisy.
-          animation: 'wq-pulse 1800ms ease-in-out infinite',
-          '@keyframes wq-pulse': {
-            '0%, 100%': { opacity: 0.65 },
-            '50%':      { opacity: 1 },
-          },
+          opacity: 0,
+          // Delay the cue until after the headline has fully landed, then pulse.
+          animation:
+            'wq-fade-in 600ms ease-out 1700ms forwards, ' +
+            'wq-pulse 1800ms ease-in-out 2300ms infinite',
         }}
       >
         Click anywhere to continue
