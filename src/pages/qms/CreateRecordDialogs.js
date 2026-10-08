@@ -19,6 +19,7 @@ import {
 import { createLineItemApi, uploadRecordAttachmentApi } from '../../api/qmsCommonApi';
 import { listDepartmentsApi } from '../../api/orgApi';
 import ESignDialog from '../../components/ESignDialog';
+import RichTextField from '../../components/RichTextField';
 import { getDocumentsApi } from '../../api/dmsApi';
 import { useAuth } from '../../store/AuthContext';
 import { Box, IconButton, Tooltip, Chip, Stack } from '@mui/material';
@@ -29,6 +30,13 @@ import {
 } from '@mui/icons-material';
 
 const PRIORITY_OPTS = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW'];
+
+// RichTextField stores HTML. An "empty" Quill editor emits "<p><br></p>",
+// so a plain .trim() is not enough to catch truly empty inputs. This helper
+// strips tags and NBSPs, then trims — used for required-field validation on
+// the three rich-text line-item fields (Existing / Proposed / Justification).
+const stripHtmlForRequired = (s) =>
+  String(s || '').replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').trim();
 
 /**
  * Tiny Error subclass that mirrors the axios error shape the BaseDialog's
@@ -753,9 +761,9 @@ export const CreateChangeControlDialog = ({ open, onClose, onCreated }) => {
     if (rows.length === 0) return 'At least one line item is required.';
     for (let i = 0; i < rows.length; i++) {
       const row = rows[i];
-      if (!row.existingSystem?.trim()) return `Line item #${i + 1}: Existing System is required.`;
-      if (!row.proposedSystem?.trim()) return `Line item #${i + 1}: Proposed System is required.`;
-      if (!row.justification?.trim())  return `Line item #${i + 1}: Remark / Justification is required.`;
+      if (!stripHtmlForRequired(row.existingSystem)) return `Line item #${i + 1}: Existing System is required.`;
+      if (!stripHtmlForRequired(row.proposedSystem)) return `Line item #${i + 1}: Proposed System is required.`;
+      if (!stripHtmlForRequired(row.justification))  return `Line item #${i + 1}: Remark / Justification is required.`;
     }
     return null;
   };
@@ -909,56 +917,66 @@ export const CreateChangeControlDialog = ({ open, onClose, onCreated }) => {
               </Typography>
               {(form.lineItems || []).map((li, idx) => (
                 <Box key={idx} sx={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 1fr 1.2fr 40px',
-                    gap: 1, mb: 1, alignItems: 'flex-start',
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    borderRadius: 1.5,
+                    p: 2, mb: 1.5,
+                    position: 'relative',
                   }}>
-                  <TextField
-                    label={`Existing System ${idx + 1}`} size="small" multiline minRows={1} required
-                    value={li.existingSystem || ''}
-                    onChange={(e) => {
-                      const next = [...form.lineItems];
-                      next[idx] = { ...next[idx], existingSystem: e.target.value };
-                      setForm(prev => ({ ...prev, lineItems: next }));
-                    }}
-                  />
-                  <TextField
-                    label={`Proposed System ${idx + 1}`} size="small" multiline minRows={1} required
-                    value={li.proposedSystem || ''}
-                    onChange={(e) => {
-                      const next = [...form.lineItems];
-                      next[idx] = { ...next[idx], proposedSystem: e.target.value };
-                      setForm(prev => ({ ...prev, lineItems: next }));
-                    }}
-                  />
-                  <TextField
-                    label={`Remark / Justification ${idx + 1}`} size="small" multiline minRows={1} required
-                    value={li.justification || ''}
-                    onChange={(e) => {
-                      const next = [...form.lineItems];
-                      next[idx] = { ...next[idx], justification: e.target.value };
-                      setForm(prev => ({ ...prev, lineItems: next }));
-                    }}
-                    placeholder="Why is this line being changed?"
-                  />
-                  <Tooltip title="Remove line">
-                    <span>
-                      <IconButton
-                        size="small"
-                        disabled={(form.lineItems || []).length <= 1}
-                        onClick={() => {
-                          const next = (form.lineItems || []).filter((_, i) => i !== idx);
-                          setForm(prev => ({
-                            ...prev,
-                            lineItems: next.length ? next
-                              : [{ existingSystem: '', proposedSystem: '', justification: '' }],
-                          }));
-                        }}
-                      >
-                        <RemoveRowIcon fontSize="small" />
-                      </IconButton>
-                    </span>
-                  </Tooltip>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography variant="caption" fontWeight={700} textTransform="uppercase"
+                                letterSpacing={0.5} color="text.secondary">
+                      Line Item {idx + 1}
+                    </Typography>
+                    <Tooltip title="Remove line">
+                      <span>
+                        <IconButton
+                          size="small"
+                          disabled={(form.lineItems || []).length <= 1}
+                          onClick={() => {
+                            const next = (form.lineItems || []).filter((_, i) => i !== idx);
+                            setForm(prev => ({
+                              ...prev,
+                              lineItems: next.length ? next
+                                : [{ existingSystem: '', proposedSystem: '', justification: '' }],
+                            }));
+                          }}
+                        >
+                          <RemoveRowIcon fontSize="small" />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                  </Box>
+                  <Stack spacing={1.5}>
+                    <RichTextField
+                      label="Existing System" required
+                      value={li.existingSystem || ''}
+                      onChange={(v) => {
+                        const next = [...form.lineItems];
+                        next[idx] = { ...next[idx], existingSystem: v };
+                        setForm(prev => ({ ...prev, lineItems: next }));
+                      }}
+                    />
+                    <RichTextField
+                      label="Proposed System" required
+                      value={li.proposedSystem || ''}
+                      onChange={(v) => {
+                        const next = [...form.lineItems];
+                        next[idx] = { ...next[idx], proposedSystem: v };
+                        setForm(prev => ({ ...prev, lineItems: next }));
+                      }}
+                    />
+                    <RichTextField
+                      label="Remark / Justification" required
+                      value={li.justification || ''}
+                      onChange={(v) => {
+                        const next = [...form.lineItems];
+                        next[idx] = { ...next[idx], justification: v };
+                        setForm(prev => ({ ...prev, lineItems: next }));
+                      }}
+                      placeholder="Why is this line being changed?"
+                    />
+                  </Stack>
                 </Box>
               ))}
               <Button
@@ -969,8 +987,9 @@ export const CreateChangeControlDialog = ({ open, onClose, onCreated }) => {
                   // — prevents the user from piling up empty rows.
                   const rows = form.lineItems || [];
                   const last = rows[rows.length - 1];
-                  if (last && (!last.existingSystem?.trim() || !last.proposedSystem?.trim()
-                               || !last.justification?.trim())) {
+                  if (last && (!stripHtmlForRequired(last.existingSystem)
+                               || !stripHtmlForRequired(last.proposedSystem)
+                               || !stripHtmlForRequired(last.justification))) {
                     return;
                   }
                   setForm(prev => ({
