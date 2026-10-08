@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import {
   Box, Card, CardContent, TextField, Button, Typography,
-  InputAdornment, IconButton, Alert, AlertTitle, CircularProgress, Avatar,
+  InputAdornment, IconButton, Alert, AlertTitle, CircularProgress,
 } from '@mui/material';
 import {
-  Visibility, VisibilityOff, LockOutlined,
+  Visibility, VisibilityOff,
   VpnKeyOff as NoLicenseIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -55,12 +55,30 @@ const LoginPage = () => {
       <Card sx={{ width: '100%', maxWidth: 420, borderRadius: 3 }}>
         <CardContent sx={{ p: 4 }}>
           <Box sx={{ textAlign: 'center', mb: 3 }}>
-            <Avatar sx={{ bgcolor: 'primary.main', width: 56, height: 56, mx: 'auto', mb: 2 }}>
-              <LockOutlined />
-            </Avatar>
+            {/* 2026-10-08 — Baseras brand mark replaces the generic
+                lock-icon avatar. Sized at 72 so the hex details stay
+                legible; sits on a soft gradient tile that echoes the
+                page background without competing with it. */}
+            <Box
+              component="img"
+              src={`${process.env.PUBLIC_URL || ''}/brand-mark.png`}
+              alt="Baseras Tech"
+              sx={{
+                width: 72,
+                height: 72,
+                mx: 'auto',
+                mb: 2,
+                display: 'block',
+                objectFit: 'contain',
+                p: 1,
+                borderRadius: 2,
+                background:
+                  'linear-gradient(135deg, rgba(21,101,192,0.08) 0%, rgba(13,71,161,0.08) 100%)',
+              }}
+            />
             <Typography variant="h5" fontWeight={700}>Welcome Back</Typography>
             <Typography variant="body2" color="text.secondary" mt={0.5}>
-              Sign in to Enterprise QMS
+              Sign in to Baseras QMS
             </Typography>
           </Box>
 
