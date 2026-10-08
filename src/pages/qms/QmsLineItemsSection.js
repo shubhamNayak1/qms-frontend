@@ -10,6 +10,7 @@ import {
   listLineItemsApi, createLineItemApi, updateLineItemApi, deleteLineItemApi,
 } from '../../api/qmsCommonApi';
 import { formatDate } from '../../utils/helpers';
+import RichTextField from '../../components/RichTextField';
 
 /**
  * QmsLineItemsSection — repeating "Existing System / Proposed System /
@@ -155,9 +156,20 @@ const QmsLineItemsSection = ({ commonSlug, recordId, readOnly = false }) => {
               {rows.map((r) => (
                 <tr key={r.id}>
                   <td>{r.srNo}</td>
-                  <td>{r.existingSystem || <em style={{ opacity: 0.5 }}>—</em>}</td>
-                  <td>{r.proposedSystem || <em style={{ opacity: 0.5 }}>—</em>}</td>
-                  <td>{r.justification  || <em style={{ opacity: 0.5 }}>—</em>}</td>
+                  {/* The three narratives are HTML (rich text). We render
+                      them with dangerouslySetInnerHTML because the source
+                      is our own form; the backend TEXT column already
+                      round-trips them unchanged. Server-side sanitisation
+                      runs on save (planned Batch R.4). */}
+                  <td>{r.existingSystem
+                        ? <div dangerouslySetInnerHTML={{ __html: r.existingSystem }} />
+                        : <em style={{ opacity: 0.5 }}>—</em>}</td>
+                  <td>{r.proposedSystem
+                        ? <div dangerouslySetInnerHTML={{ __html: r.proposedSystem }} />
+                        : <em style={{ opacity: 0.5 }}>—</em>}</td>
+                  <td>{r.justification
+                        ? <div dangerouslySetInnerHTML={{ __html: r.justification }} />
+                        : <em style={{ opacity: 0.5 }}>—</em>}</td>
                   <td>{r.proposedByName || <em style={{ opacity: 0.5 }}>—</em>}</td>
                   <td>{formatDate(r.proposedDate)}</td>
                   {!readOnly && (
@@ -185,23 +197,26 @@ const QmsLineItemsSection = ({ commonSlug, recordId, readOnly = false }) => {
         <DialogContent sx={{ pt: 2 }}>
           {saveError && <Alert severity="error" sx={{ mb: 2 }}>{saveError}</Alert>}
           <Grid container spacing={2}>
+            {/* 2026-10-08 — these three narratives switched from plain
+                multiline TextFields to the shared RichTextField so testers
+                can apply headings, lists, colour, alignment, links and
+                inline images. Content is stored as HTML in the same TEXT
+                columns; the PDF renderer strips HTML to plain text until
+                we upgrade the exporter (planned Batch R.3). */}
             <Grid item xs={12}>
-              <TextField label="Existing System" multiline rows={2} fullWidth
-                         value={form.existingSystem}
-                         onChange={(e) => setForm({ ...form, existingSystem: e.target.value })}
-                         inputProps={{ autoComplete: 'off' }} />
+              <RichTextField label="Existing System"
+                             value={form.existingSystem}
+                             onChange={(v) => setForm({ ...form, existingSystem: v })} />
             </Grid>
             <Grid item xs={12}>
-              <TextField label="Proposed System" multiline rows={2} fullWidth
-                         value={form.proposedSystem}
-                         onChange={(e) => setForm({ ...form, proposedSystem: e.target.value })}
-                         inputProps={{ autoComplete: 'off' }} />
+              <RichTextField label="Proposed System"
+                             value={form.proposedSystem}
+                             onChange={(v) => setForm({ ...form, proposedSystem: v })} />
             </Grid>
             <Grid item xs={12}>
-              <TextField label="Remark / Justification" multiline rows={2} fullWidth
-                         value={form.justification}
-                         onChange={(e) => setForm({ ...form, justification: e.target.value })}
-                         inputProps={{ autoComplete: 'off' }} />
+              <RichTextField label="Remark / Justification"
+                             value={form.justification}
+                             onChange={(v) => setForm({ ...form, justification: v })} />
             </Grid>
             <Grid item xs={6}>
               <TextField label="Proposed Date" type="date" fullWidth
