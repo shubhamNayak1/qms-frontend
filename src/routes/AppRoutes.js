@@ -37,7 +37,12 @@ const AppRoutes = () => (
           </ProtectedRoute>
         }
       >
-        <Route index element={<Navigate to={ROUTES.DASHBOARD} replace />} />
+        {/* 2026-10-08 — the index "/" route is NOT nested here any more.
+            The site root is the public WelcomePage; a logged-in user hitting
+            "/" is bounced to /dashboard from inside WelcomePage via a
+            useEffect. Keeping an <Route index> inside this protected group
+            caused React Router v6 to pick it over the public "/" and send
+            every anonymous visitor straight to /login. */}
         <Route path={ROUTES.DASHBOARD} element={<DashboardPage />} />
         <Route path={ROUTES.USERS}   element={<ModuleRoute moduleKey="USER">  <UsersPage />   </ModuleRoute>} />
         <Route path={ROUTES.ORG} element={<Navigate to={ROUTES.ORG_TREE} replace />} />
