@@ -2,6 +2,7 @@ export const TOKEN_KEY = 'qms_token';
 export const USER_KEY = 'qms_user';
 
 export const ROUTES = {
+  WELCOME: '/',
   LOGIN: '/login',
   CHANGE_PASSWORD: '/change-password',
   DASHBOARD: '/dashboard',

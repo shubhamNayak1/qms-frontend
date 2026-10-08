@@ -6,6 +6,7 @@ import MainLayout from '../layouts/MainLayout';
 import Loader from '../components/Loader';
 import { ROUTES } from '../utils/constants';
 
+const WelcomePage = lazy(() => import('../pages/auth/WelcomePage'));
 const LoginPage = lazy(() => import('../pages/auth/LoginPage'));
 const ChangePasswordPage = lazy(() => import('../pages/auth/ChangePasswordPage'));
 const DashboardPage = lazy(() => import('../pages/dashboard/DashboardPage'));
@@ -23,6 +24,8 @@ const AuditPage = lazy(() => import('../pages/audit/AuditPage'));
 const AppRoutes = () => (
   <Suspense fallback={<Loader />}>
     <Routes>
+      {/* 2026-10-08 — root splash at /. Click-anywhere → /login. */}
+      <Route path={ROUTES.WELCOME} element={<WelcomePage />} />
       <Route path={ROUTES.LOGIN} element={<LoginPage />} />
       <Route path={ROUTES.CHANGE_PASSWORD} element={
         <ProtectedRoute><ChangePasswordPage /></ProtectedRoute>
