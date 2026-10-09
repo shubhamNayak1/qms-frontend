@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
 import { loginApi, getMeApi } from '../api/authApi';
 import { getToken, setToken, removeToken, getUser, setUser } from '../utils/helpers';
 
@@ -112,6 +112,29 @@ export const AuthProvider = ({ children }) => {
 
   const isSuperAdmin = hasRole('SUPER_ADMIN');
 
+  // Permission helpers (Phase-2 — paired with hasAuthority() on the backend).
+  // user.permissions is the final effective set computed by the backend:
+  //   (role perms) ∪ (user grants) \ (user revokes).
+  // Prefer these over hasRole() going forward; role names stay available
+  // for a handful of legacy screens.
+  const permissionSet = useMemo(() => {
+    const list = user?.permissions || [];
+    return new Set(Array.isArray(list) ? list : []);
+  }, [user?.permissions]);
+
+  const hasPermission = useCallback((name) => {
+    if (!name) return false;
+    // SYSTEM_OVERRIDE is the "god bit" — mirrors backend OrgSecurityService.isSuperAdmin().
+    if (permissionSet.has('SYSTEM_OVERRIDE')) return true;
+    return permissionSet.has(name);
+  }, [permissionSet]);
+
+  const hasAnyPermission = useCallback((names) => {
+    if (!Array.isArray(names) || names.length === 0) return false;
+    if (permissionSet.has('SYSTEM_OVERRIDE')) return true;
+    return names.some((n) => permissionSet.has(n));
+  }, [permissionSet]);
+
   return (
     <AuthContext.Provider value={{
       token, user, loading, bootstrapping, error,
@@ -121,6 +144,9 @@ export const AuthProvider = ({ children }) => {
       canAccessModule,
       hasRole,
       isSuperAdmin,
+      hasPermission,
+      hasAnyPermission,
+      permissions: permissionSet,
     }}>
       {children}
     </AuthContext.Provider>

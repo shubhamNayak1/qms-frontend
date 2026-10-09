@@ -24,46 +24,54 @@ export const DRAWER_WIDTH = 240;
 // Sidebar nav. moduleKey controls visibility via /auth/me's moduleAccess map.
 //   - null            => always visible
 //   - 'SUPER_ADMIN'   => only the SUPER_ADMIN role (handled below)
-//   - <module key>    => requires the module access flag
+//   - permissions:[…] => visible when the user carries ANY of the listed perms
+//                        (SYSTEM_OVERRIDE always sees everything).
+//                        Legacy `moduleAccess` map still applies as a fallback
+//                        when permissions aren't provided — keeps the sidebar
+//                        working for the few screens still on the old flag.
+const ADMIN_ANY_PERMS = [
+  'USER_VIEW','ROLE_VIEW','PERM_VIEW','DEPT_VIEW','SITE_VIEW','LICENSE_VIEW',
+  'PASSWORD_POLICY_MANAGE','TCD_POLICY_MANAGE','ORG_TREE_VIEW',
+];
 const navItems = [
-  { label: 'Dashboard',   icon: <DashboardIcon />, path: ROUTES.DASHBOARD,    moduleKey: null },
-  { label: 'QMS',         icon: <QmsIcon />,       path: ROUTES.QMS,          moduleKey: 'QMS' },
-  { label: 'DMS',         icon: <DmsIcon />,       path: ROUTES.DMS,          moduleKey: 'DMS' },
-  { label: 'LMS',         icon: <LmsIcon />,       path: ROUTES.LMS,          moduleKey: 'LMS' },
-  { label: 'Reports',     icon: <ReportsIcon />,   path: ROUTES.REPORTS,      moduleKey: 'REPORT' },
-  { label: 'Audit Trail', icon: <AuditIcon />,     path: ROUTES.AUDIT,        moduleKey: 'AUDIT' },
-  // 2026-10-09 — Admin consolidation Phase 1. Replaces three ex-top-level
-  // menus (Users, Organisation, Licenses) with one Admin entry that owns
-  // every org-level admin screen as tabs. Gated to SUPER_ADMIN or ADMIN
-  // via the ADMIN_ACCESS special key handled in the visibility filter.
-  { label: 'Admin',        icon: <AdminIcon />,     path: ROUTES.ADMIN,        moduleKey: 'ADMIN_ACCESS' },
-  { label: 'Org Tree',     icon: <OrgIcon />,       path: ROUTES.ORG_TREE,     moduleKey: null },
+  { label: 'Dashboard',   icon: <DashboardIcon />, path: ROUTES.DASHBOARD,  permissions: ['MOD_DASHBOARD'] },
+  { label: 'QMS',         icon: <QmsIcon />,       path: ROUTES.QMS,        permissions: ['MOD_QMS'] },
+  { label: 'DMS',         icon: <DmsIcon />,       path: ROUTES.DMS,        permissions: ['MOD_DMS'] },
+  { label: 'LMS',         icon: <LmsIcon />,       path: ROUTES.LMS,        permissions: ['MOD_LMS'] },
+  { label: 'Reports',     icon: <ReportsIcon />,   path: ROUTES.REPORTS,    permissions: ['MOD_REPORTS'] },
+  { label: 'Audit Trail', icon: <AuditIcon />,     path: ROUTES.AUDIT,      permissions: ['MOD_AUDIT'] },
+  // Admin visibility is any-of the admin perms so a narrowly-scoped admin
+  // (e.g. only USER_VIEW) still sees the entry — individual tabs gate
+  // themselves on their own permission.
+  { label: 'Admin',       icon: <AdminIcon />,     path: ROUTES.ADMIN,      permissions: ADMIN_ANY_PERMS },
+  { label: 'Org Tree',    icon: <OrgIcon />,       path: ROUTES.ORG_TREE,   permissions: ['ORG_TREE_VIEW'] },
 ];
 
 const Sidebar = ({ mobileOpen, onMobileClose }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, canAccessModule } = useAuth();
-
-  // Memoize so the list doesn't recompute on every navigation render
-  const roleSet = useMemo(() => {
-    const roles = user?.roles;
-    if (!roles) return new Set();
-    return new Set(Array.isArray(roles) ? roles : [roles]);
-  }, [user]);
-  const isSuperAdmin = roleSet.has('SUPER_ADMIN');
-  // Phase 1 Admin gate — SUPER_ADMIN today, SUPER_ADMIN or ADMIN once the
-  // ADMIN role is seeded via Flyway in P1.2.
-  const hasAdminAccess = isSuperAdmin || roleSet.has('ADMIN');
+  const { user, canAccessModule, hasAnyPermission, hasPermission } = useAuth();
 
   const visibleItems = useMemo(
-    () => navItems.filter(({ moduleKey }) => {
-      if (moduleKey === null)            return true;
-      if (moduleKey === 'SUPER_ADMIN')   return isSuperAdmin;
-      if (moduleKey === 'ADMIN_ACCESS')  return hasAdminAccess;
+    () => navItems.filter(({ permissions, moduleKey }) => {
+      // Phase-2: permission-based visibility is primary.
+      if (Array.isArray(permissions) && permissions.length > 0) {
+        if (hasAnyPermission(permissions)) return true;
+        // Legacy fallback — if the user's /auth/me didn't ship a permission
+        // list yet (old deployment, mid-rollout), fall back to the old
+        // moduleAccess flag so nothing disappears from the sidebar.
+        if (!user?.permissions || user.permissions.length === 0) {
+          return canAccessModule(permissions[0].replace(/^MOD_/, ''));
+        }
+        return false;
+      }
+      // Historical null/role-name shape — kept so legacy items (if any)
+      // keep working during the rollout window.
+      if (moduleKey === null)          return true;
+      if (moduleKey === 'SUPER_ADMIN') return hasPermission('SYSTEM_OVERRIDE');
       return canAccessModule(moduleKey);
     }),
-    [canAccessModule, isSuperAdmin, hasAdminAccess]
+    [canAccessModule, hasAnyPermission, hasPermission, user?.permissions]
   );
 
   const roleName = Array.isArray(user?.roles) ? user.roles[0] : (user?.role || 'USER');

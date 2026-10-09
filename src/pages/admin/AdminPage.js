@@ -52,28 +52,39 @@ const AdminPolicyTab  = lazy(() => import('./AdminPolicyTab'));
 const AdminRoleTab    = lazy(() => import('./AdminRoleTab'));
 const AdminPermissionTab = lazy(() => import('./AdminPermissionTab'));
 
+// Each tab's `perms` array is "any-of" — matches hasAnyPermission.
+// SYSTEM_OVERRIDE bypasses every tab gate (handled inside hasPermission).
 const TABS = [
-  { key: 'department', label: 'Department', icon: <DeptIcon fontSize="small" />,    Component: DepartmentsPage },
-  { key: 'policy',     label: 'Policy',     icon: <PolicyIcon fontSize="small" />,  Component: AdminPolicyTab },
-  { key: 'role',       label: 'Role',       icon: <RoleIcon fontSize="small" />,    Component: AdminRoleTab },
-  { key: 'user',       label: 'User',       icon: <UserIcon fontSize="small" />,    Component: UsersPage },
-  { key: 'permission', label: 'Permission', icon: <PermIcon fontSize="small" />,    Component: AdminPermissionTab },
-  { key: 'licence',    label: 'Licence',    icon: <LicenceIcon fontSize="small" />, Component: LicensesPage },
-  { key: 'site',       label: 'Site',       icon: <SiteIcon fontSize="small" />,    Component: SiteProfilePage },
+  { key: 'department', label: 'Department', icon: <DeptIcon fontSize="small" />,    perms: ['DEPT_VIEW','DEPT_MANAGE'],                                 Component: DepartmentsPage },
+  { key: 'policy',     label: 'Policy',     icon: <PolicyIcon fontSize="small" />,  perms: ['PASSWORD_POLICY_MANAGE','TCD_POLICY_MANAGE'],              Component: AdminPolicyTab },
+  { key: 'role',       label: 'Role',       icon: <RoleIcon fontSize="small" />,    perms: ['ROLE_VIEW','ROLE_MANAGE'],                                 Component: AdminRoleTab },
+  { key: 'user',       label: 'User',       icon: <UserIcon fontSize="small" />,    perms: ['USER_VIEW','USER_CREATE','USER_UPDATE','USER_DELETE'],     Component: UsersPage },
+  { key: 'permission', label: 'Permission', icon: <PermIcon fontSize="small" />,    perms: ['PERM_VIEW','PERM_MANAGE'],                                 Component: AdminPermissionTab },
+  { key: 'licence',    label: 'Licence',    icon: <LicenceIcon fontSize="small" />, perms: ['LICENSE_VIEW','LICENSE_MANAGE','LICENSE_ASSIGN'],          Component: LicensesPage },
+  { key: 'site',       label: 'Site',       icon: <SiteIcon fontSize="small" />,    perms: ['SITE_VIEW','SITE_MANAGE'],                                 Component: SiteProfilePage },
 ];
 
 const AdminPage = () => {
-  const { bootstrapping, hasRole, isSuperAdmin } = useAuth();
+  const { bootstrapping, hasAnyPermission, hasRole, isSuperAdmin } = useAuth();
   const [params, setParams] = useSearchParams();
 
-  // Gate: SUPER_ADMIN or the new ADMIN role. Non-admins get bounced to
-  // the Dashboard rather than seeing a 403 — matches ModuleRoute's shape.
-  const allowed = isSuperAdmin || hasRole('ADMIN');
+  // Permission-based gating. Phase-2: visible tabs are those the user
+  // carries any permission for. Legacy fallback — SUPER_ADMIN/ADMIN
+  // role names still work during the rollout window before every user's
+  // JWT is re-issued.
+  const visibleTabs = useMemo(
+    () => TABS.filter((t) =>
+      hasAnyPermission(t.perms) || isSuperAdmin || hasRole('ADMIN')
+    ),
+    [hasAnyPermission, isSuperAdmin, hasRole]
+  );
+  const allowed = visibleTabs.length > 0;
 
   const activeKey = useMemo(() => {
     const q = params.get('tab');
-    return TABS.some((t) => t.key === q) ? q : 'department';
-  }, [params]);
+    if (visibleTabs.some((t) => t.key === q)) return q;
+    return visibleTabs[0]?.key || 'department';
+  }, [params, visibleTabs]);
 
   if (bootstrapping) return <Loader />;
   if (!allowed)      return <Navigate to={ROUTES.DASHBOARD} replace />;
@@ -84,7 +95,7 @@ const AdminPage = () => {
     setParams(sp, { replace: true });
   };
 
-  const active = TABS.find((t) => t.key === activeKey);
+  const active = visibleTabs.find((t) => t.key === activeKey);
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -106,7 +117,7 @@ const AdminPage = () => {
           scrollButtons="auto"
           sx={{ px: 2 }}
         >
-          {TABS.map((t) => (
+          {visibleTabs.map((t) => (
             <Tab
               key={t.key}
               value={t.key}
