@@ -28,6 +28,7 @@ import {
 } from '@mui/icons-material';
 import PageHeader  from '../../components/PageHeader';
 import ErrorAlert  from '../../components/ErrorAlert';
+import SafeHtml    from '../../components/SafeHtml';
 import { formatDate, formatUserAgent } from '../../utils/helpers';
 import { ROUTES }  from '../../utils/constants';
 import {
@@ -1026,7 +1027,13 @@ const AuditPage = () => {
                             <Chip label={row.module} size="small" variant="outlined" sx={{ fontSize: 10 }} />
                           </TableCell>
                           <TableCell sx={{ maxWidth: 260 }}>
-                            <Typography variant="caption">{row.description}</Typography>
+                            {/* Description can carry Quill HTML (actor remark /
+                                justification / approval comment). SafeHtml in
+                                plain mode strips tags so the table row stays
+                                single-line and legible; expand the row to see
+                                the full rich-text diff in DiffViewer. */}
+                            <SafeHtml html={row.description} plain maxLines={2}
+                                      sx={{ fontSize: 12 }} />
                           </TableCell>
                           <TableCell>
                             <Typography variant="caption" fontFamily="monospace" color="text.secondary">{row.ipAddress}</Typography>

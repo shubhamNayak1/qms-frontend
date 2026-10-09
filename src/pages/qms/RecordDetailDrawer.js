@@ -45,6 +45,7 @@ import IncidentStagePanel from './IncidentStagePanel';
 import CapaStagePanel from './CapaStagePanel';
 import QmsLineItemsSection from './QmsLineItemsSection';
 import StageAttachments from './StageAttachments';
+import SafeHtml from '../../components/SafeHtml';
 import QmsDepartmentCommentsSection from './QmsDepartmentCommentsSection';
 import TargetDateExtensionPanel from './TargetDateExtensionPanel';
 import { useAuth } from '../../store/AuthContext';
@@ -75,12 +76,20 @@ const _PriorityChip_legacy = ({ priority }) => (
   <Chip label={priority} size="small" color={PRIORITY_COLORS[priority] || 'default'} variant="outlined" />
 );
 
+// Values that look like Quill output (contain any HTML tag) are
+// rendered through SafeHtml so stored rich-text displays with its
+// formatting instead of leaking <p><strong>…</strong></p> into the
+// read-out. Plain strings keep the original Typography path.
+const looksLikeHtml = (v) => typeof v === 'string' && /<\/?[a-z][^>]*>/i.test(v);
+
 const Field = ({ label, value, children }) => (
   <Box sx={{ mb: 1.5 }}>
     <Typography variant="caption" color="text.secondary" fontWeight={600} textTransform="uppercase" letterSpacing={0.4} display="block">
       {label}
     </Typography>
-    {children || (
+    {children ? children : looksLikeHtml(value) ? (
+      <SafeHtml html={value} />
+    ) : (
       <Typography variant="body2" color={value ? 'text.primary' : 'text.disabled'}>
         {value || '—'}
       </Typography>

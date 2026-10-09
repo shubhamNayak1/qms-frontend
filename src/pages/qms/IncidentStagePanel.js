@@ -19,6 +19,7 @@ import QmsDepartmentCommentsSection from './QmsDepartmentCommentsSection';
 import { StageSection, StickyActionBar, findStageActor as flowFindStageActor, InitiatorSubmissionView } from './LinearFlow';
 import { formatDate, stripHtmlForRequired } from '../../utils/helpers';
 import RichTextField from '../../components/RichTextField';
+import SafeHtml from '../../components/SafeHtml';
 
 /**
  * IncidentStagePanel — stage-aware editable form for Incident.
@@ -499,16 +500,16 @@ const IncidentStagePanel = ({ record, onUpdated }) => {
         </Grid>
       );
       case 'PENDING_HOD': return record?.initialAssessment
-        ? <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{record.initialAssessment}</Typography>
+        ? <SafeHtml html={record.initialAssessment} />
         : <Typography variant="caption" color="text.secondary">No HOD assessment recorded.</Typography>;
       case 'PENDING_QA_REVIEW': return record?.comments
-        ? <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{record.comments}</Typography>
+        ? <SafeHtml html={record.comments} />
         : <Typography variant="caption" color="text.secondary">No QA evaluation narrative.</Typography>;
       case 'PENDING_HEAD_QA': return record?.approvalComments
-        ? <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}><strong>Approval Comment:</strong> {record.approvalComments}</Typography>
+        ? <Box><Typography variant="caption" fontWeight={700} color="text.secondary" textTransform="uppercase" letterSpacing={0.4}>Approval Comment</Typography><SafeHtml html={record.approvalComments} /></Box>
         : <Typography variant="caption" color="text.secondary">No approval comment.</Typography>;
       case 'PENDING_VERIFICATION': return record?.verificationActionTaken
-        ? <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}><strong>Action Taken:</strong> {record.verificationActionTaken}</Typography>
+        ? <Box><Typography variant="caption" fontWeight={700} color="text.secondary" textTransform="uppercase" letterSpacing={0.4}>Action Taken</Typography><SafeHtml html={record.verificationActionTaken} /></Box>
         : <Typography variant="caption" color="text.secondary">No verification narrative.</Typography>;
       case 'CLOSED': return (
         <Typography variant="body2" color="success.main">
@@ -553,9 +554,7 @@ const IncidentStagePanel = ({ record, onUpdated }) => {
                     <Typography variant="caption" sx={{ fontWeight: 700, letterSpacing: 0.4, color: 'text.secondary' }}>
                       REMARK / JUSTIFICATION
                     </Typography>
-                    <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', mt: 0.3 }}>
-                      {stamp.comment}
-                    </Typography>
+                    <SafeHtml html={stamp.comment} />
                   </Box>
                 )}
               </>

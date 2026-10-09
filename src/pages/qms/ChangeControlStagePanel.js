@@ -24,6 +24,7 @@ import {
   StageSection, StickyActionBar, findStageActor as flowFindStageActor,
 } from './LinearFlow';
 import RichTextField from '../../components/RichTextField';
+import SafeHtml from '../../components/SafeHtml';
 // formatDateTime previously used by Activity History (removed in Round-3 R18).
 
 /**
@@ -618,7 +619,7 @@ const RoDraftView = ({ record }) => {
         {record.changeReason && (
           <Grid item xs={12}>
             <Typography variant="body2"><strong>Reason for Change:</strong></Typography>
-            <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', pl: 1 }}>{record.changeReason}</Typography>
+            <SafeHtml html={record.changeReason} />
           </Grid>
         )}
         {record.initialAttachmentDmsNumber && (
@@ -821,9 +822,7 @@ const RoHodView = ({ record }) => {
             }}>
             INITIAL RISK ASSESSMENT
           </Typography>
-          <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-            {record.initialRiskAssessment}
-          </Typography>
+          <SafeHtml html={record.initialRiskAssessment} />
         </Box>
       )}
       {record.initialAssessment
@@ -835,9 +834,7 @@ const RoHodView = ({ record }) => {
               }}>
               INITIAL ASSESSMENT
             </Typography>
-            <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>
-              {record.initialAssessment}
-            </Typography>
+            <SafeHtml html={record.initialAssessment} />
           </Box>
         )
         : <Typography variant="caption" color="text.secondary">No initial assessment narrative.</Typography>}
@@ -860,7 +857,7 @@ const RoQaPhase1View = ({ record }) => (
     {record.preRemark && (
       <Grid item xs={12}>
         <Typography variant="body2"><strong>Pre-Remark:</strong></Typography>
-        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', pl: 1 }}>{record.preRemark}</Typography>
+        <SafeHtml html={record.preRemark} />
       </Grid>
     )}
   </Grid>
@@ -885,7 +882,7 @@ const RoDeptCommentsView = ({ deptComments }) => (
               )}
             </Stack>
             {c.comment && (
-              <Typography variant="body2" sx={{ mt: 0.5, whiteSpace: 'pre-wrap' }}>{c.comment}</Typography>
+              <SafeHtml html={c.comment} />
             )}
           </Box>
         ))}
@@ -899,7 +896,7 @@ const RoQaPhase2View = ({ record }) => (
     {record.comments && (
       <Grid item xs={12}>
         <Typography variant="body2"><strong>Post Remark:</strong></Typography>
-        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', pl: 1 }}>{record.comments}</Typography>
+        <SafeHtml html={record.comments} />
       </Grid>
     )}
     {record.siteHeadRequired != null && (
@@ -914,7 +911,7 @@ const RoQaPhase2View = ({ record }) => (
     {record.riskAssessment && (
       <Grid item xs={12}>
         <Typography variant="body2"><strong>Risk Assessment:</strong></Typography>
-        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', pl: 1 }}>{record.riskAssessment}</Typography>
+        <SafeHtml html={record.riskAssessment} />
       </Grid>
     )}
   </Grid>
@@ -931,7 +928,7 @@ const RoRaView = ({ record }) => (
 
 const RoSiteHeadView = ({ record }) => (
   record.comments
-    ? <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}>{record.comments}</Typography>
+    ? <SafeHtml html={record.comments} />
     : <Typography variant="caption" color="text.secondary">No site head concurrence remark recorded.</Typography>
 );
 
@@ -943,7 +940,7 @@ const RoCustomerView = ({ record }) => (
     {record.customerComment && (
       <Grid item xs={12}>
         <Typography variant="body2"><strong>Customer Comment:</strong></Typography>
-        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', pl: 1 }}>{record.customerComment}</Typography>
+        <SafeHtml html={record.customerComment} />
       </Grid>
     )}
   </Grid>
@@ -951,7 +948,7 @@ const RoCustomerView = ({ record }) => (
 
 const RoHeadQaView = ({ record }) => (
   record.approvalComments
-    ? <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap' }}><strong>Approval Comment:</strong> {record.approvalComments}</Typography>
+    ? <Box><Typography variant="caption" fontWeight={700} color="text.secondary" textTransform="uppercase" letterSpacing={0.4}>Approval Comment</Typography><SafeHtml html={record.approvalComments} /></Box>
     : <Typography variant="caption" color="text.secondary">No approval comment recorded.</Typography>
 );
 
@@ -960,7 +957,7 @@ const RoVerificationView = ({ record }) => (
     {record.verificationActionTaken && (
       <Grid item xs={12}>
         <Typography variant="body2"><strong>Action Taken:</strong></Typography>
-        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', pl: 1 }}>{record.verificationActionTaken}</Typography>
+        <SafeHtml html={record.verificationActionTaken} />
       </Grid>
     )}
     {record.verificationEffectiveOn && (
@@ -969,13 +966,13 @@ const RoVerificationView = ({ record }) => (
     {record.verificationRegCommunication && (
       <Grid item xs={12}>
         <Typography variant="body2"><strong>Reg. Communication:</strong></Typography>
-        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', pl: 1 }}>{record.verificationRegCommunication}</Typography>
+        <SafeHtml html={record.verificationRegCommunication} />
       </Grid>
     )}
     {record.verificationOtherComments && (
       <Grid item xs={12}>
         <Typography variant="body2"><strong>Other Comments:</strong></Typography>
-        <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', pl: 1 }}>{record.verificationOtherComments}</Typography>
+        <SafeHtml html={record.verificationOtherComments} />
       </Grid>
     )}
   </Grid>
@@ -1864,9 +1861,7 @@ const ChangeControlStagePanel = ({ record, onUpdated }) => {
                       <Typography variant="caption" sx={{ fontWeight: 700, letterSpacing: 0.4, color: 'text.secondary' }}>
                         REMARK / JUSTIFICATION
                       </Typography>
-                      <Typography variant="body2" sx={{ whiteSpace: 'pre-wrap', mt: 0.3 }}>
-                        {stamp.comment}
-                      </Typography>
+                      <SafeHtml html={stamp.comment} />
                     </Box>
                   )}
                 </>

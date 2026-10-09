@@ -11,6 +11,7 @@ import {
 } from '../../api/qmsCommonApi';
 import { formatDate } from '../../utils/helpers';
 import RichTextField from '../../components/RichTextField';
+import SafeHtml from '../../components/SafeHtml';
 
 /**
  * QmsLineItemsSection — repeating "Existing System / Proposed System /
@@ -161,15 +162,9 @@ const QmsLineItemsSection = ({ commonSlug, recordId, readOnly = false }) => {
                       is our own form; the backend TEXT column already
                       round-trips them unchanged. Server-side sanitisation
                       runs on save (planned Batch R.4). */}
-                  <td>{r.existingSystem
-                        ? <div dangerouslySetInnerHTML={{ __html: r.existingSystem }} />
-                        : <em style={{ opacity: 0.5 }}>—</em>}</td>
-                  <td>{r.proposedSystem
-                        ? <div dangerouslySetInnerHTML={{ __html: r.proposedSystem }} />
-                        : <em style={{ opacity: 0.5 }}>—</em>}</td>
-                  <td>{r.justification
-                        ? <div dangerouslySetInnerHTML={{ __html: r.justification }} />
-                        : <em style={{ opacity: 0.5 }}>—</em>}</td>
+                  <td><SafeHtml html={r.existingSystem} /></td>
+                  <td><SafeHtml html={r.proposedSystem} /></td>
+                  <td><SafeHtml html={r.justification} /></td>
                   <td>{r.proposedByName || <em style={{ opacity: 0.5 }}>—</em>}</td>
                   <td>{formatDate(r.proposedDate)}</td>
                   {!readOnly && (
