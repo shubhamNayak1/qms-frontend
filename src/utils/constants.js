@@ -26,6 +26,9 @@ export const ROUTES = {
   LMS_CERTIFICATES: '/lms/certificates',
   REPORTS: '/reports',
   AUDIT: '/audit',
+  // 2026-10-09 — Admin module (Phase 1). Replaces the three ex-top-level
+  // menus Users / Organisation / Licenses. See src/pages/admin/AdminPage.js.
+  ADMIN: '/admin',
 };
 
 /**

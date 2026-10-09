@@ -5,14 +5,13 @@ import {
 } from '@mui/material';
 import {
   Dashboard as DashboardIcon,
-  People as PeopleIcon,
   VerifiedUser as QmsIcon,
   Description as DmsIcon,
   School as LmsIcon,
   BarChart as ReportsIcon,
   ManageSearch as AuditIcon,
   AccountTree as OrgIcon,
-  VpnKey as LicenseIcon,
+  AdminPanelSettings as AdminIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ROUTES } from '../utils/constants';
@@ -33,9 +32,12 @@ const navItems = [
   { label: 'LMS',         icon: <LmsIcon />,       path: ROUTES.LMS,          moduleKey: 'LMS' },
   { label: 'Reports',     icon: <ReportsIcon />,   path: ROUTES.REPORTS,      moduleKey: 'REPORT' },
   { label: 'Audit Trail', icon: <AuditIcon />,     path: ROUTES.AUDIT,        moduleKey: 'AUDIT' },
-  { label: 'Users',       icon: <PeopleIcon />,    path: ROUTES.USERS,        moduleKey: 'USER' },
-  { label: 'Organisation',icon: <OrgIcon />,       path: ROUTES.ORG_TREE,     moduleKey: null },
-  { label: 'Licenses',    icon: <LicenseIcon />,   path: ROUTES.LICENSES,     moduleKey: 'SUPER_ADMIN' },
+  // 2026-10-09 — Admin consolidation Phase 1. Replaces three ex-top-level
+  // menus (Users, Organisation, Licenses) with one Admin entry that owns
+  // every org-level admin screen as tabs. Gated to SUPER_ADMIN or ADMIN
+  // via the ADMIN_ACCESS special key handled in the visibility filter.
+  { label: 'Admin',        icon: <AdminIcon />,     path: ROUTES.ADMIN,        moduleKey: 'ADMIN_ACCESS' },
+  { label: 'Org Tree',     icon: <OrgIcon />,       path: ROUTES.ORG_TREE,     moduleKey: null },
 ];
 
 const Sidebar = ({ mobileOpen, onMobileClose }) => {
@@ -44,19 +46,24 @@ const Sidebar = ({ mobileOpen, onMobileClose }) => {
   const { user, canAccessModule } = useAuth();
 
   // Memoize so the list doesn't recompute on every navigation render
-  const isSuperAdmin = useMemo(() => {
+  const roleSet = useMemo(() => {
     const roles = user?.roles;
-    if (!roles) return false;
-    return Array.isArray(roles) ? roles.includes('SUPER_ADMIN') : roles === 'SUPER_ADMIN';
+    if (!roles) return new Set();
+    return new Set(Array.isArray(roles) ? roles : [roles]);
   }, [user]);
+  const isSuperAdmin = roleSet.has('SUPER_ADMIN');
+  // Phase 1 Admin gate — SUPER_ADMIN today, SUPER_ADMIN or ADMIN once the
+  // ADMIN role is seeded via Flyway in P1.2.
+  const hasAdminAccess = isSuperAdmin || roleSet.has('ADMIN');
 
   const visibleItems = useMemo(
     () => navItems.filter(({ moduleKey }) => {
       if (moduleKey === null)            return true;
       if (moduleKey === 'SUPER_ADMIN')   return isSuperAdmin;
+      if (moduleKey === 'ADMIN_ACCESS')  return hasAdminAccess;
       return canAccessModule(moduleKey);
     }),
-    [canAccessModule, isSuperAdmin]
+    [canAccessModule, isSuperAdmin, hasAdminAccess]
   );
 
   const roleName = Array.isArray(user?.roles) ? user.roles[0] : (user?.role || 'USER');
