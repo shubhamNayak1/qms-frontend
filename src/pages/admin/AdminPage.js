@@ -91,7 +91,7 @@ const AdminPage = () => {
       <Box sx={{ px: 3, pt: 2.5, pb: 1.5 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Typography variant="h5" fontWeight={700}>Admin</Typography>
-          <Chip label="Phase 1" size="small" variant="outlined" color="primary" />
+          <Chip label="Phase 2 live" size="small" variant="outlined" color="success" />
         </Box>
         <Typography variant="body2" color="text.secondary">
           Departments · policies · roles · users · permissions · licence · site
