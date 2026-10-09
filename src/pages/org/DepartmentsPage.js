@@ -15,6 +15,7 @@ import {
 } from '../../api/orgApi';
 import { getUsersApi } from '../../api/userApi';
 import { ROUTES, DEPARTMENT_TYPES } from '../../utils/constants';
+import useESignGuard from '../../hooks/useESignGuard';
 
 const TYPE_COLOR = { QA: 'success', RA: 'warning', STANDARD: 'default' };
 
@@ -24,6 +25,7 @@ const EMPTY_FORM = {
 };
 
 const DepartmentsPage = () => {
+  const esign = useESignGuard();
   const [rows, setRows]     = useState([]);
   const [users, setUsers]   = useState([]);
   const [siteId, setSiteId] = useState(null);
@@ -80,33 +82,48 @@ const DepartmentsPage = () => {
     setDialogOpen(true);
   };
 
-  const handleSave = async () => {
-    setSaving(true); setSaveError(null);
-    try {
-      const payload = {
-        ...form,
-        parentId:  form.parentId  || null,
-        hodUserId: form.hodUserId || null,
-      };
-      if (editing) await updateDepartmentApi(editing.id, payload);
-      else         await createDepartmentApi(payload);
-      setDialogOpen(false);
-      fetchAll();
-    } catch (err) {
-      setSaveError(err.response?.data?.message || 'Failed to save department.');
-    } finally {
-      setSaving(false);
-    }
+  const handleSave = () => {
+    setSaveError(null);
+    esign.request({
+      meaning: editing ? `Update department: ${form.name}` : `Create department: ${form.name}`,
+      recordRef: editing ? `Dept #${editing.id}` : undefined,
+      action: async () => {
+        setSaving(true);
+        try {
+          const payload = {
+            ...form,
+            parentId:  form.parentId  || null,
+            hodUserId: form.hodUserId || null,
+          };
+          if (editing) await updateDepartmentApi(editing.id, payload);
+          else         await createDepartmentApi(payload);
+          setDialogOpen(false);
+          fetchAll();
+        } catch (err) {
+          setSaveError(err.response?.data?.message || 'Failed to save department.');
+          throw err;
+        } finally {
+          setSaving(false);
+        }
+      },
+    });
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = (id) => {
     if (!window.confirm('Delete this department? Sub-departments will be re-parented to its parent.')) return;
-    try {
-      await deleteDepartmentApi(id);
-      fetchAll();
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to delete.');
-    }
+    esign.request({
+      meaning: 'Delete department',
+      recordRef: `Dept #${id}`,
+      action: async () => {
+        try {
+          await deleteDepartmentApi(id);
+          fetchAll();
+        } catch (err) {
+          setError(err.response?.data?.message || 'Failed to delete.');
+          throw err;
+        }
+      },
+    });
   };
 
   // Prevent self-as-parent in the dropdown when editing.
@@ -264,6 +281,7 @@ const DepartmentsPage = () => {
           </Button>
         </DialogActions>
       </Dialog>
+      {esign.element}
     </Box>
   );
 };

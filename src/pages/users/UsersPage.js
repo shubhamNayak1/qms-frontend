@@ -29,6 +29,7 @@ import { listDepartmentsApi } from '../../api/orgApi';
 import { listLicensesApi, assignLicenseApi } from '../../api/licenseApi';
 import { getStatusColor, formatDate } from '../../utils/helpers';
 import { ROUTES } from '../../utils/constants';
+import useESignGuard from '../../hooks/useESignGuard';
 
 const EMPTY_FORM = {
   firstName: '', lastName: '', username: '', email: '', password: '',
@@ -66,6 +67,7 @@ const normalizeUser = (u) => {
 };
 
 const UsersPage = () => {
+  const esign = useESignGuard();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -185,7 +187,19 @@ const UsersPage = () => {
         && !!form.role
         && policyOk;
 
-  const handleSave = async () => {
+  // 21 CFR Part 11 — user create / edit go through an e-sign re-prompt.
+  // esign.request wraps the save body; if the password check succeeds
+  // the inner action fires, otherwise nothing changes.
+  const handleSave = () => {
+    setSaveError(null);
+    esign.request({
+      meaning: editUser ? `Update user ${editUser.username}` : `Create user ${form.username}`,
+      recordRef: editUser ? `User #${editUser.id}` : undefined,
+      action: () => doSave(),
+    });
+  };
+
+  const doSave = async () => {
     setSaving(true); setSaveError(null);
     try {
       const firstName = form.firstName.trim();
@@ -251,14 +265,21 @@ const UsersPage = () => {
     }
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = (id) => {
     if (!window.confirm('Disable this user? They will no longer be able to log in.')) return;
-    try {
-      await deleteUserApi(id);
-      fetchUsers();
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to disable user.');
-    }
+    esign.request({
+      meaning: 'Disable user',
+      recordRef: `User #${id}`,
+      action: async () => {
+        try {
+          await deleteUserApi(id);
+          fetchUsers();
+        } catch (err) {
+          setError(err.response?.data?.message || 'Failed to disable user.');
+          throw err;
+        }
+      },
+    });
   };
 
   // ── Admin reset password ─────────────────────────────────
@@ -292,18 +313,26 @@ const UsersPage = () => {
       setLicError(err.response?.data?.message || 'Failed to load available licenses.');
     }
   };
-  const handleLicAssign = async () => {
+  const handleLicAssign = () => {
     if (!licTarget || !licChosen) return;
-    setLicSaving(true); setLicError(null);
-    try {
-      await assignLicenseApi(licChosen, licTarget.id);
-      setLicTarget(null);
-      fetchUsers();
-    } catch (err) {
-      setLicError(err.response?.data?.message || 'Failed to assign license.');
-    } finally {
-      setLicSaving(false);
-    }
+    setLicError(null);
+    esign.request({
+      meaning: `Assign license to ${licTarget.username}`,
+      recordRef: `User #${licTarget.id}`,
+      action: async () => {
+        setLicSaving(true);
+        try {
+          await assignLicenseApi(licChosen, licTarget.id);
+          setLicTarget(null);
+          fetchUsers();
+        } catch (err) {
+          setLicError(err.response?.data?.message || 'Failed to assign license.');
+          throw err;
+        } finally {
+          setLicSaving(false);
+        }
+      },
+    });
   };
 
   // ── Columns ──────────────────────────────────────────────
@@ -610,6 +639,7 @@ const UsersPage = () => {
           </Button>
         </DialogActions>
       </Dialog>
+      {esign.element}
     </Box>
   );
 };

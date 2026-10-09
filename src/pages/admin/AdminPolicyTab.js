@@ -12,6 +12,7 @@ import {
 } from '@mui/icons-material';
 import PasswordPolicyDialog from '../users/PasswordPolicyDialog';
 import { listTcdPolicyApi, updateTcdPolicyApi } from '../../api/tcdPolicyApi';
+import useESignGuard from '../../hooks/useESignGuard';
 
 /*
  * AdminPolicyTab — Policy tab for the unified /admin page.
@@ -62,24 +63,32 @@ const TcdEditDialog = ({ open, row, onClose, onSaved }) => {
   const [form, setForm] = useState(row || {});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+  const esign = useESignGuard();
 
   useEffect(() => { if (row) setForm(row); setError(null); }, [row]);
 
-  const save = async () => {
-    setSaving(true); setError(null);
-    try {
-      const { data } = await updateTcdPolicyApi(row.moduleKey, {
-        maxDays:          Number(form.maxDays),
-        warningDays:      Number(form.warningDays),
-        extensionAllowed: !!form.extensionAllowed,
-        maxExtensions:    Number(form.maxExtensions),
-      });
-      onSaved(data?.data || data);
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to update policy.');
-    } finally {
-      setSaving(false);
-    }
+  // Pharma 21 CFR Part 11: a TCD-policy update is a destructive admin
+  // action, so it goes through an e-sign re-prompt before the PUT fires.
+  const save = () => {
+    setError(null);
+    esign.request({
+      meaning: `Update TCD policy for ${MODULE_LABEL[row.moduleKey] || row.moduleKey}`,
+      recordRef: row.moduleKey,
+      action: async () => {
+        setSaving(true);
+        try {
+          const { data } = await updateTcdPolicyApi(row.moduleKey, {
+            maxDays:          Number(form.maxDays),
+            warningDays:      Number(form.warningDays),
+            extensionAllowed: !!form.extensionAllowed,
+            maxExtensions:    Number(form.maxExtensions),
+          });
+          onSaved(data?.data || data);
+        } finally {
+          setSaving(false);
+        }
+      },
+    });
   };
 
   if (!row) return null;
@@ -120,11 +129,12 @@ const TcdEditDialog = ({ open, row, onClose, onSaved }) => {
         </Stack>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2 }}>
-        <Button onClick={onClose} disabled={saving}>Cancel</Button>
-        <Button variant="contained" onClick={save} disabled={saving}>
+        <Button onClick={onClose} disabled={saving || esign.isPending}>Cancel</Button>
+        <Button variant="contained" onClick={save} disabled={saving || esign.isPending}>
           {saving ? 'Saving…' : 'Save'}
         </Button>
       </DialogActions>
+      {esign.element}
     </Dialog>
   );
 };

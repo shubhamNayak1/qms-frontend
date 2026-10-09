@@ -23,6 +23,7 @@ import {
 } from '../../api/passwordPolicyApi';
 import { useAuth } from '../../store/AuthContext';
 import { formatDate } from '../../utils/helpers';
+import useESignGuard from '../../hooks/useESignGuard';
 
 const EMPTY_POLICY = {
   passwordLengthMin: 8,
@@ -88,8 +89,9 @@ const TabPanel = ({ value, index, children }) =>
 // ══════════════════════════════════════════════════════════════════════════════
 const PasswordPolicyDialog = ({ open, onClose }) => {
   const { isSuperAdmin, hasRole } = useAuth();
-  const canViewAll  = isSuperAdmin || hasRole('QA_MANAGER');
-  const canEdit     = isSuperAdmin;
+  const canViewAll  = isSuperAdmin || hasRole('QA_MANAGER') || hasRole('ADMIN');
+  const canEdit     = isSuperAdmin || hasRole('ADMIN');
+  const esign       = useESignGuard();
 
   const [tab, setTab] = useState(0);
 
@@ -151,39 +153,51 @@ const PasswordPolicyDialog = ({ open, onClose }) => {
   }, [open, fetchActive, fetchAll]);
 
   // ── Save edited active policy ────────────────────────────────────────────
-  const handleSave = async () => {
+  // 21 CFR Part 11 — password-policy edit is a destructive admin action,
+  // so the actor re-signs before the PUT fires. useESignGuard handles the
+  // password prompt + /auth/e-sign call; the inner action runs only on
+  // successful signature.
+  const handleSave = () => {
     if (!activePolicy?.id) return;
-    setSaving(true);
     setSaveError(null);
-    setSaveSuccess(false);
-    try {
-      const { data } = await updatePolicyApi(activePolicy.id, editForm);
-      setActivePolicy(data?.data || editForm);
-      setEditMode(false);
-      setSaveSuccess(true);
-      fetchAll(); // refresh table too
-    } catch (err) {
-      setSaveError(err.response?.data?.message || 'Failed to update policy.');
-    } finally {
-      setSaving(false);
-    }
+    esign.request({
+      meaning: 'Update password policy',
+      recordRef: `Policy #${activePolicy.id}`,
+      action: async () => {
+        setSaving(true);
+        setSaveSuccess(false);
+        try {
+          const { data } = await updatePolicyApi(activePolicy.id, editForm);
+          setActivePolicy(data?.data || editForm);
+          setEditMode(false);
+          setSaveSuccess(true);
+          fetchAll();
+        } finally {
+          setSaving(false);
+        }
+      },
+    });
   };
 
   // ── Create new policy ────────────────────────────────────────────────────
-  const handleCreate = async () => {
-    setCreating(true);
+  const handleCreate = () => {
     setCreateError(null);
-    try {
-      await createPolicyApi(createForm);
-      setCreateMode(false);
-      setCreateForm(EMPTY_POLICY);
-      fetchAll();
-      fetchActive();
-    } catch (err) {
-      setCreateError(err.response?.data?.message || 'Failed to create policy.');
-    } finally {
-      setCreating(false);
-    }
+    esign.request({
+      meaning: 'Create password policy',
+      recordRef: `Effective ${createForm?.effectiveDate || 'TBD'}`,
+      action: async () => {
+        setCreating(true);
+        try {
+          await createPolicyApi(createForm);
+          setCreateMode(false);
+          setCreateForm(EMPTY_POLICY);
+          fetchAll();
+          fetchActive();
+        } finally {
+          setCreating(false);
+        }
+      },
+    });
   };
 
   // ── Disable policy ───────────────────────────────────────────────────────
@@ -415,6 +429,7 @@ const PasswordPolicyDialog = ({ open, onClose }) => {
         )}
         <Button onClick={onClose} color="inherit">Close</Button>
       </DialogActions>
+      {esign.element}
     </Dialog>
   );
 };

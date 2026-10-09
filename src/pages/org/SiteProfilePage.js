@@ -8,8 +8,10 @@ import ErrorAlert from '../../components/ErrorAlert';
 import { getSiteApi, updateSiteApi } from '../../api/orgApi';
 import { getUsersApi } from '../../api/userApi';
 import { ROUTES } from '../../utils/constants';
+import useESignGuard from '../../hooks/useESignGuard';
 
 const SiteProfilePage = () => {
+  const esign = useESignGuard();
   const [site, setSite]     = useState(null);
   const [users, setUsers]   = useState([]);
   const [form, setForm]     = useState(null);
@@ -45,21 +47,29 @@ const SiteProfilePage = () => {
       .catch(() => {});
   }, []);
 
-  const handleSave = async (e) => {
+  const handleSave = (e) => {
     e?.preventDefault();
-    setSaving(true); setError(null); setOk(false);
-    try {
-      await updateSiteApi(site.id, {
-        ...form,
-        headUserId: form.headUserId || null,
-      });
-      setOk(true);
-      fetch();
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to save.');
-    } finally {
-      setSaving(false);
-    }
+    setError(null); setOk(false);
+    esign.request({
+      meaning: `Update site profile: ${form?.name || site?.name || ''}`,
+      recordRef: site?.id ? `Site #${site.id}` : undefined,
+      action: async () => {
+        setSaving(true);
+        try {
+          await updateSiteApi(site.id, {
+            ...form,
+            headUserId: form.headUserId || null,
+          });
+          setOk(true);
+          fetch();
+        } catch (err) {
+          setError(err.response?.data?.message || 'Failed to save.');
+          throw err;
+        } finally {
+          setSaving(false);
+        }
+      },
+    });
   };
 
   return (
@@ -120,6 +130,7 @@ const SiteProfilePage = () => {
           </Grid>
         </Paper>
       )}
+      {esign.element}
     </Box>
   );
 };

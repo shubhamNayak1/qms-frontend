@@ -17,6 +17,7 @@ import {
 import { getUsersApi } from '../../api/userApi';
 import { ROUTES, LICENSE_STATUS } from '../../utils/constants';
 import { formatDateTime } from '../../utils/helpers';
+import useESignGuard from '../../hooks/useESignGuard';
 
 const STATUS_COLOR = {
   AVAILABLE: 'info',
@@ -37,6 +38,7 @@ const StatTile = ({ label, value, color = 'primary' }) => (
 );
 
 const LicensesPage = () => {
+  const esign = useESignGuard();
   const [rows, setRows]       = useState([]);
   const [users, setUsers]     = useState([]);
   const [stats, setStats]     = useState(null);
@@ -109,35 +111,50 @@ const LicensesPage = () => {
     setAssignUserId('');
     setAssignError(null);
   };
-  const handleAssign = async (e) => {
+  const handleAssign = (e) => {
     e?.preventDefault();
     if (!assignTarget || !assignUserId) return;
-    setAssignSaving(true); setAssignError(null);
-    try {
-      await assignLicenseApi(assignTarget.id, assignUserId);
-      setAssignTarget(null);
-      fetchData();
-    } catch (err) {
-      setAssignError(err.response?.data?.message || 'Failed to assign.');
-    } finally {
-      setAssignSaving(false);
-    }
+    setAssignError(null);
+    esign.request({
+      meaning: `Assign license ${assignTarget.code}`,
+      recordRef: `License #${assignTarget.id}`,
+      action: async () => {
+        setAssignSaving(true);
+        try {
+          await assignLicenseApi(assignTarget.id, assignUserId);
+          setAssignTarget(null);
+          fetchData();
+        } catch (err) {
+          setAssignError(err.response?.data?.message || 'Failed to assign.');
+          throw err;
+        } finally {
+          setAssignSaving(false);
+        }
+      },
+    });
   };
 
   // ── Revoke ───────────────────────────────────────────────
-  const handleRevoke = async (license) => {
+  const handleRevoke = (license) => {
     const reason = window.prompt(
       `Revoke license ${license.code} from ${license.assignedToUsername || 'user'}? Enter optional reason:`,
       '',
     );
     // null => cancel; empty string => proceed without reason.
     if (reason === null) return;
-    try {
-      await revokeLicenseApi(license.id, reason || undefined);
-      fetchData();
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to revoke.');
-    }
+    esign.request({
+      meaning: `Revoke license ${license.code}`,
+      recordRef: `License #${license.id}`,
+      action: async () => {
+        try {
+          await revokeLicenseApi(license.id, reason || undefined);
+          fetchData();
+        } catch (err) {
+          setError(err.response?.data?.message || 'Failed to revoke.');
+          throw err;
+        }
+      },
+    });
   };
 
   const handleCopy = (code) => {
@@ -305,6 +322,7 @@ const LicensesPage = () => {
           </Button>
         </DialogActions>
       </Dialog>
+      {esign.element}
     </Box>
   );
 };
