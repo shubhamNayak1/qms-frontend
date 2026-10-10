@@ -7,7 +7,6 @@ import {
 import {
   Add as AddIcon, Search as SearchIcon,
   Edit as EditIcon, Block as DisableIcon, Refresh as RefreshIcon,
-  Security as PolicyIcon,
   LockReset as LockResetIcon,
   CloudUpload as UploadIcon,
   AssignmentInd as AssignLicenseIcon,
@@ -391,9 +390,7 @@ const UsersPage = () => {
             <Button variant="outlined" startIcon={<UploadIcon />} onClick={() => setBulkOpen(true)}>
               Bulk Upload
             </Button>
-            <Button variant="outlined" startIcon={<PolicyIcon />} onClick={() => setPolicyOpen(true)}>
-              Password Policy
-            </Button>
+            {/* Password Policy moved to Admin → Policy tab (2026-10-10). */}
             <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
               Add User
             </Button>

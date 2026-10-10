@@ -10,7 +10,6 @@ import {
   School as LmsIcon,
   BarChart as ReportsIcon,
   ManageSearch as AuditIcon,
-  AccountTree as OrgIcon,
   AdminPanelSettings as AdminIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -44,7 +43,7 @@ const navItems = [
   // (e.g. only USER_VIEW) still sees the entry — individual tabs gate
   // themselves on their own permission.
   { label: 'Admin',       icon: <AdminIcon />,     path: ROUTES.ADMIN,      permissions: ADMIN_ANY_PERMS },
-  { label: 'Org Tree',    icon: <OrgIcon />,       path: ROUTES.ORG_TREE,   permissions: ['ORG_TREE_VIEW'] },
+  // Org Tree retired 2026-10-10 — department management lives on Admin → Department.
 ];
 
 const Sidebar = ({ mobileOpen, onMobileClose }) => {

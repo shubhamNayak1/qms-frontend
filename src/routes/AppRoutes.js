@@ -14,7 +14,9 @@ const DashboardPage = lazy(() => import('../pages/dashboard/DashboardPage'));
 // render at their own top-level routes; AdminPage owns them as tabs and
 // the old paths redirect in to preserve any bookmarked links.
 const AdminPage = lazy(() => import('../pages/admin/AdminPage'));
-const OrgTreePage = lazy(() => import('../pages/org/OrgTreePage'));
+// OrgTreePage retired 2026-10-10. The visualisation lived at /org/tree;
+// department management is now in Admin → Department, so the whole page
+// goes away and /org/* redirects to the Department tab.
 const QmsPage = lazy(() => import('../pages/qms/QmsPage'));
 const DmsPage = lazy(() => import('../pages/dms/DmsPage'));
 const LmsPage = lazy(() => import('../pages/lms/LmsPage'));
@@ -55,8 +57,8 @@ const AppRoutes = () => (
             own top-level route because it's a distinct visualisation,
             not a CRUD screen. */}
         <Route path={ROUTES.USERS}           element={<Navigate to={`${ROUTES.ADMIN}?tab=user`} replace />} />
-        <Route path={ROUTES.ORG}             element={<Navigate to={ROUTES.ORG_TREE} replace />} />
-        <Route path={ROUTES.ORG_TREE}        element={<OrgTreePage />} />
+        <Route path={ROUTES.ORG}             element={<Navigate to={`${ROUTES.ADMIN}?tab=department`} replace />} />
+        <Route path={ROUTES.ORG_TREE}        element={<Navigate to={`${ROUTES.ADMIN}?tab=department`} replace />} />
         <Route path={ROUTES.ORG_DEPARTMENTS} element={<Navigate to={`${ROUTES.ADMIN}?tab=department`} replace />} />
         <Route path={ROUTES.ORG_SITE}        element={<Navigate to={`${ROUTES.ADMIN}?tab=site`} replace />} />
         <Route path={ROUTES.LICENSES}        element={<Navigate to={`${ROUTES.ADMIN}?tab=licence`} replace />} />

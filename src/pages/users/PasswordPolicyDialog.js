@@ -235,7 +235,7 @@ const PasswordPolicyDialog = ({ open, onClose }) => {
         sx={{ px: 3, borderBottom: '1px solid', borderColor: 'divider' }}
       >
         <Tab label="Active Policy" />
-        {canViewAll && <Tab label="All Policies" />}
+        {canViewAll && <Tab label="History" />}
       </Tabs>
 
       <DialogContent sx={{ pt: 2, minHeight: 340 }}>
@@ -296,7 +296,7 @@ const PasswordPolicyDialog = ({ open, onClose }) => {
           )}
         </TabPanel>
 
-        {/* ── TAB 1: All Policies ── */}
+        {/* ── TAB 1: History ── */}
         {canViewAll && (
           <TabPanel value={tab} index={1}>
             {listError && <Alert severity="error" sx={{ mb: 2 }}>{listError}</Alert>}
