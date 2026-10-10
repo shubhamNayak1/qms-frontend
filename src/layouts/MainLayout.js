@@ -46,7 +46,7 @@ const MainLayout = () => {
   }, [countdown, warnOpen, doLogout]);
 
   const { reset: resetIdle } = useIdleTimeout({
-    idleMs:  120_000, // 2 minutes total idle
+    idleMs:  900_000, // 15 minutes total idle (bumped from 2 min on tester feedback 2026-10-10)
     warnMs:  15_000,  // warn 15 s before logout
     onWarn:  startCountdown,
     onIdle:  doLogout,
@@ -55,7 +55,7 @@ const MainLayout = () => {
   const handleStayLoggedIn = () => {
     clearInterval(countdownRef.current);
     setWarnOpen(false);
-    resetIdle(); // restart the full 2-minute timer
+    resetIdle(); // restart the full 15-minute timer
   };
 
   // Cleanup interval on unmount
