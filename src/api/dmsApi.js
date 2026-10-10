@@ -1,5 +1,17 @@
 import apiClient from './axios';
 
+// ── Inline images (R.2) ────────────────────────────────────────────────────
+// Posts a single File blob as multipart; returns { url, key } the Quill
+// editor embeds in <img src="…">. Used by RichTextField's default image
+// handler so stored HTML carries URLs instead of base64 payloads.
+export const uploadInlineImageApi = (file) => {
+  const fd = new FormData();
+  fd.append('file', file);
+  return apiClient.post('/api/v1/dms/inline-images', fd, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+};
+
 // ── Search & Read ──────────────────────────────────────────────────────────
 // GET params: status, category, department, ownerId, search, page, size
 export const getDocumentsApi = (params) =>

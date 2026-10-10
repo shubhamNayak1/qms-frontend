@@ -2,6 +2,7 @@ import React, { useMemo, useRef } from 'react';
 import ReactQuill from 'react-quill-new';
 import 'react-quill-new/dist/quill.snow.css';
 import { Box, Typography } from '@mui/material';
+import { uploadInlineImageApi } from '../api/dmsApi';
 
 /**
  * RichTextField — the shared WYSIWYG input used by every QMS form that
@@ -53,11 +54,18 @@ const RichTextField = ({
 }) => {
   const quillRef = useRef(null);
 
-  // Image button handler. Opens a file picker; if the parent supplied
-  // onImageUpload we await its URL and insert the <img> at the cursor.
-  // Otherwise Quill's default (base64 inline) runs.
+  // Image button handler. Opens a file picker, uploads to the DMS
+  // inline-image endpoint (R.2) and inserts the returned URL at the
+  // cursor. Callers can override via `onImageUpload(file) => Promise<url>`
+  // if they want a different storage target (e.g. a module-specific
+  // attachments bucket).
   const imageHandler = useMemo(() => {
-    if (!onImageUpload) return undefined;
+    const upload = onImageUpload
+      ? onImageUpload
+      : async (file) => {
+          const { data } = await uploadInlineImageApi(file);
+          return data?.data?.url || data?.url;
+        };
     return function handle() {
       const input = document.createElement('input');
       input.setAttribute('type', 'file');
@@ -67,7 +75,7 @@ const RichTextField = ({
         const file = input.files?.[0];
         if (!file) return;
         try {
-          const url = await onImageUpload(file);
+          const url = await upload(file);
           if (!url) return;
           const editor = quillRef.current?.getEditor();
           const range = editor?.getSelection(true);
