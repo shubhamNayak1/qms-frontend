@@ -26,6 +26,8 @@ import { ROUTES } from '../../utils/constants';
 import {
   getCapasApi, getDeviationsApi, getIncidentsApi,
   getComplaintsApi, getChangeControlsApi, getQmsDashboardApi,
+  initiateCapaDraftApi, initiateDeviationDraftApi, initiateIncidentDraftApi,
+  initiateComplaintDraftApi, initiateChangeControlDraftApi,
 } from '../../api/qmsApi';
 import {
   STATUS_COLORS, STATUS_LABELS, PRIORITY_COLORS, MODULE_META,
@@ -567,9 +569,41 @@ const QmsPage = () => {
     setDetailOpen(true);
   };
 
-  const openCreate = () => setCreateOpen((p) => ({ ...p, [currentKey]: true }));
   const closeCreate = (key) => setCreateOpen((p) => ({ ...p, [key]: false }));
   const afterCreate = (key) => { closeCreate(key); fetchCurrentTab(); };
+
+  // L5 — Initiate = create a bare DRAFT via the new backend endpoint,
+  // then open the detail drawer against the new record for in-place
+  // editing. The old module Create dialog stays as a fallback launch
+  // path (Initiate with details…) for anyone who prefers the big form.
+  const [initiating, setInitiating] = useState(false);
+  const [initiateError, setInitiateError] = useState(null);
+  const draftInitiator = useMemo(() => ({
+    capa:            initiateCapaDraftApi,
+    deviation:       initiateDeviationDraftApi,
+    incident:        initiateIncidentDraftApi,
+    marketComplaint: initiateComplaintDraftApi,
+    changeControl:   initiateChangeControlDraftApi,
+  }), []);
+  const openCreate = async () => {
+    setInitiating(true); setInitiateError(null);
+    try {
+      const call = draftInitiator[currentKey];
+      if (!call) throw new Error('No initiate-draft API for ' + currentKey);
+      const { data } = await call();
+      const created = data?.data || data;
+      if (!created?.id) throw new Error('Draft response missing id');
+      fetchCurrentTab();
+      setDetailId(created.id);
+      setDetailModule(currentKey);
+      setDetailOpen(true);
+    } catch (err) {
+      setInitiateError(err.response?.data?.message || err.message || 'Failed to initiate draft.');
+    } finally {
+      setInitiating(false);
+    }
+  };
+  const openCreateDialog = () => setCreateOpen((p) => ({ ...p, [currentKey]: true }));
 
   const columns = makeColumns(openDetail);
 
@@ -640,12 +674,22 @@ const QmsPage = () => {
           }
           label="Include Disabled"
         />
-        <Box sx={{ ml: 'auto' }}>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
-            {MODULE_META[currentKey].addLabel}
+        <Box sx={{ ml: 'auto', display: 'flex', gap: 1 }}>
+          <Button variant="contained" startIcon={<AddIcon />}
+                  onClick={openCreate} disabled={initiating}>
+            {initiating ? 'Initiating…' : MODULE_META[currentKey].addLabel}
           </Button>
+          <Tooltip title="Open the full Create form instead of starting a draft">
+            <Button variant="outlined" size="small" onClick={openCreateDialog}
+                    disabled={initiating}>
+              with details…
+            </Button>
+          </Tooltip>
         </Box>
       </Box>
+      {initiateError && (
+        <ErrorAlert message={initiateError} onRetry={() => setInitiateError(null)} />
+      )}
 
       {error && <ErrorAlert message={error} onRetry={fetchCurrentTab} />}
 

@@ -1,5 +1,21 @@
 import apiClient from './axios';
 
+// ── Draft-first Initiate (L5) ─────────────────────────────────────────────
+// Each endpoint creates a near-empty DRAFT row (auto-numbered, status
+// DRAFT, title "Untitled Draft - <recNo>", priority MEDIUM) and returns
+// the full response. Clients then open the detail drawer against that
+// id for in-place editing.
+export const initiateCapaDraftApi = () =>
+  apiClient.post('/api/v1/qms/capa/initiate-draft');
+export const initiateDeviationDraftApi = () =>
+  apiClient.post('/api/v1/qms/deviations/initiate-draft');
+export const initiateIncidentDraftApi = () =>
+  apiClient.post('/api/v1/qms/incidents/initiate-draft');
+export const initiateComplaintDraftApi = () =>
+  apiClient.post('/api/v1/qms/complaints/initiate-draft');
+export const initiateChangeControlDraftApi = () =>
+  apiClient.post('/api/v1/qms/change-controls/initiate-draft');
+
 
 // ── CAPA ──────────────────────────────────────────────────────────────────
 // GET params: status, priority, assignedTo, department, source, search, page, size
