@@ -12,7 +12,7 @@ import {
   CheckBox as FilledIcon,
 } from '@mui/icons-material';
 import { getAllRolesFlatApi, assignPermissionsApi } from '../../api/roleApi';
-import { getAllPermissionsFlatApi, listUserOverridesApi, upsertUserOverrideApi, removeUserOverrideApi } from '../../api/permissionApi';
+import { getAllPermissionsFlatApi, listUserOverridesApi, listUserOverridesBulkApi, upsertUserOverrideApi, removeUserOverrideApi } from '../../api/permissionApi';
 import { getUsersApi } from '../../api/userApi';
 import useESignGuard from '../../hooks/useESignGuard';
 
@@ -184,23 +184,48 @@ const UserMatrix = ({ perms, allUsers }) => {
   }, [perms]);
   const permsFlat = useMemo(() => Object.values(permsByModule).flat(), [permsByModule]);
 
-  // Fetch overrides for any user we don't yet have cached.
-  const loadOverrides = async (userId) => {
-    if (overridesByUser[userId]) return;
-    setLoadingUsers((m) => ({ ...m, [userId]: true }));
-    try {
-      const { data } = await listUserOverridesApi(userId);
-      setOverridesByUser((m) => ({ ...m, [userId]: data?.data || [] }));
-    } catch (err) {
-      setError(err.response?.data?.message || 'Failed to load overrides.');
-      setOverridesByUser((m) => ({ ...m, [userId]: [] }));
-    } finally {
-      setLoadingUsers((m) => ({ ...m, [userId]: false }));
-    }
-  };
-
+  // Batch-load overrides for every newly-selected user in one HTTP call.
+  // Users already in the cache are skipped; a single GET /permission-overrides
+  // ?userIds=... fetches the rest, so selecting all 100 users costs one call
+  // instead of 100.
   useEffect(() => {
-    for (const u of selectedUsers) if (u?.id) loadOverrides(u.id);
+    const missing = selectedUsers
+      .map((u) => u?.id)
+      .filter((id) => id != null && overridesByUser[id] === undefined);
+    if (missing.length === 0) return;
+
+    setLoadingUsers((m) => {
+      const next = { ...m };
+      missing.forEach((id) => { next[id] = true; });
+      return next;
+    });
+
+    (async () => {
+      try {
+        const { data } = await listUserOverridesBulkApi(missing);
+        const map = data?.data || {};
+        setOverridesByUser((prev) => {
+          const next = { ...prev };
+          for (const id of missing) {
+            next[id] = map[String(id)] || map[id] || [];
+          }
+          return next;
+        });
+      } catch (err) {
+        setError(err.response?.data?.message || 'Failed to load overrides.');
+        setOverridesByUser((prev) => {
+          const next = { ...prev };
+          missing.forEach((id) => { next[id] = []; });
+          return next;
+        });
+      } finally {
+        setLoadingUsers((m) => {
+          const next = { ...m };
+          missing.forEach((id) => { next[id] = false; });
+          return next;
+        });
+      }
+    })();
   }, [selectedUsers]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   const roleHas = (user, permId) => (user?.roles || []).some((r) =>
