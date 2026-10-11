@@ -387,7 +387,7 @@ const AdminPermissionTab = () => {
     }
   };
 
-  useEffect(() => { fetchAll(); }, []);
+  useEffect(() => { fetchAll(); }, []);  // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <Box sx={{ p: 3 }}>
