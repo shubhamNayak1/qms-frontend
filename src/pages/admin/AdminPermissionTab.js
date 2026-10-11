@@ -351,17 +351,35 @@ const AdminPermissionTab = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Backend caps page size at 100 (see UserController.getUsers @Max(100)).
+  // Walk pages until every user is fetched — the Permission matrix needs
+  // the full roster.
+  const fetchAllUsers = async () => {
+    const PAGE = 100;
+    const first = await getUsersApi({ page: 0, size: PAGE });
+    const body = first.data?.data;
+    if (!body) return [];
+    const total = body.totalElements ?? body.content?.length ?? 0;
+    const all   = [...(body.content || [])];
+    const needed = Math.ceil(total / PAGE);
+    for (let i = 1; i < needed; i++) {
+      const next = await getUsersApi({ page: i, size: PAGE });
+      all.push(...(next.data?.data?.content || []));
+    }
+    return all;
+  };
+
   const fetchAll = async () => {
     setLoading(true); setError(null);
     try {
       const [r, p, u] = await Promise.all([
         getAllRolesFlatApi(),
         getAllPermissionsFlatApi(),
-        getUsersApi({ size: 500 }),
+        fetchAllUsers(),
       ]);
       setRoles(r.data?.data || []);
       setPerms(p.data?.data || []);
-      setUsers(u.data?.data?.content || u.data?.data || []);
+      setUsers(u);
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to load matrix data.');
     } finally {
