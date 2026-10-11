@@ -1,7 +1,7 @@
 import React, { lazy, Suspense, useMemo } from 'react';
 import { useSearchParams, Navigate } from 'react-router-dom';
 import {
-  Box, Paper, Tab, Tabs, Chip, Typography,
+  Box, Paper, Tab, Tabs, Typography,
 } from '@mui/material';
 import {
   Business as DeptIcon,
@@ -100,10 +100,7 @@ const AdminPage = () => {
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <Box sx={{ px: 3, pt: 2.5, pb: 1.5 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Typography variant="h5" fontWeight={700}>Admin</Typography>
-          <Chip label="Phase 2 live" size="small" variant="outlined" color="success" />
-        </Box>
+        <Typography variant="h5" fontWeight={700}>Admin</Typography>
         <Typography variant="body2" color="text.secondary">
           Departments · policies · roles · users · permissions · licence · site
         </Typography>
