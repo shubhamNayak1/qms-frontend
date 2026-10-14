@@ -179,7 +179,6 @@ const UsersPage = () => {
     : !!form.firstName.trim()
         && !!form.username.trim()
         && !!form.password
-        && !!form.initials.trim()
         && !!form.joiningDate
         && !!form.phone.trim()
         && !!form.departmentId
@@ -464,10 +463,10 @@ const UsersPage = () => {
                          inputProps={{ autoComplete: 'off' }} />
             </Grid>
             <Grid item xs={4}>
-              <TextField label="Initials" fullWidth required value={form.initials}
+              <TextField label="Initials" fullWidth value={form.initials}
                          onChange={(e) => setForm({ ...form, initials: e.target.value.toUpperCase() })}
                          placeholder="JKD"
-                         helperText="Letters only"
+                         helperText="Optional · letters only"
                          inputProps={{ autoComplete: 'off', maxLength: 10 }} />
             </Grid>
             <Grid item xs={4}>
@@ -502,7 +501,7 @@ const UsersPage = () => {
                   <TextField label="Initial Login Password" type="password" fullWidth required
                              value={form.password}
                              onChange={(e) => setForm({ ...form, password: e.target.value })}
-                             helperText="User will be forced to change this on first login."
+                             helperText="User must change password on first login."
                              inputProps={{ autoComplete: 'new-password' }} />
                 </Grid>
                 <Grid item xs={12}>
@@ -528,27 +527,17 @@ const UsersPage = () => {
                          placeholder="QA Officer / Production Engineer / …"
                          inputProps={{ autoComplete: 'off' }} />
             </Grid>
-            <Grid item xs={12}>
-              <Stack direction="row" spacing={2}>
-                <FormControlLabel
-                  control={<Switch checked={form.isDeptReviewer}
-                                   onChange={(e) => setForm({ ...form, isDeptReviewer: e.target.checked })} />}
-                  label="Department Reviewer"
-                />
-                {selectedDept?.deptType === 'QA' && (
+            {selectedDept?.deptType === 'QA' && (
+              <Grid item xs={12}>
+                <Stack direction="row" spacing={2}>
                   <FormControlLabel
                     control={<Switch checked={form.isQaReviewer}
                                      onChange={(e) => setForm({ ...form, isQaReviewer: e.target.checked })} />}
                     label="QA Reviewer"
                   />
-                )}
-              </Stack>
-              {selectedDept?.deptType !== 'QA' && form.isQaReviewer && (
-                <Typography variant="caption" color="warning.main">
-                  QA Reviewer is only meaningful when the user belongs to a QA department.
-                </Typography>
-              )}
-            </Grid>
+                </Stack>
+              </Grid>
+            )}
             <Grid item xs={6}>
               <TextField label="Role" select fullWidth required value={form.role}
                          onChange={(e) => setForm({ ...form, role: e.target.value })}>
