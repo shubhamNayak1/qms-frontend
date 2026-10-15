@@ -17,7 +17,7 @@ import ProfileDrawer from '../components/ProfileDrawer';
 import NotificationPanel from '../components/NotificationPanel';
 import { getNotificationCountApi } from '../api/notificationApi';
 
-const POLL_INTERVAL = 60_000; // 60 seconds
+const POLL_INTERVAL = 600_000; // 10 minutes
 
 const Header = ({ onMobileMenuToggle }) => {
   const { user, logout } = useAuth();
