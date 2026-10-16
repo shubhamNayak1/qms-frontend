@@ -9,7 +9,7 @@ import {
   Verified as SystemIcon,
   AddCircleOutline as AddIcon,
   Edit as EditIcon,
-  DeleteOutline as DeleteIcon,
+  Block as DisableIcon,
   Refresh as RefreshIcon,
 } from '@mui/icons-material';
 import {
@@ -266,10 +266,10 @@ const AdminRoleTab = () => {
                     </Tooltip>
                     <Tooltip title={r.isSystemRole ? 'System role cannot be disabled' : 'Disable'}>
                       <span>
-                        <IconButton size="small" color="error"
+                        <IconButton size="small" color="warning"
                                     disabled={r.isSystemRole}
                                     onClick={() => handleDelete(r)}>
-                          <DeleteIcon fontSize="small" />
+                          <DisableIcon fontSize="small" />
                         </IconButton>
                       </span>
                     </Tooltip>
