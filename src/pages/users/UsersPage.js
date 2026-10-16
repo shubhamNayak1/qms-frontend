@@ -189,7 +189,6 @@ const UsersPage = () => {
     if (!policyOk)             missing.push('Password does not satisfy policy');
     return missing;
   }, [editUser, form, policyOk]);
-  const requiredFieldsOk = missingFields.length === 0;
 
   // 21 CFR Part 11 — user create / edit go through an e-sign re-prompt.
   // esign.request wraps the save body; if the password check succeeds
