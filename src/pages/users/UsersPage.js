@@ -174,22 +174,59 @@ const UsersPage = () => {
 
   // Mandatory-field gate. On create, all the new fields are required.
   // On edit the username/password fields are immutable.
-  const requiredFieldsOk = editUser
-    ? !!form.firstName.trim()
-    : !!form.firstName.trim()
-        && !!form.username.trim()
-        && !!form.password
-        && !!form.joiningDate
-        && !!form.phone.trim()
-        && !!form.departmentId
-        && !!form.role
-        && policyOk;
+  // We also compute `missingFields` so the dialog can tell the actor
+  // exactly what is missing before Save ever fires.
+  const missingFields = useMemo(() => {
+    const missing = [];
+    if (!form.firstName.trim()) missing.push('First Name');
+    if (editUser) return missing;
+    if (!form.username.trim()) missing.push('Username');
+    if (!form.password)        missing.push('Initial Password');
+    if (!form.joiningDate)     missing.push('Joining Date');
+    if (!form.phone.trim())    missing.push('Mobile Number');
+    if (!form.departmentId)    missing.push('Department');
+    if (!form.role)            missing.push('Role');
+    if (!policyOk)             missing.push('Password does not satisfy policy');
+    return missing;
+  }, [editUser, form, policyOk]);
+  const requiredFieldsOk = missingFields.length === 0;
 
   // 21 CFR Part 11 — user create / edit go through an e-sign re-prompt.
   // esign.request wraps the save body; if the password check succeeds
   // the inner action fires, otherwise nothing changes.
+  // Human-friendly field labels for backend validation errors so a 400
+  // from Spring (keys are camelCase: firstName, phone, etc.) renders as
+  // "First Name is required" instead of raw JSON.
+  const FIELD_LABELS = {
+    firstName: 'First Name',
+    lastName: 'Surname',
+    username: 'Username',
+    email: 'Email Address',
+    password: 'Initial Password',
+    initials: 'Initials',
+    joiningDate: 'Joining Date',
+    phone: 'Mobile Number',
+    departmentId: 'Department',
+    designation: 'Designation',
+  };
+  const formatApiError = (err) => {
+    const body = err?.response?.data;
+    const fieldErrors = body?.errors && typeof body.errors === 'object' ? body.errors : null;
+    if (fieldErrors && Object.keys(fieldErrors).length > 0) {
+      return Object.entries(fieldErrors)
+        .map(([k, v]) => `${FIELD_LABELS[k] || k}: ${v}`)
+        .join(' · ');
+    }
+    return body?.message || err?.message || 'Failed to save user.';
+  };
+
   const handleSave = () => {
     setSaveError(null);
+    // Pre-submit gate — surface what's missing, don't just grey the button.
+    if (missingFields.length > 0) {
+      setSaveError(`Please fill in: ${missingFields.join(', ')}.`);
+      return;
+    }
     esign.request({
       meaning: editUser ? `Update user ${editUser.username}` : `Create user ${form.username}`,
       recordRef: editUser ? `User #${editUser.id}` : undefined,
@@ -257,7 +294,7 @@ const UsersPage = () => {
       setDialogOpen(false);
       fetchUsers();
     } catch (err) {
-      setSaveError(err.response?.data?.message || 'Failed to save user.');
+      setSaveError(formatApiError(err));
     } finally {
       setSaving(false);
     }
@@ -450,6 +487,11 @@ const UsersPage = () => {
         <DialogTitle>{editUser ? 'Edit User' : 'Create User'}</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
           {saveError && <Alert severity="error" sx={{ mb: 2 }}>{saveError}</Alert>}
+          {missingFields.length > 0 && !saveError && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Please fill in: {missingFields.join(', ')}.
+            </Alert>
+          )}
           <Grid container spacing={2}>
             <Grid item xs={6}>
               <TextField label="First Name" fullWidth required value={form.firstName}
@@ -556,7 +598,7 @@ const UsersPage = () => {
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
           <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
-          <Button variant="contained" type="submit" disabled={saving || !requiredFieldsOk}>
+          <Button variant="contained" type="submit" disabled={saving}>
             {saving ? 'Saving...' : 'Save'}
           </Button>
         </DialogActions>

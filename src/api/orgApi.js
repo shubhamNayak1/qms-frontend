@@ -22,8 +22,12 @@ export const createDepartmentApi = (data) =>
 export const updateDepartmentApi = (id, data) =>
   apiClient.put(`/api/v1/org/departments/${id}`, data);
 
-export const deleteDepartmentApi = (id) =>
-  apiClient.delete(`/api/v1/org/departments/${id}`);
+// Toggle isActive on a department. Preferred over hard delete — the row
+// stays in the DB so historical QMS records keep resolving its name.
+export const setDepartmentActiveApi = (id, active) =>
+  apiClient.patch(`/api/v1/org/departments/${id}/active`, null, {
+    params: { active },
+  });
 
 // ── Org Tree (top-down nested) ──────────────────────────────
 export const getOrgTreeApi = () =>

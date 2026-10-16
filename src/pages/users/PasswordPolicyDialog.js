@@ -21,8 +21,9 @@ import {
   updatePolicyApi,
   deletePolicyApi,
 } from '../../api/passwordPolicyApi';
+import { searchAuditLogsApi } from '../../api/auditApi';
 import { useAuth } from '../../store/AuthContext';
-import { formatDate } from '../../utils/helpers';
+import { formatDate, formatDateTime } from '../../utils/helpers';
 import useESignGuard from '../../hooks/useESignGuard';
 
 const EMPTY_POLICY = {
@@ -115,6 +116,12 @@ const PasswordPolicyDialog = ({ open, onClose }) => {
   const [createError, setCreateError]     = useState(null);
   const [includeDisabled, setIncludeDisabled] = useState(false);
 
+  // Audit trail (true change history — pulled from audit_logs so edits
+  // against the single policy row are preserved as a timeline).
+  const [auditLogs, setAuditLogs]           = useState([]);
+  const [auditLoading, setAuditLoading]     = useState(false);
+  const [auditError, setAuditError]         = useState(null);
+
   // ── Load active policy ───────────────────────────────────────────────────
   const fetchActive = useCallback(() => {
     setActiveLoading(true);
@@ -139,10 +146,29 @@ const PasswordPolicyDialog = ({ open, onClose }) => {
       .finally(() => setListLoading(false));
   }, [canViewAll]);
 
+  // ── Load audit trail for PasswordPolicy ───────────────────────────────────
+  const fetchAuditLogs = useCallback(() => {
+    if (!canViewAll) return;
+    setAuditLoading(true);
+    setAuditError(null);
+    searchAuditLogsApi({
+      module: 'PASSWORD_POLICY',
+      entityType: 'PasswordPolicy',
+      size: 50,
+    })
+      .then(({ data }) => {
+        const content = data?.data?.content ?? data?.data ?? [];
+        setAuditLogs(Array.isArray(content) ? content : []);
+      })
+      .catch(() => setAuditError('Failed to load change history.'))
+      .finally(() => setAuditLoading(false));
+  }, [canViewAll]);
+
   useEffect(() => {
     if (open) {
       fetchActive();
       fetchAll();
+      fetchAuditLogs();
       setTab(0);
       setEditMode(false);
       setSaveSuccess(false);
@@ -150,7 +176,7 @@ const PasswordPolicyDialog = ({ open, onClose }) => {
       setCreateMode(false);
       setCreateError(null);
     }
-  }, [open, fetchActive, fetchAll]);
+  }, [open, fetchActive, fetchAll, fetchAuditLogs]);
 
   // ── Save edited active policy ────────────────────────────────────────────
   // 21 CFR Part 11 — password-policy edit is a destructive admin action,
@@ -171,7 +197,7 @@ const PasswordPolicyDialog = ({ open, onClose }) => {
           setActivePolicy(data?.data || editForm);
           setEditMode(false);
           setSaveSuccess(true);
-          fetchAll();
+          fetchAll(); fetchAuditLogs();
         } finally {
           setSaving(false);
         }
@@ -191,7 +217,7 @@ const PasswordPolicyDialog = ({ open, onClose }) => {
           await createPolicyApi(createForm);
           setCreateMode(false);
           setCreateForm(EMPTY_POLICY);
-          fetchAll();
+          fetchAll(); fetchAuditLogs();
           fetchActive();
         } finally {
           setCreating(false);
@@ -205,7 +231,7 @@ const PasswordPolicyDialog = ({ open, onClose }) => {
     if (!window.confirm('Disable this password policy?')) return;
     try {
       await deletePolicyApi(id);
-      fetchAll();
+      fetchAll(); fetchAuditLogs();
       fetchActive();
     } catch (err) {
       setListError(err.response?.data?.message || 'Failed to disable policy.');
@@ -324,6 +350,63 @@ const PasswordPolicyDialog = ({ open, onClose }) => {
               </>
             ) : (
               <>
+                {/* ── Change log (true audit history) ──────────────────────── */}
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
+                    Change History
+                  </Typography>
+                  {auditError && <Alert severity="error" sx={{ mb: 1 }}>{auditError}</Alert>}
+                  {auditLoading ? (
+                    <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+                      <CircularProgress size={24} />
+                    </Box>
+                  ) : auditLogs.length === 0 ? (
+                    <Typography variant="caption" color="text.secondary">
+                      No changes recorded yet.
+                    </Typography>
+                  ) : (
+                    <Paper variant="outlined" sx={{ overflow: 'hidden', maxHeight: 240, overflowY: 'auto' }}>
+                      <Table size="small" stickyHeader>
+                        <TableHead>
+                          <TableRow sx={{ bgcolor: 'action.hover' }}>
+                            <TableCell sx={{ fontWeight: 600 }}>When</TableCell>
+                            <TableCell sx={{ fontWeight: 600 }}>User</TableCell>
+                            <TableCell sx={{ fontWeight: 600 }}>Action</TableCell>
+                            <TableCell sx={{ fontWeight: 600 }}>Details</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {auditLogs.map((log) => (
+                            <TableRow key={log.id} hover>
+                              <TableCell sx={{ whiteSpace: 'nowrap' }}>
+                                {formatDateTime(log.timestamp || log.eventTimestamp)}
+                              </TableCell>
+                              <TableCell>{log.userFullName || log.username || '—'}</TableCell>
+                              <TableCell>
+                                <Chip
+                                  size="small"
+                                  label={log.action}
+                                  color={
+                                    log.action === 'DELETE' ? 'error'
+                                    : log.action === 'CREATE' ? 'success'
+                                    : log.action === 'UPDATE' ? 'info'
+                                    : 'default'
+                                  }
+                                />
+                              </TableCell>
+                              <TableCell sx={{ color: 'text.secondary' }}>
+                                {log.description || '—'}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </Paper>
+                  )}
+                </Box>
+
+                <Divider sx={{ my: 2 }} />
+
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
                   <FormControlLabel
                     control={

@@ -4,14 +4,15 @@ import {
   Dialog, DialogTitle, DialogContent, DialogActions, Grid, MenuItem, Alert, TextField,
 } from '@mui/material';
 import {
-  Add as AddIcon, Edit as EditIcon, Delete as DeleteIcon, Refresh as RefreshIcon,
+  Add as AddIcon, Edit as EditIcon, Refresh as RefreshIcon,
+  Block as BlockIcon, CheckCircleOutline as EnableIcon,
 } from '@mui/icons-material';
 import PageHeader from '../../components/PageHeader';
 import DataTable from '../../components/DataTable';
 import ErrorAlert from '../../components/ErrorAlert';
 import {
   listDepartmentsApi, createDepartmentApi, updateDepartmentApi,
-  deleteDepartmentApi, getSiteApi,
+  setDepartmentActiveApi, getSiteApi,
 } from '../../api/orgApi';
 import { getUsersApi } from '../../api/userApi';
 import { ROUTES, DEPARTMENT_TYPES } from '../../utils/constants';
@@ -20,7 +21,7 @@ import useESignGuard from '../../hooks/useESignGuard';
 const TYPE_COLOR = { QA: 'success', RA: 'warning', STANDARD: 'default' };
 
 const EMPTY_FORM = {
-  name: '', code: '', description: '', siteId: null,
+  name: '', code: '', siteId: null,
   parentId: '', hodUserId: '', deptType: 'STANDARD',
 };
 
@@ -72,7 +73,6 @@ const DepartmentsPage = () => {
     setForm({
       name:        row.name,
       code:        row.code,
-      description: row.description || '',
       siteId:      row.siteId,
       parentId:    row.parentId || '',
       hodUserId:   row.hodUserId || '',
@@ -109,17 +109,19 @@ const DepartmentsPage = () => {
     });
   };
 
-  const handleDelete = (id) => {
-    if (!window.confirm('Delete this department? Sub-departments will be re-parented to its parent.')) return;
+  const handleToggleActive = (row) => {
+    const nextActive = !(row.isActive !== false);
+    const verb = nextActive ? 'Enable' : 'Disable';
+    if (!window.confirm(`${verb} department "${row.name}"?`)) return;
     esign.request({
-      meaning: 'Delete department',
-      recordRef: `Dept #${id}`,
+      meaning: `${verb} department: ${row.name}`,
+      recordRef: `Dept #${row.id}`,
       action: async () => {
         try {
-          await deleteDepartmentApi(id);
+          await setDepartmentActiveApi(row.id, nextActive);
           fetchAll();
         } catch (err) {
-          setError(err.response?.data?.message || 'Failed to delete.');
+          setError(err.response?.data?.message || `Failed to ${verb.toLowerCase()}.`);
           throw err;
         }
       },
@@ -165,13 +167,29 @@ const DepartmentsPage = () => {
       renderCell: (row) => row.hodUserName || <em style={{ opacity: 0.5 }}>not set</em> },
     { field: 'memberCount', headerName: 'Members', minWidth: 90, align: 'right',
       renderCell: (row) => row.memberCount ?? 0 },
-    { field: 'actions', headerName: 'Actions', minWidth: 110, align: 'right',
+    { field: 'status', headerName: 'Status', minWidth: 100,
       renderCell: (row) => (
-        <Box>
-          <Tooltip title="Edit"><IconButton size="small" onClick={() => openEdit(row)}><EditIcon fontSize="small" /></IconButton></Tooltip>
-          <Tooltip title="Delete"><IconButton size="small" color="error" onClick={() => handleDelete(row.id)}><DeleteIcon fontSize="small" /></IconButton></Tooltip>
-        </Box>
-      )},
+        <Chip size="small"
+              label={row.isActive === false ? 'Disabled' : 'Active'}
+              color={row.isActive === false ? 'default' : 'success'}
+              variant={row.isActive === false ? 'outlined' : 'filled'} />
+      ) },
+    { field: 'actions', headerName: 'Actions', minWidth: 110, align: 'right',
+      renderCell: (row) => {
+        const isActive = row.isActive !== false;
+        return (
+          <Box>
+            <Tooltip title="Edit"><IconButton size="small" onClick={() => openEdit(row)}><EditIcon fontSize="small" /></IconButton></Tooltip>
+            <Tooltip title={isActive ? 'Disable' : 'Enable'}>
+              <IconButton size="small"
+                          color={isActive ? 'warning' : 'success'}
+                          onClick={() => handleToggleActive(row)}>
+                {isActive ? <BlockIcon fontSize="small" /> : <EnableIcon fontSize="small" />}
+              </IconButton>
+            </Tooltip>
+          </Box>
+        );
+      } },
   ];
 
   return (
@@ -220,12 +238,6 @@ const DepartmentsPage = () => {
               <TextField label="Code" required fullWidth value={form.code}
                          onChange={e => setForm({ ...form, code: e.target.value.toUpperCase() })}
                          helperText="Short, unique, e.g. QA, PROD-A"
-                         inputProps={{ autoComplete: 'off' }} />
-            </Grid>
-            <Grid item xs={12}>
-              <TextField label="Description" fullWidth multiline rows={2}
-                         value={form.description}
-                         onChange={e => setForm({ ...form, description: e.target.value })}
                          inputProps={{ autoComplete: 'off' }} />
             </Grid>
             <Grid item xs={6}>
